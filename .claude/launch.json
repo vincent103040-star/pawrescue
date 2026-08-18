@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "stray-volunteer-system",
+      "runtimeExecutable": "C:\\Users\\TMP-214\\dev-with-path.cmd",
+      "runtimeArgs": ["C:\\Users\\TMP-214\\Desktop\\remix-(修版)-浪浪家園-志工招募與排班管理系統"],
+      "port": 3000
+    }
+  ]
+}

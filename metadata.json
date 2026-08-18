@@ -1,0 +1,8 @@
+{
+  "name": "Remix (修版) 浪浪家園 志工招募與排班管理系統",
+  "description": "流浪動物之家志工招募、職位發布、報名審核、缺工統計看板、Google地圖/日曆與LINE串聯管理系統",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
