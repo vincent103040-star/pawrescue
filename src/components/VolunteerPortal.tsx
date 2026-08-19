@@ -6,6 +6,7 @@ import { ShiftCalendarView } from './ShiftCalendarView';
 import { Heart, MapPin, Calendar, Clock, Check, Users, ExternalLink, Sparkles, AlertCircle, ArrowUpRight, CheckCircle2, QrCode, Settings, Bell, BellRing, User, Save, Send, Smartphone, ShieldCheck, ToggleLeft, ToggleRight, Sparkle, TrendingUp, Award, CheckSquare, Square, Crown, Medal, Star, Trophy, BookOpen, Zap, ChevronRight, LayoutGrid, MessageSquare } from 'lucide-react';
 import { buildGoogleCalendarLink } from '../utils/googleCalendar';
 import { buildLineLoginUrl } from '../utils/lineLogin';
+import { getLiffVolunteerIdentity } from '../utils/liff';
 
 export interface GrowthChecklistItem {
   id: string;
@@ -337,6 +338,15 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
     setPhone(profilePhone);
     setLineId(profileLineId);
     handleGenerateSituationalQuestion(shift);
+
+    // When opened inside LINE via LIFF, trust the real LINE profile over whatever
+    // was typed/saved before -- it's a more reliable source for name + LINE ID.
+    getLiffVolunteerIdentity().then(identity => {
+      if (identity) {
+        setName(identity.name);
+        setLineId(identity.lineId);
+      }
+    });
   };
 
   const handleConfirmApply = (e: React.FormEvent) => {
