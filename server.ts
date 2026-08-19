@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import { readFileSync } from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
@@ -11,6 +12,34 @@ import { getAllVolunteers, getVolunteerByEmail, upsertVolunteerFromLogin, addCom
 // Vite's own precedence for the frontend VITE_* vars.
 dotenv.config();
 dotenv.config({ path: '.env.local', override: true });
+
+interface RulebookEmbeddingEntry {
+  id: string;
+  title: string;
+  text: string;
+  embedding: number[];
+}
+
+// Precomputed by scripts/embed-rulebook.ts -- run that script again (once)
+// whenever rulebookCorpus.ts changes. Loaded once at startup rather than
+// re-embedding the whole corpus on every query, since embedding calls count
+// against the same scarce daily quota as everything else.
+let rulebookEmbeddings: RulebookEmbeddingEntry[] = [];
+try {
+  rulebookEmbeddings = JSON.parse(readFileSync('data/rulebook_embeddings.json', 'utf-8'));
+} catch {
+  console.warn('data/rulebook_embeddings.json not found -- run `npx tsx scripts/embed-rulebook.ts` to enable the rulebook Q&A feature.');
+}
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  let dot = 0, normA = 0, normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+}
 
 async function startServer() {
   const app = express();
@@ -461,6 +490,95 @@ ${JSON.stringify(branchData, null, 2)}
     } catch (error: any) {
       console.warn('Gemini Situational Assessment Error (fallback activated):', error?.message || error);
       return res.json({ success: true, ...fallbackAssessment, isFallback: true });
+    }
+  });
+
+  // API endpoint: Simple RAG Q&A over the volunteer rulebook/SOP corpus.
+  // Retrieval = embed the question, cosine-similarity against the precomputed
+  // rulebook_embeddings.json, take the top matches. Generation = ask Gemini to
+  // answer using only those matched excerpts, so it can't invent rules that
+  // aren't actually in the handbook.
+  app.post('/api/ai/rag-ask', async (req, res) => {
+    const { question } = req.body;
+
+    const keywordFallback = () => {
+      const q = String(question || '');
+      let best: RulebookEmbeddingEntry | null = null;
+      let bestScore = 0;
+      for (const chunk of rulebookEmbeddings) {
+        const hay = chunk.title + chunk.text;
+        let score = 0;
+        for (const ch of q) {
+          if (ch.trim() && hay.includes(ch)) score++;
+        }
+        if (score > bestScore) {
+          bestScore = score;
+          best = chunk;
+        }
+      }
+      return {
+        answer: best
+          ? `AI 暫時無法使用，為你找到手冊裡最相關的原文段落：\n\n【${best.title}】\n${best.text}`
+          : '找不到相關規則，建議直接聯繫值班社工確認。',
+        sources: best ? [best.title] : []
+      };
+    };
+
+    if (!question || !String(question).trim()) {
+      return res.status(400).json({ success: false, error: '請輸入問題' });
+    }
+
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey || rulebookEmbeddings.length === 0) {
+        return res.json({ success: true, isFallback: true, ...keywordFallback() });
+      }
+
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+      });
+
+      const embedRes = await ai.models.embedContent({
+        model: 'gemini-embedding-001',
+        contents: question
+      });
+      const questionVector = embedRes.embeddings?.[0]?.values;
+      if (!questionVector) throw new Error('No embedding returned for question');
+
+      const ranked = rulebookEmbeddings
+        .map(chunk => ({ chunk, score: cosineSimilarity(questionVector, chunk.embedding) }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 3);
+
+      const contextText = ranked
+        .map(r => `【${r.chunk.title}】\n${r.chunk.text}`)
+        .join('\n\n');
+
+      const prompt = `你是浪浪家園流浪動物之家的志工手冊問答助理。請「只根據」以下手冊摘錄回答志工的問題，語氣親切簡短。如果摘錄中真的找不到答案，請誠實說明手冊沒有明確規定，並建議聯繫值班社工，不要編造規則。
+
+手冊摘錄：
+${contextText}
+
+志工問題：${question}`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.6-flash',
+        contents: prompt
+      });
+
+      const answer = (response.text || '').trim();
+      if (!answer) throw new Error('Empty answer from Gemini');
+
+      return res.json({
+        success: true,
+        isFallback: false,
+        answer,
+        sources: ranked.map(r => r.chunk.title)
+      });
+    } catch (error: any) {
+      console.warn('RAG Ask Error (fallback activated):', error?.message || error);
+      return res.json({ success: true, isFallback: true, ...keywordFallback() });
     }
   });
 

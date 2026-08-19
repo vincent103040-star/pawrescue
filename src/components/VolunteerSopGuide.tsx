@@ -1,5 +1,5 @@
-import React from 'react';
-import { BookOpen, ShieldAlert, Heart, CheckCircle2, AlertTriangle, Phone, FileText, Sparkles, Download, ArrowRight, ShieldCheck, Dog, Cat, Syringe } from 'lucide-react';
+import React, { useState } from 'react';
+import { BookOpen, ShieldAlert, Heart, CheckCircle2, AlertTriangle, Phone, FileText, Sparkles, Download, ArrowRight, ShieldCheck, Dog, Cat, Syringe, MessageCircleQuestion, Loader2 } from 'lucide-react';
 
 interface VolunteerSopGuideProps {
   onOpenRulebookModal: () => void;
@@ -8,6 +8,31 @@ interface VolunteerSopGuideProps {
 export const VolunteerSopGuide: React.FC<VolunteerSopGuideProps> = ({
   onOpenRulebookModal
 }) => {
+  const [ragQuestion, setRagQuestion] = useState('');
+  const [ragAnswer, setRagAnswer] = useState<{ answer: string; sources: string[]; isFallback?: boolean } | null>(null);
+  const [ragLoading, setRagLoading] = useState(false);
+
+  const handleAskRulebook = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ragQuestion.trim() || ragLoading) return;
+    setRagLoading(true);
+    setRagAnswer(null);
+    try {
+      const res = await fetch('/api/ai/rag-ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: ragQuestion })
+      });
+      const data = await res.json();
+      setRagAnswer({ answer: data.answer, sources: data.sources || [], isFallback: data.isFallback });
+    } catch (err) {
+      console.warn('Rulebook RAG ask failed', err);
+      setRagAnswer({ answer: '暫時連不上 AI 服務，請直接聯繫值班社工，或稍後再試一次。', sources: [] });
+    } finally {
+      setRagLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-8 py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto font-sans">
       
@@ -33,6 +58,51 @@ export const VolunteerSopGuide: React.FC<VolunteerSopGuideProps> = ({
           <FileText className="w-4 h-4" />
           <span>開啟完整手冊 &bull; PDF 下載</span>
         </button>
+      </div>
+
+      {/* Rulebook AI Q&A (RAG over the rulebook/SOP content above) */}
+      <div className="bg-white rounded-[28px] p-6 border border-[#5A5A40]/15 shadow-xs space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-[#E6E2D3] text-[#5A5A40] flex items-center justify-center">
+            <MessageCircleQuestion className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="font-bold font-serif text-slate-900 text-base">問手冊 AI 小幫手</h3>
+            <p className="text-[11px] text-slate-500">直接用你的話問規則手冊，AI 只會根據手冊內容回答，查不到會誠實說</p>
+          </div>
+        </div>
+
+        <form onSubmit={handleAskRulebook} className="flex flex-col sm:flex-row gap-2">
+          <input
+            type="text"
+            value={ragQuestion}
+            onChange={e => setRagQuestion(e.target.value)}
+            placeholder="例如：貓咪飛機耳的時候該怎麼辦？"
+            className="flex-1 p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl focus:ring-2 focus:ring-[#5A5A40] focus:outline-none text-xs"
+          />
+          <button
+            type="submit"
+            disabled={!ragQuestion.trim() || ragLoading}
+            className="px-5 py-3 bg-[#5A5A40] hover:bg-[#484833] text-white rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-40 cursor-pointer shrink-0"
+          >
+            {ragLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-amber-300" />}
+            <span>{ragLoading ? '查詢中...' : '問問看'}</span>
+          </button>
+        </form>
+
+        {ragAnswer && (
+          <div className="bg-[#f5f5f0] p-4 rounded-2xl text-xs text-slate-700 leading-relaxed space-y-2">
+            <p className="whitespace-pre-line">{ragAnswer.answer}</p>
+            {ragAnswer.sources.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                <span className="text-[10px] text-slate-400">參考段落：</span>
+                {ragAnswer.sources.map(s => (
+                  <span key={s} className="text-[10px] bg-white border border-[#5A5A40]/15 text-[#5A5A40] px-2 py-0.5 rounded-full">{s}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Safety SOP Cards Grid */}
