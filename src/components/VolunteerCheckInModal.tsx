@@ -11,7 +11,7 @@ interface VolunteerCheckInModalProps {
   attendanceRecords: AttendanceRecord[];
   onClose: () => void;
   onCheckInSubmit: (record: Omit<AttendanceRecord, 'id'>) => void;
-  onCheckOutSubmit: (recordId: string, checkOutTime: string, hoursLogged: number, rating?: number, comment?: string) => void;
+  onCheckOutSubmit: (recordId: string, checkOutTime: string, hoursLogged: number, rating?: number, comment?: string, photo?: { base64: string; mimeType: string }) => void;
   onSendLineToast: (msg: string) => void;
 }
 
@@ -307,7 +307,8 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
       checkOutTimeStr,
       hours,
       finalRating,
-      finalComment
+      finalComment,
+      checkoutPhoto ? { base64: checkoutPhoto.base64, mimeType: checkoutPhoto.mimeType } : undefined
     );
 
     onSendLineToast(

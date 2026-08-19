@@ -110,6 +110,20 @@ export default function App() {
       .catch(() => { /* keep the locally cached roster if the backend is unreachable */ });
   }, []);
 
+  // Same idea for attendance records: they used to live only in this browser's
+  // localStorage, so a volunteer checking in on their phone (via LIFF) and an admin
+  // looking at the dashboard on a desktop never saw each other's data.
+  useEffect(() => {
+    fetch('/api/attendance')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && Array.isArray(data.records)) {
+          setAttendanceRecords(data.records);
+        }
+      })
+      .catch(() => { /* keep the locally cached records if the backend is unreachable */ });
+  }, []);
+
   // Modals state
   const [aiModalShift, setAiModalShift] = useState<PositionShift | null>(null);
   const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
@@ -254,6 +268,12 @@ export default function App() {
     if (newRecord.applicationId) {
       setApplications(prev => prev.map(a => a.id === newRecord.applicationId ? { ...a, status: 'attended' } : a));
     }
+
+    fetch('/api/attendance/check-in', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newRecord)
+    }).catch(() => { /* best-effort backend sync -- local state already has it */ });
   };
 
   const handleCheckOutSubmit = (
@@ -261,7 +281,8 @@ export default function App() {
     checkOutTime: string,
     hoursLogged: number,
     rating?: number,
-    comment?: string
+    comment?: string,
+    photo?: { base64: string; mimeType: string }
   ) => {
     let checkedOutName = '';
 
@@ -282,6 +303,27 @@ export default function App() {
       }
       return r;
     }));
+
+    fetch(`/api/attendance/${recordId}/check-out`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        checkOutTime,
+        hoursLogged,
+        rating,
+        feedbackComment: comment,
+        photoBase64: photo?.base64,
+        mimeType: photo?.mimeType
+      })
+    })
+      .then(res => res.json())
+      .then(data => {
+        // Pick up the server-assigned photoUrl once the photo is actually saved to disk.
+        if (data.success && data.record?.photoUrl) {
+          setAttendanceRecords(prev => prev.map(r => r.id === recordId ? { ...r, photoUrl: data.record.photoUrl } : r));
+        }
+      })
+      .catch(() => { /* best-effort backend sync -- local state already has the text feedback */ });
 
     if (checkedOutName) {
       setVolunteers(prev => prev.map(v => {

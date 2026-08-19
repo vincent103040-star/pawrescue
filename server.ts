@@ -1,10 +1,10 @@
 import express from 'express';
 import path from 'path';
-import { readFileSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
-import { getAllVolunteers, getVolunteerByEmail, upsertVolunteerFromLogin, addCompletedShiftHours, setLineUserId, getLineUserId, setLinePreferences, getLinePreferences } from './db';
+import { getAllVolunteers, getVolunteerByEmail, upsertVolunteerFromLogin, addCompletedShiftHours, setLineUserId, getLineUserId, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout } from './db';
 
 // dotenv.config() alone only loads a file literally named ".env" — this project
 // (like Vite) keeps secrets in ".env.local", so load that explicitly. ".env" is
@@ -47,6 +47,10 @@ async function startServer() {
 
   // Raised from the 100kb default to fit a compressed check-out photo as base64 JSON.
   app.use(express.json({ limit: '8mb' }));
+
+  const photosDir = path.join(process.cwd(), 'data', 'photos');
+  mkdirSync(photosDir, { recursive: true });
+  app.use('/photos', express.static(photosDir));
 
   // API endpoint: AI Recruitment Post Generator using Gemini API
   app.post('/api/ai/generate-post', async (req, res) => {
@@ -708,6 +712,67 @@ ${contextText}
     } catch (error: any) {
       console.error('Log Hours Error:', error);
       return res.status(500).json({ success: false, error: error.message || '更新服務時數失敗' });
+    }
+  });
+
+  // API endpoint: attendance records — single source of truth (was localStorage-only
+  // before, so different devices/browsers never saw each other's check-ins)
+  app.get('/api/attendance', (req, res) => {
+    try {
+      return res.json({ success: true, records: getAllAttendanceRecords() });
+    } catch (error: any) {
+      console.error('Get Attendance Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '讀取出勤紀錄失敗' });
+    }
+  });
+
+  app.post('/api/attendance/check-in', (req, res) => {
+    try {
+      const record = req.body;
+      if (!record?.id || !record?.volunteerName || !record?.shiftId) {
+        return res.status(400).json({ success: false, error: '缺少必要的簽到欄位' });
+      }
+      const saved = insertAttendanceRecord(record);
+      return res.json({ success: true, record: saved });
+    } catch (error: any) {
+      console.error('Check-In Persist Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '儲存簽到紀錄失敗' });
+    }
+  });
+
+  app.post('/api/attendance/:id/check-out', (req, res) => {
+    try {
+      const { id } = req.params;
+      const { checkOutTime, hoursLogged, rating, feedbackComment, photoBase64, mimeType } = req.body;
+      if (!checkOutTime || typeof hoursLogged !== 'number') {
+        return res.status(400).json({ success: false, error: '缺少簽退時間或服務時數' });
+      }
+
+      let photoUrl: string | undefined;
+      if (photoBase64 && mimeType) {
+        const ext = mimeType === 'image/png' ? 'png' : 'jpg';
+        const filename = `${id}.${ext}`;
+        writeFileSync(path.join(photosDir, filename), Buffer.from(photoBase64, 'base64'));
+        photoUrl = `/photos/${filename}`;
+      }
+
+      const updated = updateAttendanceCheckout(id, {
+        checkOutTime,
+        hoursLogged,
+        rating,
+        feedbackComment,
+        feedbackSubmittedAt: new Date().toLocaleString('zh-TW', { hour12: false }),
+        smsSent: true,
+        photoUrl
+      });
+
+      if (!updated) {
+        return res.status(404).json({ success: false, error: '找不到該筆出勤紀錄' });
+      }
+      return res.json({ success: true, record: updated });
+    } catch (error: any) {
+      console.error('Check-Out Persist Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '儲存簽退紀錄失敗' });
     }
   });
 

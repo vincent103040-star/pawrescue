@@ -1,8 +1,8 @@
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'fs';
 import path from 'path';
-import { VOLUNTEER_PROFILES } from './src/data/mockData';
-import type { VolunteerProfile } from './src/types';
+import { VOLUNTEER_PROFILES, INITIAL_ATTENDANCE_RECORDS } from './src/data/mockData';
+import type { VolunteerProfile, AttendanceRecord } from './src/types';
 
 const dataDir = path.join(process.cwd(), 'data');
 fs.mkdirSync(dataDir, { recursive: true });
@@ -211,4 +211,118 @@ export function getLinePreferences(email: string): StoredLinePreferences {
   } catch {
     return DEFAULT_LINE_PREFERENCES;
   }
+}
+
+// Attendance records (check-in/check-out, feedback rating+comment, check-out photo).
+// This used to live only in the browser's localStorage, so a different device/browser
+// (e.g. a volunteer's phone via LIFF vs. an admin's desktop) never saw the same data.
+// Storing it server-side fixes that.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS attendance_records (
+    id TEXT PRIMARY KEY,
+    applicationId TEXT,
+    volunteerName TEXT NOT NULL,
+    volunteerPhone TEXT,
+    lineId TEXT,
+    shiftId TEXT NOT NULL,
+    shiftTitle TEXT NOT NULL,
+    branchId TEXT NOT NULL,
+    zone TEXT NOT NULL,
+    date TEXT NOT NULL,
+    checkInTime TEXT NOT NULL,
+    checkOutTime TEXT,
+    status TEXT NOT NULL,
+    hoursLogged REAL,
+    locationVerified INTEGER NOT NULL DEFAULT 0,
+    distanceMeters REAL,
+    qrCodeToken TEXT NOT NULL DEFAULT '',
+    rating INTEGER,
+    feedbackComment TEXT,
+    feedbackSubmittedAt TEXT,
+    smsSent INTEGER NOT NULL DEFAULT 0,
+    photoUrl TEXT
+  )
+`);
+
+// Seed with the original mock attendance history on first run only, same pattern as
+// the volunteers table above.
+const attendanceSeedCount = db.prepare('SELECT COUNT(*) AS c FROM attendance_records').get() as { c: number };
+if (attendanceSeedCount.c === 0) {
+  const insertSeed = db.prepare(`
+    INSERT INTO attendance_records
+      (id, applicationId, volunteerName, volunteerPhone, lineId, shiftId, shiftTitle, branchId, zone, date, checkInTime, checkOutTime, status, hoursLogged, locationVerified, distanceMeters, qrCodeToken, rating, feedbackComment, feedbackSubmittedAt, smsSent, photoUrl)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  for (const r of INITIAL_ATTENDANCE_RECORDS) {
+    insertSeed.run(
+      r.id, r.applicationId || null, r.volunteerName, r.volunteerPhone || null, r.lineId || null,
+      r.shiftId, r.shiftTitle, r.branchId, r.zone, r.date, r.checkInTime, r.checkOutTime || null,
+      r.status, r.hoursLogged ?? null, r.locationVerified ? 1 : 0, r.distanceMeters ?? null,
+      r.qrCodeToken, r.rating ?? null, r.feedbackComment || null, r.feedbackSubmittedAt || null,
+      r.smsSent ? 1 : 0, r.photoUrl || null
+    );
+  }
+}
+
+function rowToAttendanceRecord(row: any): AttendanceRecord {
+  return {
+    id: row.id,
+    applicationId: row.applicationId || undefined,
+    volunteerName: row.volunteerName,
+    volunteerPhone: row.volunteerPhone || undefined,
+    lineId: row.lineId || undefined,
+    shiftId: row.shiftId,
+    shiftTitle: row.shiftTitle,
+    branchId: row.branchId,
+    zone: row.zone,
+    date: row.date,
+    checkInTime: row.checkInTime,
+    checkOutTime: row.checkOutTime || undefined,
+    status: row.status,
+    hoursLogged: row.hoursLogged ?? undefined,
+    locationVerified: !!row.locationVerified,
+    distanceMeters: row.distanceMeters ?? undefined,
+    qrCodeToken: row.qrCodeToken,
+    rating: row.rating ?? undefined,
+    feedbackComment: row.feedbackComment || undefined,
+    feedbackSubmittedAt: row.feedbackSubmittedAt || undefined,
+    smsSent: !!row.smsSent,
+    photoUrl: row.photoUrl || undefined
+  };
+}
+
+export function getAllAttendanceRecords(): AttendanceRecord[] {
+  const rows = db.prepare('SELECT * FROM attendance_records ORDER BY checkInTime DESC').all();
+  return rows.map(rowToAttendanceRecord);
+}
+
+export function insertAttendanceRecord(r: AttendanceRecord): AttendanceRecord {
+  db.prepare(`
+    INSERT INTO attendance_records
+      (id, applicationId, volunteerName, volunteerPhone, lineId, shiftId, shiftTitle, branchId, zone, date, checkInTime, checkOutTime, status, hoursLogged, locationVerified, distanceMeters, qrCodeToken, rating, feedbackComment, feedbackSubmittedAt, smsSent, photoUrl)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    r.id, r.applicationId || null, r.volunteerName, r.volunteerPhone || null, r.lineId || null,
+    r.shiftId, r.shiftTitle, r.branchId, r.zone, r.date, r.checkInTime, r.checkOutTime || null,
+    r.status, r.hoursLogged ?? null, r.locationVerified ? 1 : 0, r.distanceMeters ?? null,
+    r.qrCodeToken, r.rating ?? null, r.feedbackComment || null, r.feedbackSubmittedAt || null,
+    r.smsSent ? 1 : 0, r.photoUrl || null
+  );
+  return r;
+}
+
+export function updateAttendanceCheckout(
+  id: string,
+  updates: { checkOutTime: string; hoursLogged: number; rating?: number; feedbackComment?: string; feedbackSubmittedAt: string; smsSent: boolean; photoUrl?: string }
+): AttendanceRecord | null {
+  db.prepare(`
+    UPDATE attendance_records
+    SET checkOutTime = ?, hoursLogged = ?, status = 'completed', rating = ?, feedbackComment = ?, feedbackSubmittedAt = ?, smsSent = ?, photoUrl = COALESCE(?, photoUrl)
+    WHERE id = ?
+  `).run(
+    updates.checkOutTime, updates.hoursLogged, updates.rating ?? null, updates.feedbackComment || null,
+    updates.feedbackSubmittedAt, updates.smsSent ? 1 : 0, updates.photoUrl || null, id
+  );
+  const row = db.prepare('SELECT * FROM attendance_records WHERE id = ?').get(id);
+  return row ? rowToAttendanceRecord(row) : null;
 }

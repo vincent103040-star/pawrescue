@@ -143,6 +143,7 @@ export interface AttendanceRecord {
   feedbackComment?: string;
   feedbackSubmittedAt?: string;
   smsSent?: boolean;
+  photoUrl?: string; // relative URL to the AI-captioned check-out photo, if one was attached
 }
 
 export interface LineMessage {

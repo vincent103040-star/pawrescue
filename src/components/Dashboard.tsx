@@ -918,12 +918,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
                             </div>
                           </div>
 
-                          {/* Feedback Text Quote Box */}
-                          <div className="bg-white p-3 rounded-xl border border-slate-200/80 text-xs text-slate-800 leading-relaxed relative font-sans shadow-2xs">
-                            <span className="text-amber-500 font-serif text-lg leading-none absolute -top-1 left-2">“</span>
-                            <p className="pl-3 pr-1 pt-1 italic text-slate-700">
-                              {item.feedbackComment || '完成志工服務，環境與動線說明十分清晰！'}
-                            </p>
+                          {/* Feedback Text Quote Box (+ check-out photo, if the volunteer attached one) */}
+                          <div className="bg-white p-3 rounded-xl border border-slate-200/80 text-xs text-slate-800 leading-relaxed relative font-sans shadow-2xs flex gap-3">
+                            {item.photoUrl && (
+                              <img
+                                src={item.photoUrl}
+                                alt="志工服務照片"
+                                className="w-16 h-16 rounded-lg object-cover border border-slate-200 shrink-0"
+                              />
+                            )}
+                            <div className="relative flex-1">
+                              <span className="text-amber-500 font-serif text-lg leading-none absolute -top-1 left-2">"</span>
+                              <p className="pl-3 pr-1 pt-1 italic text-slate-700">
+                                {item.feedbackComment || '完成志工服務，環境與動線說明十分清晰！'}
+                              </p>
+                            </div>
                           </div>
                         </div>
 
