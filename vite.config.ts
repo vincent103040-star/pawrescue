@@ -17,6 +17,10 @@ export default defineConfig(() => {
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      // Vite blocks requests whose Host header isn't localhost by default (DNS
+      // rebinding protection). The app is reverse-proxied from a public domain,
+      // so that domain must be explicitly trusted here.
+      allowedHosts: ['35-192-205-12.sslip.io'],
     },
   };
 });
