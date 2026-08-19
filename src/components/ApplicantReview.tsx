@@ -232,6 +232,22 @@ export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
                               <span>🚨 重複報名衝突</span>
                             </button>
                           )}
+                          {app.aiReadinessAssessment && (
+                            <span
+                              className="text-[10px] bg-violet-100 text-violet-800 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 cursor-help"
+                              title={
+                                `AI 情境測驗準備度：${app.aiReadinessAssessment.score}/5\n` +
+                                `回饋：${app.aiReadinessAssessment.feedback}` +
+                                (app.aiReadinessAssessment.flags.length
+                                  ? `\n觀察重點：${app.aiReadinessAssessment.flags.join('、')}`
+                                  : '') +
+                                `\n（僅供參考，不自動核准或拒絕）`
+                              }
+                            >
+                              <Sparkles className="w-3 h-3" />
+                              <span>AI 準備度 {app.aiReadinessAssessment.score}/5</span>
+                            </span>
+                          )}
                         </div>
                         <div className="text-[11px] text-slate-500 flex items-center gap-3 mt-1">
                           <span>📞 {app.volunteerPhone}</span>

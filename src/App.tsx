@@ -354,7 +354,12 @@ export default function App() {
     email: string,
     phone: string,
     lineId: string,
-    notes: string
+    notes: string,
+    situational?: {
+      question: string;
+      answer: string;
+      assessment?: { score: number; feedback: string; flags: string[]; isFallback?: boolean };
+    }
   ) => {
     const shift = shifts.find(s => s.id === shiftId);
     if (!shift) return;
@@ -372,7 +377,10 @@ export default function App() {
       appliedAt: new Date().toLocaleString('zh-TW', { hour12: false }),
       notes,
       syncToCalendar: true,
-      syncToLine: true
+      syncToLine: true,
+      situationalQuestion: situational?.question,
+      situationalAnswer: situational?.answer,
+      aiReadinessAssessment: situational?.assessment
     };
 
     setApplications(prev => [newApp, ...prev]);

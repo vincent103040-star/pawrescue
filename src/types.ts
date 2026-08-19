@@ -66,6 +66,14 @@ export interface VolunteerApplication {
   reviewedAt?: string;
   syncToCalendar: boolean;
   syncToLine: boolean;
+  situationalQuestion?: string;
+  situationalAnswer?: string;
+  aiReadinessAssessment?: {
+    score: number; // 1-5
+    feedback: string; // shown to the applicant, encouraging tone
+    flags: string[]; // objective observations shown to the reviewer only
+    isFallback?: boolean;
+  };
 }
 
 export interface LineNotificationPreferences {

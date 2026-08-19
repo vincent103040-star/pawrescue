@@ -63,7 +63,19 @@ interface VolunteerPortalProps {
   shifts: PositionShift[];
   branches: Branch[];
   selectedBranch: BranchId | 'all';
-  onApplySubmit: (shiftId: string, name: string, email: string, phone: string, lineId: string, notes: string) => void;
+  onApplySubmit: (
+    shiftId: string,
+    name: string,
+    email: string,
+    phone: string,
+    lineId: string,
+    notes: string,
+    situational?: {
+      question: string;
+      answer: string;
+      assessment?: { score: number; feedback: string; flags: string[]; isFallback?: boolean };
+    }
+  ) => void;
   onSendLineToast: (msg: string) => void;
   onOpenCheckInModal?: () => void;
   activeSection?: 'shifts' | 'growth' | 'settings';
@@ -254,6 +266,63 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
   const [notes, setNotes] = useState('');
   const [submittedSuccess, setSubmittedSuccess] = useState(false);
 
+  // AI situational readiness quiz states
+  const [situationalQuestion, setSituationalQuestion] = useState('');
+  const [isLoadingQuestion, setIsLoadingQuestion] = useState(false);
+  const [situationalAnswer, setSituationalAnswer] = useState('');
+  const [aiAssessment, setAiAssessment] = useState<{ score: number; feedback: string; flags: string[]; isFallback?: boolean } | null>(null);
+  const [isAssessing, setIsAssessing] = useState(false);
+
+  const tierToExperienceLevel = (tier?: string): SkillLevel => {
+    if (tier === '資深志工' || tier === '志工隊長') return 'experienced';
+    if (tier === '正式志工') return 'intermediate';
+    return 'beginner';
+  };
+
+  const handleGenerateSituationalQuestion = async (shift: PositionShift) => {
+    setIsLoadingQuestion(true);
+    setSituationalQuestion('');
+    setSituationalAnswer('');
+    setAiAssessment(null);
+    try {
+      const res = await fetch('/api/ai/generate-situational-question', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ zone: shift.zone, experienceLevel: tierToExperienceLevel(currentUser?.tier) })
+      });
+      const data = await res.json();
+      setSituationalQuestion(data.question || '');
+    } catch (err) {
+      console.warn('Situational question fetch failed', err);
+      setSituationalQuestion('');
+    } finally {
+      setIsLoadingQuestion(false);
+    }
+  };
+
+  const handleAssessSituationalAnswer = async (shift: PositionShift) => {
+    if (!situationalAnswer.trim()) return;
+    setIsAssessing(true);
+    try {
+      const res = await fetch('/api/ai/assess-situational-answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          zone: shift.zone,
+          question: situationalQuestion,
+          answer: situationalAnswer,
+          experienceLevel: tierToExperienceLevel(currentUser?.tier)
+        })
+      });
+      const data = await res.json();
+      setAiAssessment({ score: data.score, feedback: data.feedback, flags: data.flags || [], isFallback: data.isFallback });
+    } catch (err) {
+      console.warn('Situational answer assessment failed', err);
+    } finally {
+      setIsAssessing(false);
+    }
+  };
+
   const filteredShifts = shifts.filter(s => {
     if (selectedBranch !== 'all' && s.branchId !== selectedBranch) return false;
     if (selectedZoneFilter !== 'all' && s.zone !== selectedZoneFilter) return false;
@@ -267,13 +336,19 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
     setEmail(profileEmail);
     setPhone(profilePhone);
     setLineId(profileLineId);
+    handleGenerateSituationalQuestion(shift);
   };
 
   const handleConfirmApply = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeShiftForApply) return;
 
-    onApplySubmit(activeShiftForApply.id, name, email, phone, lineId, notes);
+    onApplySubmit(
+      activeShiftForApply.id, name, email, phone, lineId, notes,
+      situationalQuestion
+        ? { question: situationalQuestion, answer: situationalAnswer, assessment: aiAssessment || undefined }
+        : undefined
+    );
     setSubmittedSuccess(true);
 
     setTimeout(() => {
@@ -284,6 +359,9 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
       setPhone('');
       setLineId('');
       setNotes('');
+      setSituationalQuestion('');
+      setSituationalAnswer('');
+      setAiAssessment(null);
     }, 2000);
   };
 
@@ -1352,6 +1430,47 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                     rows={3}
                     className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
                   />
+                </div>
+
+                <div className="p-4 bg-white border border-[#5A5A40]/15 rounded-2xl space-y-3">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-[#5A5A40]">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>AI 情境準備度小測驗（選填，僅供社工參考，不影響報名）</span>
+                  </div>
+
+                  {isLoadingQuestion ? (
+                    <p className="text-[11px] text-slate-500">Gemini 正在為這個班次出情境題...</p>
+                  ) : situationalQuestion ? (
+                    <>
+                      <p className="text-xs text-slate-700 bg-[#f5f5f0] p-3 rounded-xl leading-relaxed">
+                        {situationalQuestion}
+                      </p>
+                      <textarea
+                        value={situationalAnswer}
+                        onChange={e => { setSituationalAnswer(e.target.value); setAiAssessment(null); }}
+                        placeholder="想到什麼就寫什麼，沒有標準答案～"
+                        rows={2}
+                        className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl focus:ring-2 focus:ring-[#5A5A40] focus:outline-none text-xs"
+                      />
+
+                      {aiAssessment ? (
+                        <div className="p-3 bg-[#E6E2D3]/40 border border-[#5A5A40]/15 rounded-xl text-[11px] text-[#5A5A40] space-y-1">
+                          <p className="font-bold">💬 AI 小回饋：{aiAssessment.feedback}</p>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleAssessSituationalAnswer(activeShiftForApply)}
+                          disabled={!situationalAnswer.trim() || isAssessing}
+                          className="text-[11px] font-bold text-[#5A5A40] hover:underline disabled:opacity-40 disabled:hover:no-underline cursor-pointer"
+                        >
+                          {isAssessing ? 'AI 思考中...' : '請 AI 幫我看看這個回答 →'}
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-[11px] text-slate-400">這次沒有出題，直接送出報名即可。</p>
+                  )}
                 </div>
 
                 <div className="p-3.5 bg-[#f5f5f0] border border-[#5A5A40]/12 rounded-2xl text-[11px] text-[#5A5A40] space-y-1">

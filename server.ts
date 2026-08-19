@@ -336,6 +336,134 @@ ${JSON.stringify(branchData, null, 2)}
     }
   });
 
+  // Shared fallback content for the situational readiness quiz (used when no API key or on error)
+  const ZONE_DISPLAY_NAMES: Record<string, string> = {
+    cat: '貓舍區',
+    dog: '大狗運動場',
+    puppy: '幼犬育幼區',
+    medical: '醫療與隔離區',
+    logistics: '物資與行政導覽區'
+  };
+
+  const FALLBACK_SITUATIONAL_QUESTIONS: Record<string, string> = {
+    cat: '如果貓咪突然對你哈氣並躲進籠子深處，你會怎麼處理？',
+    dog: '如果大型犬在運動場放風時突然對其他狗吠叫、拉扯牽繩，你會怎麼處理？',
+    puppy: '如果幼犬出現輕微腹瀉或食慾不振，你會怎麼處理？',
+    medical: '如果協助照護的動物術後傷口滲出異常分泌物，你會怎麼處理？',
+    logistics: '如果一批捐贈物資缺少清楚標示、你不確定該分類到哪裡，你會怎麼處理？'
+  };
+
+  const EXPERIENCE_LABELS: Record<string, string> = {
+    beginner: '新手（無相關經驗）',
+    intermediate: '略有經驗',
+    experienced: '資深熟練'
+  };
+
+  // API endpoint: AI Dynamic Situational Question Generator (volunteer readiness quiz)
+  app.post('/api/ai/generate-situational-question', async (req, res) => {
+    const { zone, experienceLevel } = req.body;
+    const zoneName = ZONE_DISPLAY_NAMES[zone] || '園區服務';
+    const experienceLabel = EXPERIENCE_LABELS[experienceLevel] || '新手（無相關經驗）';
+
+    const fallbackQuestion = FALLBACK_SITUATIONAL_QUESTIONS[zone] || FALLBACK_SITUATIONAL_QUESTIONS.cat;
+
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.json({ success: true, question: fallbackQuestion, isFallback: true });
+      }
+
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+      });
+
+      const prompt = `你是資深動物收容所志工培訓督導。請為即將申請「${zoneName}」班次、自評經驗程度為「${experienceLabel}」的志工申請人，出一題貼近真實現場的情境判斷題，測試他對動物行為觀察與安全處理的認知。
+
+只回傳題目文字本身（1 句話，繁體中文，50 字以內），不要加任何標題、編號或額外說明。`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt
+      });
+
+      const question = (response.text || '').trim().replace(/^["「]|["」]$/g, '');
+      if (!question) {
+        return res.json({ success: true, question: fallbackQuestion, isFallback: true });
+      }
+      return res.json({ success: true, question, isFallback: false });
+    } catch (error: any) {
+      console.warn('Gemini Situational Question Error (fallback activated):', error?.message || error);
+      return res.json({ success: true, question: fallbackQuestion, isFallback: true });
+    }
+  });
+
+  // API endpoint: AI Situational Answer Readiness Assessment (volunteer readiness quiz)
+  app.post('/api/ai/assess-situational-answer', async (req, res) => {
+    const { zone, question, answer, experienceLevel } = req.body;
+    const experienceLabel = EXPERIENCE_LABELS[experienceLevel] || '新手（無相關經驗）';
+
+    const fallbackAssessment = {
+      score: 3,
+      feedback: '感謝你認真分享你的想法！社工夥伴會在審核時進一步了解你的照護經驗，若有不熟悉的地方，錄取後也會有完整的培訓與資深志工陪同帶領，不用太緊張。',
+      flags: [] as string[]
+    };
+
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey || !answer || !String(answer).trim()) {
+        return res.json({ success: true, ...fallbackAssessment, isFallback: true });
+      }
+
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+      });
+
+      const prompt = `你是一位溫和但專業的動物收容所志工培訓督導，負責初步評估志工申請人對現場情境的準備度，而不是決定是否錄取（錄取與否由人類社工決定）。
+
+情境題：${question}
+申請人回答：${answer}
+申請人自評經驗程度：${experienceLabel}
+
+請以【純 JSON 格式】回覆（不要包含 markdown \`\`\`json 或額外開頭結尾文字），格式如下：
+{
+  "score": 1到5的整數（準備度評分，5為最佳）,
+  "feedback": "給申請人看的回饋，鼓勵性語氣，100字內；若回答顯示可能有安全疑慮，也要溫和具體地指出並給建議",
+  "flags": ["給審核社工看的客觀觀察重點，最多3點，簡短片語即可，例如：對貓咪緊迫訊號辨識度待加強"]
+}`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt
+      });
+
+      const generatedText = (response.text || '').trim();
+      let parsed: any = null;
+      try {
+        const cleanJson = generatedText.replace(/```json/g, '').replace(/```/g, '').trim();
+        parsed = JSON.parse(cleanJson);
+      } catch (err) {
+        console.warn('Failed to parse Gemini situational assessment JSON, using fallback');
+      }
+
+      if (parsed && typeof parsed.score === 'number' && parsed.feedback) {
+        return res.json({
+          success: true,
+          isFallback: false,
+          score: parsed.score,
+          feedback: parsed.feedback,
+          flags: Array.isArray(parsed.flags) ? parsed.flags : []
+        });
+      }
+
+      return res.json({ success: true, ...fallbackAssessment, isFallback: true });
+    } catch (error: any) {
+      console.warn('Gemini Situational Assessment Error (fallback activated):', error?.message || error);
+      return res.json({ success: true, ...fallbackAssessment, isFallback: true });
+    }
+  });
+
   // API endpoint: Google login / self profile-edit upsert into the persistent SQLite volunteer DB
   app.post('/api/auth/google-phone-login', async (req, res) => {
     try {
