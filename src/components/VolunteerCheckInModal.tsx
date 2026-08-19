@@ -61,6 +61,55 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
   const [feedbackComment, setFeedbackComment] = useState<string>('');
   const [isSmsSentNotificationShown, setIsSmsSentNotificationShown] = useState(false);
 
+  // Check-out photo + AI caption state
+  const [checkoutPhoto, setCheckoutPhoto] = useState<{ previewUrl: string; base64: string; mimeType: string } | null>(null);
+  const [isCaptioning, setIsCaptioning] = useState(false);
+
+  // Downscale to keep the upload small and fast on mobile data, since a raw
+  // phone photo can be several MB -- we only need enough detail for the AI
+  // caption, not full resolution.
+  const handlePhotoSelected = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 1024;
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+        setCheckoutPhoto({
+          previewUrl: dataUrl,
+          base64: dataUrl.split(',')[1],
+          mimeType: 'image/jpeg'
+        });
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAiCaptionPhoto = async (shiftTitle: string, zone: string) => {
+    if (!checkoutPhoto || isCaptioning) return;
+    setIsCaptioning(true);
+    try {
+      const res = await fetch('/api/ai/caption-photo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: checkoutPhoto.base64, mimeType: checkoutPhoto.mimeType, shiftTitle, zone })
+      });
+      const data = await res.json();
+      if (data.caption) setFeedbackComment(data.caption);
+    } catch (err) {
+      console.warn('AI photo caption failed', err);
+    } finally {
+      setIsCaptioning(false);
+    }
+  };
+
   // Geofencing states
   const [presetLocationMode, setPresetLocationMode] = useState<'on_site' | 'nearby' | 'far'>('on_site');
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -266,6 +315,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
     );
 
     setPendingFeedbackRecord(null);
+    setCheckoutPhoto(null);
   };
 
   // Resend Feedback SMS link for completed record
@@ -820,7 +870,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
               </div>
 
               <button
-                onClick={() => setPendingFeedbackRecord(null)}
+                onClick={() => { setPendingFeedbackRecord(null); setCheckoutPhoto(null); }}
                 className="text-slate-400 hover:text-slate-600 p-1.5 rounded-full hover:bg-slate-100 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -907,6 +957,46 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                   ))}
                 </div>
               </div>
+            </div>
+
+            {/* Check-out Photo + AI Caption */}
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-700">今天的服務照片 (選填)：</label>
+              {checkoutPhoto ? (
+                <div className="flex items-start gap-3">
+                  <img src={checkoutPhoto.previewUrl} alt="服務照片預覽" className="w-20 h-20 object-cover rounded-xl border border-slate-200 shrink-0" />
+                  <div className="flex-1 space-y-1.5">
+                    <button
+                      type="button"
+                      onClick={() => pendingFeedbackRecord && handleAiCaptionPhoto(pendingFeedbackRecord.shiftTitle, pendingFeedbackRecord.zone)}
+                      disabled={isCaptioning}
+                      className="w-full bg-[#5A5A40] hover:bg-[#484833] text-white text-[11px] font-bold py-2 rounded-xl flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                      <span>{isCaptioning ? 'AI 看照片寫心得中...' : '請 AI 幫我看照片寫心得'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCheckoutPhoto(null)}
+                      className="text-[10px] text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      移除照片重新選擇
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-300 hover:border-[#5A5A40]/40 rounded-xl py-4 text-xs text-slate-500 cursor-pointer transition">
+                  <Camera className="w-4 h-4" />
+                  <span>拍照或選擇一張今天的服務照片</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={e => e.target.files?.[0] && handlePhotoSelected(e.target.files[0])}
+                  />
+                </label>
+              )}
             </div>
 
             {/* Feedback Comment Textarea */}

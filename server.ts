@@ -45,7 +45,8 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  // Raised from the 100kb default to fit a compressed check-out photo as base64 JSON.
+  app.use(express.json({ limit: '8mb' }));
 
   // API endpoint: AI Recruitment Post Generator using Gemini API
   app.post('/api/ai/generate-post', async (req, res) => {
@@ -579,6 +580,49 @@ ${contextText}
     } catch (error: any) {
       console.warn('RAG Ask Error (fallback activated):', error?.message || error);
       return res.json({ success: true, isFallback: true, ...keywordFallback() });
+    }
+  });
+
+  // API endpoint: AI caption for a volunteer's check-out photo. Multimodal --
+  // the image itself is sent to Gemini, not just described in text, so the
+  // suggested caption actually reflects what's in the photo.
+  app.post('/api/ai/caption-photo', async (req, res) => {
+    const { imageBase64, mimeType, shiftTitle, zone } = req.body;
+
+    const fallbackCaption = `今天在${shiftTitle || '園區'}服務，陪伴毛孩度過充實的一天，謝謝這份溫暖的付出！`;
+
+    if (!imageBase64 || !mimeType) {
+      return res.status(400).json({ success: false, error: '缺少照片資料' });
+    }
+
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.json({ success: true, caption: fallbackCaption, isFallback: true });
+      }
+
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+      });
+
+      const prompt = `你是流浪動物之家的志工社群小編。這張照片是志工今天在「${shiftTitle || '園區'}」（場域：${zone || '未指定'}）服務時拍的。請根據照片實際內容，寫一段 60-100 字的溫暖第一人稱心得文字，適合放進志工的服務紀錄與領養牆故事。語氣真誠、具體描述照片中看到的畫面，不要空泛通用，也不要編造照片裡沒有的細節。只回傳心得文字本身，不要加任何標題或引號。`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.6-flash',
+        contents: [
+          { text: prompt },
+          { inlineData: { mimeType, data: imageBase64 } }
+        ]
+      });
+
+      const caption = (response.text || '').trim();
+      if (!caption) throw new Error('Empty caption from Gemini');
+
+      return res.json({ success: true, caption, isFallback: false });
+    } catch (error: any) {
+      console.warn('Photo Caption Error (fallback activated):', error?.message || error);
+      return res.json({ success: true, caption: fallbackCaption, isFallback: true });
     }
   });
 
