@@ -59,7 +59,7 @@ async function startServer() {
 4. 結尾請用充滿愛心號召力的語氣，長度約 250-350 字。`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.7-flash',
+        model: 'gemini-2.5-flash',
         contents: prompt
       });
 
@@ -119,7 +119,7 @@ async function startServer() {
 5. 長度約 150-250 字，適合在手機 LINE 螢幕上快速閱讀。`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.7-flash',
+        model: 'gemini-2.5-flash',
         contents: prompt
       });
 
@@ -228,7 +228,7 @@ ${JSON.stringify(branchData, null, 2)}
 }`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.7-flash',
+        model: 'gemini-2.5-flash',
         contents: prompt
       });
 
