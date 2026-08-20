@@ -614,8 +614,12 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
         </div>
 
         <div className="text-xs text-slate-600 font-semibold px-3 flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-          <span>預設 LINE ID：@{profileLineId}</span>
+          <span className={`w-2 h-2 rounded-full ${lineLinkStatus?.linked ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
+          <span>
+            {lineLinkStatus?.linked
+              ? `已連結 LINE 帳號：${lineLinkStatus.displayName || '已連結'}`
+              : '尚未連結真實 LINE 帳號'}
+          </span>
         </div>
       </div>
 
@@ -1203,20 +1207,6 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                   onChange={e => setProfileEmail(e.target.value)}
                   className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs font-medium focus:ring-2 focus:ring-[#5A5A40] focus:outline-none placeholder:text-slate-400"
                 />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[#5A5A40] mb-1">LINE 暱稱／備註</label>
-                <input
-                  type="text"
-                  required
-                  value={profileLineId}
-                  onChange={e => setProfileLineId(e.target.value)}
-                  className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs font-medium focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
-                />
-                <p className="text-[10px] text-slate-400 mt-1">
-                  這是自行輸入的備註，LINE 平台不提供查詢您帳號的搜尋 ID（例如 @手動設定的那組）。真正能用來發送 LINE 推播的身分，是下方「連結真實 LINE 帳號」取得的官方資料。
-                </p>
               </div>
 
               <div>
