@@ -940,6 +940,7 @@ ${contextText}
     // LINE expects a fast 200 to consider the webhook healthy (its Console "Verify"
     // button sends a request with no events at all and just checks the status code).
     res.sendStatus(200);
+    console.log('LINE Webhook: received', (req.body?.events || []).length, 'event(s)');
 
     const channelSecret = process.env.LINE_CHANNEL_SECRET;
     const signature = req.get('x-line-signature');
@@ -976,7 +977,11 @@ ${contextText}
     }
 
     async function replyToLine(replyToken: string, text: string) {
-      if (!token || !replyToken) return;
+      if (!token) {
+        console.warn('LINE Webhook: LINE_CHANNEL_ACCESS_TOKEN not set, skipping reply');
+        return;
+      }
+      if (!replyToken) return;
       const lineRes = await fetch('https://api.line.me/v2/bot/message/reply', {
         method: 'POST',
         headers: {
@@ -985,6 +990,9 @@ ${contextText}
         },
         body: JSON.stringify({ replyToken, messages: [{ type: 'text', text: text.slice(0, 5000) }] })
       });
+      if (lineRes.ok) {
+        console.log('LINE Webhook: reply sent successfully');
+      }
       if (!lineRes.ok) {
         console.error('LINE Reply API 錯誤:', await lineRes.text());
       }
