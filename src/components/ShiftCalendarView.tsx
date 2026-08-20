@@ -357,9 +357,111 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
         </div>
       </div>
 
-      {/* Main Full Page Calendar Grid */}
-      <div className="bg-white rounded-[32px] border border-[#5A5A40]/15 overflow-hidden shadow-xs">
-        
+      {/* Mobile Agenda / List View -- a 7-column grid genuinely can't fit readable
+          text on a phone screen, so below the md breakpoint we switch to a
+          Google-Calendar-style agenda list (one card per day-with-shifts) instead
+          of just shrinking the same grid. */}
+      <div className="md:hidden space-y-3">
+        {(() => {
+          const daysWithShifts = calendarCells
+            .filter(cell => cell.isCurrentMonth)
+            .map(cell => ({ cell, dayShifts: filteredShifts.filter(s => s.date === cell.dateStr) }))
+            .filter(({ dayShifts }) => dayShifts.length > 0);
+
+          if (daysWithShifts.length === 0) {
+            return (
+              <div className="bg-white rounded-3xl border border-[#5A5A40]/15 p-8 text-center text-sm text-slate-400">
+                本月尚無符合篩選條件的班次
+              </div>
+            );
+          }
+
+          return daysWithShifts.map(({ cell, dayShifts }) => {
+            const weekdayLabel = weekDays[new Date(`${cell.dateStr}T00:00:00`).getDay()];
+            return (
+              <div
+                key={cell.dateStr}
+                className={`bg-white rounded-3xl border overflow-hidden shadow-xs ${
+                  cell.isToday ? 'border-amber-400 ring-1 ring-amber-300' : 'border-[#5A5A40]/15'
+                }`}
+              >
+                <div className={`px-4 py-2.5 flex items-center justify-between ${cell.isToday ? 'bg-amber-50' : 'bg-[#f8f8f5]'}`}>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm font-extrabold font-mono px-2 py-0.5 rounded-full ${
+                      cell.isToday ? 'bg-amber-500 text-slate-950' : 'text-slate-800'
+                    }`}>
+                      {month + 1}/{cell.dayNum}
+                    </span>
+                    <span className="text-xs text-slate-500 font-bold">
+                      {weekdayLabel}{cell.isToday ? ' · 今天' : ''}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-bold text-[#5A5A40] bg-white border border-[#5A5A40]/10 px-2 py-0.5 rounded-full">
+                    {dayShifts.length} 班次
+                  </span>
+                </div>
+
+                <div className="p-3 space-y-2">
+                  {dayShifts.map(shift => {
+                    const zConf = ZONE_CONFIGS[shift.zone];
+                    const isFull = shift.currentCount >= shift.requiredCount;
+                    const isApplied = myAppliedShiftIds.includes(shift.id);
+
+                    return (
+                      <div
+                        key={shift.id}
+                        onClick={() => setActiveShiftDetail(shift)}
+                        className={`p-3 rounded-2xl text-sm border transition shadow-2xs cursor-pointer active:scale-[0.98] ${
+                          isApplied
+                            ? 'bg-emerald-50 border-emerald-300 ring-1 ring-emerald-400 text-emerald-950'
+                            : shift.zone === 'cat'
+                            ? 'bg-amber-50 border-amber-200 text-amber-950'
+                            : shift.zone === 'dog'
+                            ? 'bg-sky-50 border-sky-200 text-sky-950'
+                            : shift.zone === 'puppy'
+                            ? 'bg-rose-50 border-rose-200 text-rose-950'
+                            : shift.zone === 'medical'
+                            ? 'bg-purple-50 border-purple-200 text-purple-950'
+                            : 'bg-emerald-50 border-emerald-200 text-emerald-950'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 font-bold">
+                            <span>{zConf?.icon}</span>
+                            <span>{shift.title}</span>
+                          </div>
+                          {isVolunteerMode && isApplied && (
+                            <span className="bg-emerald-600 text-white text-[10px] font-black px-2 py-0.5 rounded-md shrink-0">
+                              已報名
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs mt-1.5 text-slate-600 pt-1.5 border-t border-slate-200/50">
+                          <span className="flex items-center gap-1 font-mono">
+                            <Clock className="w-3.5 h-3.5 text-slate-400" />
+                            <span>{shift.timeRange}</span>
+                          </span>
+                          <span className={`font-bold px-2 py-0.5 rounded-full ${
+                            isFull ? 'bg-emerald-200 text-emerald-900' : 'bg-white text-slate-700 border border-slate-200'
+                          }`}>
+                            {shift.currentCount}/{shift.requiredCount} 人
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          });
+        })()}
+      </div>
+
+      {/* Main Full Page Calendar Grid (desktop/tablet only -- a 7-column grid
+          doesn't fit readable text on a phone screen, see the agenda list above) */}
+      <div className="hidden md:block bg-white rounded-[32px] border border-[#5A5A40]/15 overflow-hidden shadow-xs">
+
         {/* Days of Week Header */}
         <div className="grid grid-cols-7 border-b border-[#5A5A40]/15 bg-[#f8f8f5] text-center">
           {weekDays.map((wd, i) => (

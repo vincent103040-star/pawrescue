@@ -35,18 +35,18 @@ export const VolunteerNavbar: React.FC<VolunteerNavbarProps> = ({
     <header className="bg-white border-b border-amber-200/80 sticky top-0 z-40 shadow-xs">
       
       {/* Top Volunteer Notice & Status Bar */}
-      <div className="bg-[#5A5A40] text-white text-xs py-1.5 px-4 flex justify-between items-center font-medium">
-        <div className="flex items-center space-x-2">
-          <span className="bg-amber-100 text-amber-900 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold tracking-wider uppercase flex items-center gap-1">
+      <div className="bg-[#5A5A40] text-white text-xs py-1.5 px-4 flex flex-wrap gap-y-1 justify-between items-center font-medium">
+        <div className="flex items-center space-x-2 min-w-0">
+          <span className="bg-amber-100 text-amber-900 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold tracking-wider uppercase flex items-center gap-1 shrink-0">
             <HeartHandshake className="w-3 h-3 text-amber-700" />
             <span>志工專屬服務平台</span>
           </span>
-          <span className="font-sans text-white/90">
+          <span className="hidden sm:inline font-sans text-white/90 truncate">
             🐾 浪浪家園 PawRescue &bull; 志工排班、出勤簽到與成長歷程
           </span>
         </div>
 
-        <div className="flex items-center space-x-3 text-white/90 text-[11px]">
+        <div className="flex items-center space-x-2 text-white/90 text-[11px] shrink-0">
           <div className="hidden sm:flex items-center gap-2 bg-black/20 px-2.5 py-0.5 rounded-full">
             <User className="w-3.5 h-3.5 text-amber-200" />
             <span>
@@ -59,7 +59,7 @@ export const VolunteerNavbar: React.FC<VolunteerNavbarProps> = ({
 
           <button
             onClick={onSwitchToAdmin}
-            className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-2.5 py-0.5 rounded-full text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
+            className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-2.5 py-0.5 rounded-full text-[11px] font-bold flex items-center gap-1 transition cursor-pointer whitespace-nowrap shrink-0"
             title="切換至管理者 / 社工督導控制台"
           >
             <ArrowRightLeft className="w-3 h-3" />
@@ -69,7 +69,7 @@ export const VolunteerNavbar: React.FC<VolunteerNavbarProps> = ({
 
           <button
             onClick={onLogout}
-            className="hover:bg-white/20 text-white/80 hover:text-white px-2 py-0.5 rounded-md text-[11px] flex items-center gap-1 transition cursor-pointer"
+            className="hover:bg-white/20 text-white/80 hover:text-white px-2 py-0.5 rounded-md text-[11px] flex items-center gap-1 transition cursor-pointer whitespace-nowrap shrink-0"
             title="登出並返回身分選擇頁"
           >
             <LogOut className="w-3 h-3" />
@@ -79,23 +79,23 @@ export const VolunteerNavbar: React.FC<VolunteerNavbarProps> = ({
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-18">
-          
+        <div className="flex flex-wrap items-center justify-between gap-y-2 min-h-18 py-2">
+
           {/* Logo & Volunteer Portal Name */}
-          <div className="flex items-center space-x-3 cursor-pointer group" onClick={() => setActiveTab('shifts')}>
-            <div className="w-11 h-11 rounded-2xl bg-[#5A5A40] text-white flex items-center justify-center shadow-xs transform transition group-hover:scale-105">
+          <div className="flex items-center space-x-3 cursor-pointer group min-w-0" onClick={() => setActiveTab('shifts')}>
+            <div className="w-11 h-11 rounded-2xl bg-[#5A5A40] text-white flex items-center justify-center shadow-xs transform transition group-hover:scale-105 shrink-0">
               <PawPrint className="w-6 h-6 text-white" />
             </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <h1 className="text-xl font-bold font-serif italic text-[#5A5A40] tracking-tight">
+            <div className="min-w-0">
+              <div className="flex items-center space-x-2 flex-wrap">
+                <h1 className="text-xl font-bold font-serif italic text-[#5A5A40] tracking-tight whitespace-nowrap">
                   浪浪家園 PawRescue
                 </h1>
-                <span className="text-[10px] bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-0.5 rounded-full font-bold">
+                <span className="text-[10px] bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-0.5 rounded-full font-bold whitespace-nowrap">
                   志工專屬專區
                 </span>
               </div>
-              <p className="text-xs text-slate-500 font-sans">線上搶班 &bull; 我的排班日曆 &bull; 出勤簽到 &bull; 晉升成長</p>
+              <p className="hidden sm:block text-xs text-slate-500 font-sans">線上搶班 &bull; 我的排班日曆 &bull; 出勤簽到 &bull; 晉升成長</p>
             </div>
           </div>
 
@@ -130,21 +130,22 @@ export const VolunteerNavbar: React.FC<VolunteerNavbarProps> = ({
           </div>
 
           {/* Quick Action Button for Volunteer */}
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-2 shrink-0">
             {openCheckInModal && (
               <button
                 onClick={openCheckInModal}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-full text-xs font-bold flex items-center space-x-1.5 shadow-sm transition transform active:scale-95 cursor-pointer"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-full text-xs font-bold flex items-center space-x-1.5 shadow-sm transition transform active:scale-95 cursor-pointer whitespace-nowrap"
               >
-                <QrCode className="w-4 h-4" />
-                <span>手機掃碼簽到 / 簽退</span>
+                <QrCode className="w-4 h-4 shrink-0" />
+                <span className="hidden sm:inline">手機掃碼簽到 / 簽退</span>
+                <span className="sm:hidden">掃碼簽到</span>
               </button>
             )}
 
             {openRulebookModal && (
               <button
                 onClick={openRulebookModal}
-                className="bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 px-3.5 py-2.5 rounded-full text-xs font-bold flex items-center space-x-1.5 shadow-xs transition cursor-pointer"
+                className="bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 px-3.5 py-2.5 rounded-full text-xs font-bold flex items-center space-x-1.5 shadow-xs transition cursor-pointer whitespace-nowrap shrink-0"
               >
                 <BookOpen className="w-4 h-4 text-amber-700" />
                 <span className="hidden sm:inline">安全守則 PDF</span>
