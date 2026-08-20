@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { VolunteerProfile } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
-import { Users, Award, Clock, Search, Shield, Phone, Mail, MessageSquare, Star, Plus, Check, Trophy, TrendingUp, Medal, Sparkles, ArrowUpDown, Filter, Download, FileText } from 'lucide-react';
+import { Users, Award, Clock, Search, Shield, Phone, Mail, MessageSquare, Star, Plus, Check, Trophy, TrendingUp, Medal, Sparkles, ArrowUpDown, Filter, Download, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 import { CertificateModal } from './CertificateModal';
 
 interface VolunteerRosterProps {
@@ -41,6 +41,24 @@ export const VolunteerRoster: React.FC<VolunteerRosterProps> = ({ volunteers }) 
     if (sortBy === 'name') return a.name.localeCompare(b.name, 'zh-TW');
     return 0;
   });
+
+  // Client-side pagination -- purely to keep the browser from having to mount/paint
+  // hundreds of cards at once as the roster grows; the full list is already fetched
+  // in one shot, so this has no effect on server load or network payload.
+  const ITEMS_PER_PAGE = 9;
+  const [currentPage, setCurrentPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(sortedVolunteers.length / ITEMS_PER_PAGE));
+
+  // Changing a filter/search/sort can shrink the result set out from under whatever
+  // page you were on -- snap back to page 1 so you never land on a blank page.
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, tierFilter, sortBy]);
+
+  const paginatedVolunteers = sortedVolunteers.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   // Calculate ranks based on totalHours descending
   const hoursRankedMap = new Map<string, number>();
@@ -260,7 +278,7 @@ export const VolunteerRoster: React.FC<VolunteerRosterProps> = ({ volunteers }) 
 
       {/* Volunteer Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 font-sans">
-        {sortedVolunteers.map(vol => {
+        {paginatedVolunteers.map(vol => {
           const rank = hoursRankedMap.get(vol.id) || 99;
           const isTop3 = rank <= 3;
 
@@ -442,6 +460,47 @@ export const VolunteerRoster: React.FC<VolunteerRosterProps> = ({ volunteers }) 
           );
         })}
       </div>
+
+      {/* Pagination -- only shown once there's actually more than one page */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 pt-2">
+          <button
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+            className="p-2 rounded-xl border border-[#5A5A40]/15 bg-white text-[#5A5A40] disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[#f5f5f0] transition cursor-pointer"
+            title="上一頁"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+            <button
+              key={p}
+              onClick={() => setCurrentPage(p)}
+              className={`w-9 h-9 rounded-xl text-xs font-bold transition cursor-pointer ${
+                p === currentPage
+                  ? 'bg-[#5A5A40] text-white shadow-xs'
+                  : 'bg-white text-slate-600 border border-[#5A5A40]/15 hover:bg-[#f5f5f0]'
+              }`}
+            >
+              {p}
+            </button>
+          ))}
+
+          <button
+            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+            className="p-2 rounded-xl border border-[#5A5A40]/15 bg-white text-[#5A5A40] disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[#f5f5f0] transition cursor-pointer"
+            title="下一頁"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+
+          <span className="text-[11px] text-slate-400 ml-2">
+            第 {currentPage} / {totalPages} 頁・共 {sortedVolunteers.length} 位志工
+          </span>
+        </div>
+      )}
 
       {/* Certificate Modal */}
       {selectedCertVolunteer && (
