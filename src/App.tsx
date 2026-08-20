@@ -280,12 +280,6 @@ export default function App() {
     showToast('🔄 已快速切換為「志工夥伴」服務視角');
   };
 
-  const handleSwitchToAdmin = () => {
-    setUserRole('admin');
-    setAdminActiveTab('dashboard');
-    showToast('🔄 已切換為「管理者 / 社工督導」工作站');
-  };
-
   // Attendance Handlers
   const handleCheckInSubmit = (newRecordData: Omit<AttendanceRecord, 'id'>) => {
     const newRecord: AttendanceRecord = {
@@ -705,7 +699,6 @@ export default function App() {
             openRulebookModal={() => setIsRulebookModalOpen(true)}
             currentUser={volunteerSession}
             myApplicationsCount={myApplicationsCount}
-            onSwitchToAdmin={handleSwitchToAdmin}
             onLogout={handleLogout}
           />
 

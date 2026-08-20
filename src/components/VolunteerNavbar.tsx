@@ -1,5 +1,5 @@
 import React from 'react';
-import { PawPrint, Calendar, Heart, MessageSquare, QrCode, BookOpen, LogOut, ArrowRightLeft, User, TrendingUp, Settings, Star, Building2, CheckCircle2, HeartHandshake } from 'lucide-react';
+import { PawPrint, Calendar, Heart, MessageSquare, QrCode, BookOpen, LogOut, User, TrendingUp, Settings, Star, Building2, CheckCircle2, HeartHandshake } from 'lucide-react';
 import { BranchId, Branch, VolunteerUserSession } from '../types';
 
 export type VolunteerActiveTab = 'shifts' | 'myshifts' | 'growth' | 'settings' | 'sop';
@@ -14,7 +14,6 @@ interface VolunteerNavbarProps {
   openRulebookModal?: () => void;
   currentUser: VolunteerUserSession | null;
   myApplicationsCount: number;
-  onSwitchToAdmin: () => void;
   onLogout: () => void;
 }
 
@@ -28,7 +27,6 @@ export const VolunteerNavbar: React.FC<VolunteerNavbarProps> = ({
   openRulebookModal,
   currentUser,
   myApplicationsCount,
-  onSwitchToAdmin,
   onLogout
 }) => {
   return (
@@ -56,16 +54,6 @@ export const VolunteerNavbar: React.FC<VolunteerNavbarProps> = ({
               </span>
             </span>
           </div>
-
-          <button
-            onClick={onSwitchToAdmin}
-            className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-2.5 py-0.5 rounded-full text-[11px] font-bold flex items-center gap-1 transition cursor-pointer whitespace-nowrap shrink-0"
-            title="切換至管理者 / 社工督導控制台"
-          >
-            <ArrowRightLeft className="w-3 h-3" />
-            <span className="hidden sm:inline">切換管理者後台</span>
-            <span className="sm:hidden">管理端</span>
-          </button>
 
           <button
             onClick={onLogout}
