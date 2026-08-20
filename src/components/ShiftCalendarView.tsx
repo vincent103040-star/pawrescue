@@ -19,7 +19,8 @@ import {
   Bot,
   X,
   Edit2,
-  Check
+  Check,
+  ChevronDown
 } from 'lucide-react';
 
 // "Today" must follow the shelter's own timezone (Taiwan), not whatever
@@ -69,6 +70,19 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
   const [editDate, setEditDate] = useState<string>('');
   const [editTimeRange, setEditTimeRange] = useState<string>('');
   const [editRequiredCount, setEditRequiredCount] = useState<number>(4);
+
+  // Mobile agenda list: which dates are expanded to show full shift cards.
+  // Collapsed by default (only a "still needs N volunteers" summary shows) so a
+  // volunteer can scan a whole month at a glance instead of scrolling through
+  // fully-expanded cards for every single day.
+  const [expandedAgendaDates, setExpandedAgendaDates] = useState<Set<string>>(() => new Set());
+  const toggleAgendaDate = (dateStr: string) => {
+    setExpandedAgendaDates(prev => {
+      const next = new Set(prev);
+      if (next.has(dateStr)) next.delete(dateStr); else next.add(dateStr);
+      return next;
+    });
+  };
 
   // Month navigation helpers
   const year = currentDate.getFullYear();
@@ -359,49 +373,68 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
 
       {/* Mobile Agenda / List View -- a 7-column grid genuinely can't fit readable
           text on a phone screen, so below the md breakpoint we switch to a
-          Google-Calendar-style agenda list (one card per day-with-shifts) instead
-          of just shrinking the same grid. */}
-      <div className="md:hidden space-y-3">
+          Google-Calendar-style agenda list instead of just shrinking the same
+          grid. Every day in the month gets a row (not just days with shifts,
+          so a volunteer can see well beyond a handful of upcoming days); each
+          row is collapsed to a one-line "still needs N volunteers" summary by
+          default and expands on tap to reveal the full shift cards. */}
+      <div className="md:hidden space-y-2">
         {(() => {
-          const daysWithShifts = calendarCells
+          const monthDays = calendarCells
             .filter(cell => cell.isCurrentMonth)
-            .map(cell => ({ cell, dayShifts: filteredShifts.filter(s => s.date === cell.dateStr) }))
-            .filter(({ dayShifts }) => dayShifts.length > 0);
+            .map(cell => ({ cell, dayShifts: filteredShifts.filter(s => s.date === cell.dateStr) }));
 
-          if (daysWithShifts.length === 0) {
-            return (
-              <div className="bg-white rounded-3xl border border-[#5A5A40]/15 p-8 text-center text-sm text-slate-400">
-                本月尚無符合篩選條件的班次
-              </div>
-            );
-          }
-
-          return daysWithShifts.map(({ cell, dayShifts }) => {
+          return monthDays.map(({ cell, dayShifts }) => {
             const weekdayLabel = weekDays[new Date(`${cell.dateStr}T00:00:00`).getDay()];
+            const vacancyCount = dayShifts.reduce((sum, s) => sum + Math.max(0, s.requiredCount - s.currentCount), 0);
+            const hasShifts = dayShifts.length > 0;
+            const isExpanded = expandedAgendaDates.has(cell.dateStr);
+
             return (
               <div
                 key={cell.dateStr}
-                className={`bg-white rounded-3xl border overflow-hidden shadow-xs ${
-                  cell.isToday ? 'border-amber-400 ring-1 ring-amber-300' : 'border-[#5A5A40]/15'
+                className={`bg-white rounded-2xl border overflow-hidden shadow-2xs ${
+                  cell.isToday ? 'border-amber-400 ring-1 ring-amber-300' : 'border-[#5A5A40]/12'
                 }`}
               >
-                <div className={`px-4 py-2.5 flex items-center justify-between ${cell.isToday ? 'bg-amber-50' : 'bg-[#f8f8f5]'}`}>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-sm font-extrabold font-mono px-2 py-0.5 rounded-full ${
-                      cell.isToday ? 'bg-amber-500 text-slate-950' : 'text-slate-800'
+                <button
+                  type="button"
+                  onClick={() => hasShifts && toggleAgendaDate(cell.dateStr)}
+                  className={`w-full px-4 py-2.5 flex items-center justify-between gap-2 text-left ${
+                    hasShifts ? 'cursor-pointer active:bg-[#f5f5f0]' : 'cursor-default'
+                  } ${cell.isToday ? 'bg-amber-50' : hasShifts ? 'bg-[#f8f8f5]' : 'bg-white'}`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={`text-sm font-extrabold font-mono px-2 py-0.5 rounded-full shrink-0 ${
+                      cell.isToday ? 'bg-amber-500 text-slate-950' : hasShifts ? 'text-slate-800' : 'text-slate-400'
                     }`}>
                       {month + 1}/{cell.dayNum}
                     </span>
-                    <span className="text-xs text-slate-500 font-bold">
+                    <span className={`text-xs font-bold shrink-0 ${hasShifts ? 'text-slate-500' : 'text-slate-300'}`}>
                       {weekdayLabel}{cell.isToday ? ' · 今天' : ''}
                     </span>
                   </div>
-                  <span className="text-[10px] font-bold text-[#5A5A40] bg-white border border-[#5A5A40]/10 px-2 py-0.5 rounded-full">
-                    {dayShifts.length} 班次
-                  </span>
-                </div>
 
-                <div className="p-3 space-y-2">
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {!hasShifts ? (
+                      <span className="text-[10px] font-bold text-slate-300">無班次安排</span>
+                    ) : vacancyCount > 0 ? (
+                      <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full whitespace-nowrap">
+                        {dayShifts.length} 班次・尚缺 {vacancyCount} 人
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full whitespace-nowrap">
+                        {dayShifts.length} 班次已額滿
+                      </span>
+                    )}
+                    {hasShifts && (
+                      <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                    )}
+                  </div>
+                </button>
+
+                {hasShifts && isExpanded && (
+                <div className="p-3 pt-1 space-y-2">
                   {dayShifts.map(shift => {
                     const zConf = ZONE_CONFIGS[shift.zone];
                     const isFull = shift.currentCount >= shift.requiredCount;
@@ -452,6 +485,7 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
                     );
                   })}
                 </div>
+                )}
               </div>
             );
           });
