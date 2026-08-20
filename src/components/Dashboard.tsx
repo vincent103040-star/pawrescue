@@ -399,6 +399,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         onSetAllModulesVisibility={(visible) => { if (visible) handleShowAllModules(); }}
         onApplyPreset={handleApplyPreset}
         onToggleAllCollapse={(collapsed) => { if (collapsed) handleCollapseAll(); else handleExpandAll(); }}
+        onResetToDefault={handleResetModules}
       />
 
       {/* 1. 關鍵指標與即時告警卡片 (Overview Stats) */}

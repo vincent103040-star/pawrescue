@@ -145,6 +145,7 @@ interface DashboardModuleCustomizerProps {
   onSetAllModulesVisibility: (visible: boolean) => void;
   onApplyPreset: (preset: 'all' | 'focus_schedule' | 'focus_operations') => void;
   onToggleAllCollapse: (collapsed: boolean) => void;
+  onResetToDefault: () => void;
 }
 
 export const DashboardModuleCustomizer: React.FC<DashboardModuleCustomizerProps> = ({
@@ -153,7 +154,8 @@ export const DashboardModuleCustomizer: React.FC<DashboardModuleCustomizerProps>
   onToggleModuleVisibility,
   onSetAllModulesVisibility,
   onApplyPreset,
-  onToggleAllCollapse
+  onToggleAllCollapse,
+  onResetToDefault
 }) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
 
@@ -320,7 +322,7 @@ export const DashboardModuleCustomizer: React.FC<DashboardModuleCustomizerProps>
 
             <button
               type="button"
-              onClick={() => onSetAllModulesVisibility(true)}
+              onClick={onResetToDefault}
               className="ml-auto text-xs font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1 cursor-pointer py-1 px-2"
             >
               <RotateCcw className="w-3 h-3" />
