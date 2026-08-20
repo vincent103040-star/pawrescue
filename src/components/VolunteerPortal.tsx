@@ -234,6 +234,18 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
     refreshLineLinkStatus();
   }, [refreshLineLinkStatus]);
 
+  // Auto-suggest a "稱謂" (display name) from whichever real identity source is
+  // available, preferring the volunteer's actual LINE display name (from real LINE
+  // Login) over their Google account name -- but only while nothing's been
+  // customized yet, so this never clobbers a name the volunteer already saved.
+  React.useEffect(() => {
+    if (profileName && profileName !== '林小明') return;
+    const suggested =
+      (lineLinkStatus?.linked && lineLinkStatus.displayName) ||
+      (currentUser?.name && currentUser.name !== '林小明' ? currentUser.name : null);
+    if (suggested) setProfileName(suggested);
+  }, [lineLinkStatus, currentUser]);
+
   // Handle the redirect back from LINE Login (?lineLinked=1|0)
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1160,7 +1172,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#5A5A40] mb-1">真實姓名</label>
+                <label className="block text-xs font-bold text-[#5A5A40] mb-1">稱謂</label>
                 <input
                   type="text"
                   required
@@ -1168,6 +1180,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                   onChange={e => setProfileName(e.target.value)}
                   className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs font-medium focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
                 />
+                <p className="text-[10px] text-slate-400 mt-1">預設帶入您的 LINE 顯示名稱（若尚未連結則帶入 Google 帳號名稱），也可自行修改。</p>
               </div>
 
               <div>
@@ -1193,7 +1206,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#5A5A40] mb-1">LINE ID (帳號綁定)</label>
+                <label className="block text-xs font-bold text-[#5A5A40] mb-1">LINE 暱稱／備註</label>
                 <input
                   type="text"
                   required
@@ -1201,6 +1214,9 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                   onChange={e => setProfileLineId(e.target.value)}
                   className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs font-medium focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
                 />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  這是自行輸入的備註，LINE 平台不提供查詢您帳號的搜尋 ID（例如 @手動設定的那組）。真正能用來發送 LINE 推播的身分，是下方「連結真實 LINE 帳號」取得的官方資料。
+                </p>
               </div>
 
               <div>
