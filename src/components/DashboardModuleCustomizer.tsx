@@ -120,12 +120,12 @@ export const DASHBOARD_MODULE_CONFIGS = DASHBOARD_MODULE_DEFS;
 
 export const DEFAULT_VISIBLE_MODULES: Record<DashboardModuleId, boolean> = {
   overview_stats: true,
-  heatmap: true,
-  ai_warning_map: true,
+  heatmap: false,
+  ai_warning_map: false,
   daily_duty: true,
-  monthly_report: true,
+  monthly_report: false,
   feedback_hub: true,
-  zone_shortage: true
+  zone_shortage: false
 };
 
 export const DEFAULT_COLLAPSED_MODULES: Record<DashboardModuleId, boolean> = {
