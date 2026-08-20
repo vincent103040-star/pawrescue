@@ -141,6 +141,24 @@ export const Dashboard: React.FC<DashboardProps> = ({
     onSendLineToast('🔄 已重置看板模組至預設顯示配置');
   };
 
+  const handleApplyPreset = (preset: 'all' | 'focus_schedule' | 'focus_operations') => {
+    if (preset === 'all') {
+      handleShowAllModules();
+      return;
+    }
+    const presetVisible: Record<'focus_schedule' | 'focus_operations', DashboardModuleId[]> = {
+      focus_schedule: ['overview_stats', 'heatmap', 'ai_warning_map', 'zone_shortage'],
+      focus_operations: ['overview_stats', 'daily_duty', 'monthly_report', 'feedback_hub']
+    };
+    const shown = new Set(presetVisible[preset]);
+    const next = Object.keys(DEFAULT_VISIBLE_MODULES).reduce((acc, k) => {
+      acc[k as DashboardModuleId] = shown.has(k as DashboardModuleId);
+      return acc;
+    }, {} as Record<DashboardModuleId, boolean>);
+    setVisibleModules(next);
+    onSendLineToast(preset === 'focus_schedule' ? '🎯 已切換為排班分析專注模式' : '📋 已切換為現場營運專注模式');
+  };
+
   // Feedback Hub state
   const [feedbackRatingFilter, setFeedbackRatingFilter] = useState<'all' | '5' | '4' | 'low'>('all');
   const [feedbackSearchTerm, setFeedbackSearchTerm] = useState<string>('');
@@ -377,12 +395,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
       <DashboardModuleCustomizer
         visibleModules={visibleModules}
         collapsedModules={collapsedModules}
-        onToggleVisibility={handleToggleModuleVisibility}
-        onToggleCollapse={handleToggleModuleCollapse}
-        onShowAll={handleShowAllModules}
-        onCollapseAll={handleCollapseAll}
-        onExpandAll={handleExpandAll}
-        onReset={handleResetModules}
+        onToggleModuleVisibility={handleToggleModuleVisibility}
+        onSetAllModulesVisibility={(visible) => { if (visible) handleShowAllModules(); }}
+        onApplyPreset={handleApplyPreset}
+        onToggleAllCollapse={(collapsed) => { if (collapsed) handleCollapseAll(); else handleExpandAll(); }}
       />
 
       {/* 1. 關鍵指標與即時告警卡片 (Overview Stats) */}
