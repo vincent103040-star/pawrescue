@@ -137,9 +137,9 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
 
           <button
             onClick={() => setShowCreateModal(true)}
-            className="bg-[#5A5A40] hover:bg-[#484833] text-white font-bold text-xs px-5 py-3 rounded-full shadow-xs transition flex items-center gap-2 cursor-pointer"
+            className="bg-[#5A5A40] hover:bg-[#484833] text-white font-extrabold text-lg px-24 py-4 rounded-full shadow-md transition flex items-center gap-2.5 cursor-pointer"
           >
-            <Plus className="w-4 h-4 text-[#E6E2D3]" />
+            <Plus className="w-6 h-6 text-emerald-300" />
             <span>發布全新志工班次</span>
           </button>
         </div>
