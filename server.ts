@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
@@ -46,7 +47,13 @@ async function startServer() {
   const PORT = 3000;
 
   // Raised from the 100kb default to fit a compressed check-out photo as base64 JSON.
-  app.use(express.json({ limit: '8mb' }));
+  // `verify` stashes the raw bytes on the request so the LINE webhook handler can
+  // recompute the x-line-signature HMAC over the exact same bytes LINE signed --
+  // the parsed/re-serialized JSON is not guaranteed to match byte-for-byte.
+  app.use(express.json({
+    limit: '8mb',
+    verify: (req, _res, buf) => { (req as any).rawBody = buf; }
+  }));
 
   const photosDir = path.join(process.cwd(), 'data', 'photos');
   mkdirSync(photosDir, { recursive: true });
@@ -503,9 +510,9 @@ ${JSON.stringify(branchData, null, 2)}
   // rulebook_embeddings.json, take the top matches. Generation = ask Gemini to
   // answer using only those matched excerpts, so it can't invent rules that
   // aren't actually in the handbook.
-  app.post('/api/ai/rag-ask', async (req, res) => {
-    const { question } = req.body;
-
+  // Shared by the HTTP endpoint below and the LINE webhook auto-reply handler
+  // further down, so both surfaces answer from the exact same rulebook logic.
+  async function answerRulebookQuestion(question: string): Promise<{ answer: string; isFallback: boolean; sources: string[] }> {
     const keywordFallback = () => {
       const q = String(question || '');
       let best: RulebookEmbeddingEntry | null = null;
@@ -529,14 +536,10 @@ ${JSON.stringify(branchData, null, 2)}
       };
     };
 
-    if (!question || !String(question).trim()) {
-      return res.status(400).json({ success: false, error: '請輸入問題' });
-    }
-
     try {
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey || rulebookEmbeddings.length === 0) {
-        return res.json({ success: true, isFallback: true, ...keywordFallback() });
+        return { isFallback: true, ...keywordFallback() };
       }
 
       const ai = new GoogleGenAI({
@@ -575,16 +578,24 @@ ${contextText}
       const answer = (response.text || '').trim();
       if (!answer) throw new Error('Empty answer from Gemini');
 
-      return res.json({
-        success: true,
+      return {
         isFallback: false,
         answer,
         sources: ranked.map(r => r.chunk.title)
-      });
+      };
     } catch (error: any) {
       console.warn('RAG Ask Error (fallback activated):', error?.message || error);
-      return res.json({ success: true, isFallback: true, ...keywordFallback() });
+      return { isFallback: true, ...keywordFallback() };
     }
+  }
+
+  app.post('/api/ai/rag-ask', async (req, res) => {
+    const { question } = req.body;
+    if (!question || !String(question).trim()) {
+      return res.status(400).json({ success: false, error: '請輸入問題' });
+    }
+    const result = await answerRulebookQuestion(question);
+    return res.json({ success: true, ...result });
   });
 
   // API endpoint: AI caption for a volunteer's check-out photo. Multimodal --
@@ -917,6 +928,66 @@ ${contextText}
     } catch (error: any) {
       console.error('LINE Broadcast Error:', error);
       return res.status(500).json({ success: false, error: error.message || 'LINE 廣播發送失敗' });
+    }
+  });
+
+  // API endpoint: LINE Messaging API webhook. Receives events (user messages, follows)
+  // from the official account and auto-replies -- text questions are answered via the
+  // same rulebook RAG logic as /api/ai/rag-ask, so "問手冊 AI 小幫手" also works as a
+  // LINE chat, not just inside the web app. Register this exact URL as the channel's
+  // Webhook URL in the LINE Developers Console (Messaging API channel, not LINE Login).
+  app.post('/api/line/webhook', async (req, res) => {
+    // LINE expects a fast 200 to consider the webhook healthy (its Console "Verify"
+    // button sends a request with no events at all and just checks the status code).
+    res.sendStatus(200);
+
+    const channelSecret = process.env.LINE_CHANNEL_SECRET;
+    const signature = req.get('x-line-signature');
+    if (channelSecret) {
+      const rawBody: Buffer | undefined = (req as any).rawBody;
+      const expected = createHmac('sha256', channelSecret).update(rawBody || Buffer.alloc(0)).digest('base64');
+      const expectedBuf = Buffer.from(expected);
+      const actualBuf = Buffer.from(String(signature || ''));
+      const valid = expectedBuf.length === actualBuf.length && timingSafeEqual(expectedBuf, actualBuf);
+      if (!valid) {
+        console.warn('LINE Webhook: signature mismatch, ignoring event batch');
+        return;
+      }
+    } else {
+      console.warn('LINE_CHANNEL_SECRET 尚未設定，略過簽章驗證（僅建議本機測試時如此）');
+    }
+
+    const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+    const events = req.body?.events || [];
+
+    for (const event of events) {
+      try {
+        if (event.type === 'follow') {
+          await replyToLine(event.replyToken, '嗨，我是浪浪家園的志工小幫手 🐾 直接傳訊息問我志工手冊 / SOP 相關問題，我會幫你從手冊裡找答案！');
+          continue;
+        }
+        if (event.type === 'message' && event.message?.type === 'text') {
+          const result = await answerRulebookQuestion(event.message.text);
+          await replyToLine(event.replyToken, result.answer);
+        }
+      } catch (error: any) {
+        console.error('LINE Webhook Event Error:', error?.message || error);
+      }
+    }
+
+    async function replyToLine(replyToken: string, text: string) {
+      if (!token || !replyToken) return;
+      const lineRes = await fetch('https://api.line.me/v2/bot/message/reply', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ replyToken, messages: [{ type: 'text', text: text.slice(0, 5000) }] })
+      });
+      if (!lineRes.ok) {
+        console.error('LINE Reply API 錯誤:', await lineRes.text());
+      }
     }
   });
 
