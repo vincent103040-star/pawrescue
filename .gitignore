@@ -8,4 +8,5 @@ coverage/
 !.env.example
 /data/*.db
 /data/photos/
+/data/avatars/
 dogcat.png

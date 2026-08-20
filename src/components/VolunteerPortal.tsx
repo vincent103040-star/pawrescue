@@ -3,7 +3,7 @@ import { PositionShift, Branch, BranchId, SkillLevel, ZoneCategory, LineNotifica
 import { ZONE_CONFIGS } from '../data/mockData';
 import { VolunteerWelcomeCard } from './VolunteerWelcomeCard';
 import { ShiftCalendarView } from './ShiftCalendarView';
-import { Heart, MapPin, Calendar, Clock, Check, Users, ExternalLink, Sparkles, AlertCircle, ArrowUpRight, CheckCircle2, QrCode, Settings, Bell, BellRing, User, Save, Send, Smartphone, ShieldCheck, ToggleLeft, ToggleRight, Sparkle, TrendingUp, Award, CheckSquare, Square, Crown, Medal, Star, Trophy, BookOpen, Zap, ChevronRight, LayoutGrid, MessageSquare } from 'lucide-react';
+import { Heart, MapPin, Calendar, Clock, Check, Users, ExternalLink, Sparkles, AlertCircle, ArrowUpRight, CheckCircle2, QrCode, Settings, Bell, BellRing, User, Save, Send, Smartphone, ShieldCheck, ToggleLeft, ToggleRight, Sparkle, TrendingUp, Award, CheckSquare, Square, Crown, Medal, Star, Trophy, BookOpen, Zap, ChevronRight, LayoutGrid, MessageSquare, Camera, ShieldAlert } from 'lucide-react';
 import { buildGoogleCalendarLink } from '../utils/googleCalendar';
 import { buildLineLoginUrl } from '../utils/lineLogin';
 import { getLiffVolunteerIdentity } from '../utils/liff';
@@ -156,10 +156,64 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
 
   // Profile Form states
   const [profileName, setProfileName] = useState(() => localStorage.getItem('volunteer_profile_name') || '林小明');
-  const [profilePhone, setProfilePhone] = useState(() => localStorage.getItem('volunteer_profile_phone') || '0912-345-678');
-  const [profileEmail, setProfileEmail] = useState(() => localStorage.getItem('volunteer_profile_email') || 'xiaoming@gmail.com');
+  // Phone/email have no meaningful mock fallback -- pre-filling a fake number/address
+  // for a volunteer who hasn't actually entered one is misleading, so these default to
+  // empty and show a "未有資料" placeholder instead (see the input elements below).
+  const [profilePhone, setProfilePhone] = useState(() => localStorage.getItem('volunteer_profile_phone') || '');
+  const [profileEmail, setProfileEmail] = useState(() => localStorage.getItem('volunteer_profile_email') || '');
   const [profileLineId, setProfileLineId] = useState(() => localStorage.getItem('volunteer_profile_lineid') || 'xiaoming_line');
   const [isSavedSuccess, setIsSavedSuccess] = useState(false);
+
+  // Emergency contact + avatar photo -- both live server-side on the volunteer's DB
+  // row (see updateVolunteerProfileExtras in db.ts) rather than localStorage, since
+  // an admin needs to see them too (roster card's "緊急聯絡人" / avatar image).
+  const [profileEmergencyContact, setProfileEmergencyContact] = useState('');
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState('');
+  const [pendingAvatar, setPendingAvatar] = useState<{ previewUrl: string; base64: string; mimeType: string } | null>(null);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+
+  // Seed the two DB-only fields above from the volunteer's actual saved record
+  // (not just this browser's localStorage) whenever we know their email.
+  React.useEffect(() => {
+    if (!profileEmail) return;
+    fetch(`/api/volunteers/profile?email=${encodeURIComponent(profileEmail)}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.volunteer) {
+          setProfileEmergencyContact(data.volunteer.emergencyContact || '');
+          setProfileAvatarUrl(data.volunteer.avatar || '');
+        }
+      })
+      .catch(() => { /* best-effort -- form still works without a saved record yet */ });
+  }, [profileEmail]);
+
+  // Downscale + compress client-side before ever touching the network -- an avatar
+  // is only ever shown as a small circle, so there's no reason to upload a multi-MB
+  // phone photo. Mirrors VolunteerCheckInModal's check-out photo handling, just with
+  // a much smaller target size since this never needs to be full-resolution.
+  const handleAvatarSelected = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 320;
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        setPendingAvatar({
+          previewUrl: dataUrl,
+          base64: dataUrl.split(',')[1],
+          mimeType: 'image/jpeg'
+        });
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Real LINE Login link status
   const [lineLinkStatus, setLineLinkStatus] = useState<{ linked: boolean; displayName: string | null } | null>(null);
@@ -394,28 +448,58 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
 
     onUpdateProfile?.({ name: profileName, phone: profilePhone, email: profileEmail, lineId: profileLineId });
 
-    // Sync the updated contact info to the backend volunteer DB
-    fetch('/api/auth/google-phone-login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        idToken: 'volunteer-self-update',
-        googleProfile: {
-          uid: `google-uid-${profileEmail.replace(/[@.]/g, '_')}`,
+    // Sync the updated contact info to the backend volunteer DB. This endpoint
+    // requires a real phone number (it's shared with actual Google login), so only
+    // call it once the volunteer has entered one -- an empty phone just means the
+    // name/lineId edits above stay local until they fill it in.
+    if (profilePhone) {
+      fetch('/api/auth/google-phone-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          idToken: 'volunteer-self-update',
+          googleProfile: {
+            uid: `google-uid-${profileEmail.replace(/[@.]/g, '_')}`,
+            email: profileEmail,
+            name: profileName
+          },
+          phoneNumber: profilePhone,
+          lineId: profileLineId,
+          tier: currentUser?.tier || '新進志工',
+          totalHours: currentUser?.totalHours || 0,
+          linePreferences: {
+            shiftChanges: linePreferences.shiftChanges,
+            urgentRecruitment: linePreferences.urgentRecruitment,
+            checkInReminder: linePreferences.checkInReminder
+          }
+        })
+      }).catch(() => { /* best-effort sync, ignore network errors */ });
+    }
+
+    // Sync emergency contact + avatar (the two fields the login-sync call above
+    // deliberately never touches) via the dedicated extras endpoint.
+    if (profileEmail && (profileEmergencyContact || pendingAvatar)) {
+      setIsUploadingAvatar(!!pendingAvatar);
+      fetch('/api/volunteers/profile-extras', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           email: profileEmail,
-          name: profileName
-        },
-        phoneNumber: profilePhone,
-        lineId: profileLineId,
-        tier: currentUser?.tier || '新進志工',
-        totalHours: currentUser?.totalHours || 0,
-        linePreferences: {
-          shiftChanges: linePreferences.shiftChanges,
-          urgentRecruitment: linePreferences.urgentRecruitment,
-          checkInReminder: linePreferences.checkInReminder
-        }
+          emergencyContact: profileEmergencyContact,
+          avatarBase64: pendingAvatar?.base64,
+          avatarMimeType: pendingAvatar?.mimeType
+        })
       })
-    }).catch(() => { /* best-effort sync, ignore network errors */ });
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.volunteer) {
+            setProfileAvatarUrl(data.volunteer.avatar || '');
+            setPendingAvatar(null);
+          }
+        })
+        .catch(() => { /* best-effort sync, ignore network errors */ })
+        .finally(() => setIsUploadingAvatar(false));
+    }
 
     setIsSavedSuccess(true);
     setTimeout(() => setIsSavedSuccess(false), 3000);
@@ -1046,8 +1130,37 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                 <span>志工預設基本資料</span>
               </div>
 
+              {/* Avatar upload -- compressed to a small JPEG client-side (see
+                  handleAvatarSelected) before ever hitting the network/disk. */}
+              <div className="flex items-center gap-4">
+                <div className="relative shrink-0">
+                  <img
+                    src={pendingAvatar?.previewUrl || profileAvatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(profileName || '志工')}`}
+                    alt="大頭照"
+                    className="w-16 h-16 rounded-2xl object-cover border-2 border-[#5A5A40]/20 shadow-xs bg-[#f5f5f0]"
+                  />
+                  <label
+                    className="absolute -bottom-1.5 -right-1.5 bg-[#5A5A40] hover:bg-[#484833] text-white rounded-full p-1.5 shadow-xs cursor-pointer transition"
+                    title="上傳大頭照"
+                  >
+                    <Camera className="w-3.5 h-3.5 text-amber-300" />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={e => e.target.files?.[0] && handleAvatarSelected(e.target.files[0])}
+                    />
+                  </label>
+                </div>
+                <div className="text-[11px] text-slate-500">
+                  <p className="font-bold text-[#5A5A40]">大頭照</p>
+                  <p>點擊右下角相機圖示更換，會自動壓縮成小檔案上傳。</p>
+                  {pendingAvatar && <p className="text-amber-700 font-bold mt-0.5">已選好新照片，按下方「儲存」才會真的上傳。</p>}
+                </div>
+              </div>
+
               <div>
-                <label className="block text-xs font-bold text-[#5A5A40] mb-1">真實姓名 *</label>
+                <label className="block text-xs font-bold text-[#5A5A40] mb-1">真實姓名</label>
                 <input
                   type="text"
                   required
@@ -1058,29 +1171,29 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#5A5A40] mb-1">行動電話 *</label>
+                <label className="block text-xs font-bold text-[#5A5A40] mb-1">行動電話</label>
                 <input
                   type="tel"
-                  required
+                  placeholder="未有資料"
                   value={profilePhone}
                   onChange={e => setProfilePhone(e.target.value)}
-                  className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs font-medium focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                  className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs font-medium focus:ring-2 focus:ring-[#5A5A40] focus:outline-none placeholder:text-slate-400"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#5A5A40] mb-1">電子郵件 *</label>
+                <label className="block text-xs font-bold text-[#5A5A40] mb-1">電子郵件</label>
                 <input
                   type="email"
-                  required
+                  placeholder="未有資料"
                   value={profileEmail}
                   onChange={e => setProfileEmail(e.target.value)}
-                  className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs font-medium focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                  className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs font-medium focus:ring-2 focus:ring-[#5A5A40] focus:outline-none placeholder:text-slate-400"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#5A5A40] mb-1">LINE ID (帳號綁定) *</label>
+                <label className="block text-xs font-bold text-[#5A5A40] mb-1">LINE ID (帳號綁定)</label>
                 <input
                   type="text"
                   required
@@ -1088,6 +1201,21 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                   onChange={e => setProfileLineId(e.target.value)}
                   className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs font-medium focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
                 />
+              </div>
+
+              <div>
+                <label className="flex items-center gap-1 text-xs font-bold text-[#5A5A40] mb-1">
+                  <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
+                  <span>緊急聯絡人</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="例：張太太 (配偶) 0933-221-101"
+                  value={profileEmergencyContact}
+                  onChange={e => setProfileEmergencyContact(e.target.value)}
+                  className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs font-medium focus:ring-2 focus:ring-[#5A5A40] focus:outline-none placeholder:text-slate-400"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">發生意外時，社工督導會依此聯絡資訊通知您的家人。</p>
               </div>
 
               <div className="bg-[#fdfdfb] p-3 rounded-xl border border-[#5A5A40]/12 text-[11px] text-[#5A5A40] space-y-1">

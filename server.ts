@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
-import { getAllVolunteers, getVolunteerByEmail, upsertVolunteerFromLogin, addCompletedShiftHours, setLineUserId, getLineUserId, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout } from './db';
+import { getAllVolunteers, getVolunteerByEmail, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout } from './db';
 
 // dotenv.config() alone only loads a file literally named ".env" — this project
 // (like Vite) keeps secrets in ".env.local", so load that explicitly. ".env" is
@@ -58,6 +58,10 @@ async function startServer() {
   const photosDir = path.join(process.cwd(), 'data', 'photos');
   mkdirSync(photosDir, { recursive: true });
   app.use('/photos', express.static(photosDir));
+
+  const avatarsDir = path.join(process.cwd(), 'data', 'avatars');
+  mkdirSync(avatarsDir, { recursive: true });
+  app.use('/avatars', express.static(avatarsDir));
 
   // API endpoint: AI Recruitment Post Generator using Gemini API
   app.post('/api/ai/generate-post', async (req, res) => {
@@ -708,6 +712,57 @@ ${contextText}
     } catch (error: any) {
       console.error('Get Volunteers Error:', error);
       return res.status(500).json({ success: false, error: error.message || '讀取志工名冊失敗' });
+    }
+  });
+
+  // API endpoint: a single volunteer's full profile (including emergencyContact and
+  // avatar, which the roster-list endpoint above also returns but the settings tab
+  // only needs one record of). Used to seed the settings form with what's actually
+  // saved server-side instead of only whatever this browser's localStorage has.
+  app.get('/api/volunteers/profile', (req, res) => {
+    try {
+      const email = String(req.query.email || '');
+      if (!email) return res.status(400).json({ success: false, error: '缺少 email' });
+      const volunteer = getVolunteerByEmail(email);
+      if (!volunteer) return res.status(404).json({ success: false, error: '找不到此志工資料' });
+      return res.json({ success: true, volunteer });
+    } catch (error: any) {
+      console.error('Get Volunteer Profile Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '讀取志工資料失敗' });
+    }
+  });
+
+  // API endpoint: self-edit fields that upsertVolunteerFromLogin deliberately leaves
+  // alone -- emergency contact text, and an uploaded avatar photo. The avatar is
+  // expected to already be downscaled/compressed client-side (see
+  // VolunteerCheckInModal's canvas-downscale pattern) before being sent here as base64,
+  // to keep the write small; this endpoint does not re-compress it.
+  app.post('/api/volunteers/profile-extras', (req, res) => {
+    try {
+      const { email, emergencyContact, avatarBase64, avatarMimeType } = req.body;
+      if (!email) return res.status(400).json({ success: false, error: '缺少 email' });
+
+      const updates: { emergencyContact?: string; avatar?: string } = {};
+      if (typeof emergencyContact === 'string') {
+        updates.emergencyContact = emergencyContact.trim();
+      }
+      if (avatarBase64) {
+        const ext = avatarMimeType === 'image/png' ? 'png' : 'jpg';
+        const filename = `${String(email).toLowerCase().trim().replace(/[^a-z0-9]/gi, '_')}.${ext}`;
+        writeFileSync(path.join(avatarsDir, filename), Buffer.from(avatarBase64, 'base64'));
+        // Cache-bust so the browser doesn't keep showing a stale cached image after
+        // a volunteer re-uploads a new photo under the exact same filename.
+        updates.avatar = `/avatars/${filename}?v=${Date.now()}`;
+      }
+
+      const updated = updateVolunteerProfileExtras(email, updates);
+      if (!updated) {
+        return res.status(404).json({ success: false, error: '找不到此志工資料，請先完成一次登入同步' });
+      }
+      return res.json({ success: true, volunteer: updated });
+    } catch (error: any) {
+      console.error('Update Volunteer Profile Extras Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '更新個人資料失敗' });
     }
   });
 

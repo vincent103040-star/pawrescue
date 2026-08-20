@@ -143,6 +143,31 @@ export function upsertVolunteerFromLogin(params: {
   return getVolunteerByEmail(email)!;
 }
 
+// Update the volunteer-self-editable "extras" that upsertVolunteerFromLogin
+// deliberately leaves alone (see its comment) -- emergency contact text and an
+// uploaded avatar photo. Only touches the fields actually passed in, and only
+// for a volunteer that already has a row (Google login must have happened once
+// already to create one).
+export function updateVolunteerProfileExtras(
+  email: string,
+  updates: { emergencyContact?: string; avatar?: string }
+): VolunteerProfile | null {
+  const normalizedEmail = email.toLowerCase().trim();
+  const existing = db.prepare('SELECT email FROM volunteers WHERE email = ?').get(normalizedEmail);
+  if (!existing) return null;
+
+  if (updates.emergencyContact !== undefined) {
+    db.prepare('UPDATE volunteers SET emergencyContact = ? WHERE email = ?')
+      .run(updates.emergencyContact, normalizedEmail);
+  }
+  if (updates.avatar !== undefined) {
+    db.prepare('UPDATE volunteers SET avatar = ? WHERE email = ?')
+      .run(updates.avatar, normalizedEmail);
+  }
+
+  return getVolunteerByEmail(normalizedEmail);
+}
+
 // Update hours/shift count after a check-out (best-effort, matched by name today —
 // see the App.tsx TODO about matching by email once attendance records carry it).
 export function addCompletedShiftHours(name: string, hoursLogged: number) {
