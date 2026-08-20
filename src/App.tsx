@@ -625,7 +625,6 @@ export default function App() {
             openCheckInModal={() => setIsCheckInModalOpen(true)}
             openRulebookModal={() => setIsRulebookModalOpen(true)}
             currentUser={adminSession}
-            onSwitchToVolunteer={handleSwitchToVolunteer}
             onLogout={handleLogout}
           />
 

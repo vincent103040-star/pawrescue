@@ -1,5 +1,5 @@
 import React from 'react';
-import { PawPrint, Calendar, MapPin, Shield, UserCheck, PlusCircle, Sparkles, Building2, QrCode, BookOpen, LogOut, ArrowRightLeft, User } from 'lucide-react';
+import { PawPrint, Calendar, MapPin, Shield, UserCheck, PlusCircle, Sparkles, Building2, QrCode, BookOpen, LogOut, User } from 'lucide-react';
 import { BranchId, Branch, AdminUserSession } from '../types';
 
 interface AdminNavbarProps {
@@ -13,7 +13,6 @@ interface AdminNavbarProps {
   openCheckInModal?: () => void;
   openRulebookModal?: () => void;
   currentUser: AdminUserSession | null;
-  onSwitchToVolunteer: () => void;
   onLogout: () => void;
 }
 
@@ -28,7 +27,6 @@ export const AdminNavbar: React.FC<AdminNavbarProps> = ({
   openCheckInModal,
   openRulebookModal,
   currentUser,
-  onSwitchToVolunteer,
   onLogout
 }) => {
   return (
@@ -51,16 +49,6 @@ export const AdminNavbar: React.FC<AdminNavbarProps> = ({
             <User className="w-3.5 h-3.5 text-[#E6E2D3]" />
             <span>登入者：<strong>{currentUser?.name || '蔡督導'}</strong> ({currentUser?.roleTitle || '系統管理員'})</span>
           </div>
-
-          <button
-            onClick={onSwitchToVolunteer}
-            className="bg-amber-500/30 hover:bg-amber-500/50 text-amber-200 border border-amber-300/40 px-2.5 py-0.5 rounded-full text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
-            title="切換至志工夥伴服務專區"
-          >
-            <ArrowRightLeft className="w-3 h-3" />
-            <span className="hidden sm:inline">切換志工視角</span>
-            <span className="sm:hidden">志工端</span>
-          </button>
 
           <button
             onClick={onLogout}

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { PawPrint, Shield, Heart, Sparkles, Calendar, MapPin, MessageSquare, CheckCircle2, ArrowRight, User, Phone, Users, ShieldCheck, Award, QrCode, BookOpen, Clock, HeartHandshake, ChevronRight, Check, Smartphone, KeyRound, Star, Quote, Home } from 'lucide-react';
-import { BranchId, AdminUserSession, VolunteerUserSession } from '../types';
+import { PawPrint, Shield, Heart, Sparkles, Calendar, MapPin, MessageSquare, CheckCircle2, ArrowRight, User, Phone, Users, ShieldCheck, Award, QrCode, BookOpen, Clock, HeartHandshake, ChevronRight, Check, Smartphone, KeyRound, Star, Quote, Home, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { AdminUserSession, VolunteerUserSession } from '../types';
 import { GooglePhoneAuthModal } from './GooglePhoneAuthModal';
 
 interface LoginPortalProps {
@@ -76,10 +76,14 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
   totalVolunteersCount,
   totalServiceHours
 }) => {
-  // Admin custom login state
-  const [adminName, setAdminName] = useState('蔡督導');
-  const [adminRoleTitle, setAdminRoleTitle] = useState('園區總督導 (系統管理員)');
-  const [adminBranch, setAdminBranch] = useState<BranchId | 'all'>('all');
+  // Admin username/password login state. This is a demo credential check, not real
+  // backend authentication -- the password defaults to a visible "0000" specifically
+  // so it reads as an obvious placeholder to be changed before any real deployment,
+  // rather than looking like a genuine (and thus falsely reassuring) secured login.
+  const [adminUsername, setAdminUsername] = useState('Admin');
+  const [adminPassword, setAdminPassword] = useState('0000');
+  const [showAdminPassword, setShowAdminPassword] = useState(true);
+  const [adminLoginError, setAdminLoginError] = useState('');
 
   // Lightweight cursor-follow paw icon, scoped only to the adoption success wall —
   // a single tracked element (not a per-mousemove DOM/canvas trail), so it stays cheap
@@ -107,13 +111,20 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
     phone: '0912-345-678'
   });
 
-  // Preset quick logins
-  const handleQuickAdminLogin = (name: string, roleTitle: string, branch: BranchId | 'all' = 'all') => {
+  // Demo credential check (client-side only -- see the state comment above). A real
+  // deployment would replace this with an actual authenticated backend session.
+  const handleAdminLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (adminUsername.trim() !== 'Admin' || adminPassword !== '0000') {
+      setAdminLoginError('帳號或密碼錯誤，請重新輸入。');
+      return;
+    }
+    setAdminLoginError('');
     onLoginAsAdmin({
-      name,
-      roleTitle,
-      email: `${name === '蔡督導' ? 'tsai' : 'chen'}@pawrescue.org.tw`,
-      branchId: branch
+      name: 'Admin',
+      roleTitle: '系統管理員',
+      email: 'admin@pawrescue.org.tw',
+      branchId: 'all'
     });
   };
 
@@ -360,51 +371,62 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
               </div>
             </div>
 
-            {/* Quick Demo Logins & Login Action */}
-            <div className="space-y-4 pt-2 border-t border-[#5A5A40]/10">
-              <div className="space-y-2">
-                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                  快速以預設社工身分進入：
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => handleQuickAdminLogin('蔡督導', '園區總督導 (系統管理員)', 'all')}
-                    className="p-2.5 rounded-xl border border-[#5A5A40]/20 bg-white hover:bg-[#E6E2D3]/30 text-left transition cursor-pointer flex items-center gap-2 shadow-2xs"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-[#5A5A40] text-white flex items-center justify-center text-xs font-bold shrink-0">
-                      蔡
-                    </div>
-                    <div className="overflow-hidden">
-                      <div className="text-xs font-bold text-slate-900 truncate">蔡督導</div>
-                      <div className="text-[10px] text-slate-500 truncate">總督導 &bull; 全區</div>
-                    </div>
-                  </button>
-
-                  <button
-                    onClick={() => handleQuickAdminLogin('陳社工', '志工招募組長', 'main')}
-                    className="p-2.5 rounded-xl border border-[#5A5A40]/20 bg-white hover:bg-[#E6E2D3]/30 text-left transition cursor-pointer flex items-center gap-2 shadow-2xs"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-emerald-700 text-white flex items-center justify-center text-xs font-bold shrink-0">
-                      陳
-                    </div>
-                    <div className="overflow-hidden">
-                      <div className="text-xs font-bold text-slate-900 truncate">陳社工</div>
-                      <div className="text-[10px] text-slate-500 truncate">招募組長 &bull; 本館</div>
-                    </div>
-                  </button>
+            {/* Admin Username / Password Login */}
+            <form onSubmit={handleAdminLoginSubmit} className="space-y-3 pt-2 border-t border-[#5A5A40]/10">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">帳號</label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={adminUsername}
+                    onChange={e => setAdminUsername(e.target.value)}
+                    placeholder="Admin"
+                    className="w-full pl-9 pr-3 py-2.5 bg-[#f5f5f0] border border-[#5A5A40]/20 rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                  />
                 </div>
               </div>
 
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">密碼</label>
+                <div className="relative">
+                  <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type={showAdminPassword ? 'text' : 'password'}
+                    value={adminPassword}
+                    onChange={e => setAdminPassword(e.target.value)}
+                    placeholder="0000"
+                    className="w-full pl-9 pr-9 py-2.5 bg-[#f5f5f0] border border-[#5A5A40]/20 rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminPassword(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    title={showAdminPassword ? '隱藏密碼' : '顯示密碼'}
+                  >
+                    {showAdminPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">預設帳號 Admin、密碼 0000，僅供示範使用，正式上線前請務必更改。</p>
+              </div>
+
+              {adminLoginError && (
+                <div className="flex items-center gap-1.5 text-[11px] text-rose-700 bg-rose-50 border border-rose-200 px-3 py-2 rounded-xl">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>{adminLoginError}</span>
+                </div>
+              )}
+
               {/* Main Enter Button */}
               <button
-                onClick={() => handleQuickAdminLogin(adminName, adminRoleTitle, adminBranch)}
+                type="submit"
                 className="w-full py-3.5 bg-[#5A5A40] hover:bg-[#484833] text-white font-extrabold rounded-2xl text-xs shadow-md transition flex items-center justify-center gap-2 cursor-pointer transform group-hover:scale-[1.01]"
               >
                 <Shield className="w-4 h-4 text-[#E6E2D3]" />
                 <span>進入管理者 / 社工督導控制台</span>
                 <ArrowRight className="w-4 h-4 text-[#E6E2D3]" />
               </button>
-            </div>
+            </form>
 
           </div>
 
