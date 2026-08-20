@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Branch, PositionShift, LineMessage } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
-import { MapPin, Calendar, MessageSquare, Send, Smartphone, ExternalLink, CheckCircle, HelpCircle, Layers, FileText, ArrowRight, Megaphone, AlertCircle, RefreshCw } from 'lucide-react';
+import { MapPin, Calendar, MessageSquare, Smartphone, ExternalLink, CheckCircle, HelpCircle, Layers, FileText, ArrowRight } from 'lucide-react';
 
 interface IntegrationHubProps {
   branches: Branch[];
@@ -24,37 +24,6 @@ export const IntegrationHub: React.FC<IntegrationHubProps> = ({ branches, shifts
   ]);
 
   const [inputMsg, setInputMsg] = useState('');
-
-  // Real LINE broadcast composer state
-  const [broadcastText, setBroadcastText] = useState('');
-  const [isBroadcasting, setIsBroadcasting] = useState(false);
-  const [broadcastResult, setBroadcastResult] = useState<{ ok: boolean; msg: string } | null>(null);
-
-  const handleSendBroadcast = async () => {
-    if (!broadcastText.trim()) return;
-    setIsBroadcasting(true);
-    setBroadcastResult(null);
-    try {
-      const res = await fetch('/api/line/broadcast', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: broadcastText })
-      });
-      const data = await res.json();
-      if (!data.success) {
-        setBroadcastResult({ ok: false, msg: data.error || '發送失敗' });
-      } else if (data.isFallback) {
-        setBroadcastResult({ ok: false, msg: data.note });
-      } else {
-        setBroadcastResult({ ok: true, msg: '✅ 已成功發送給所有加此官方帳號好友的志工！' });
-        setBroadcastText('');
-      }
-    } catch (err: any) {
-      setBroadcastResult({ ok: false, msg: err.message || '發送失敗，請確認網路連線' });
-    } finally {
-      setIsBroadcasting(false);
-    }
-  };
 
   // Selected Branch for Map Simulator
   const [selectedMapBranch, setSelectedMapBranch] = useState<Branch>(branches[0]);
@@ -273,49 +242,6 @@ export const IntegrationHub: React.FC<IntegrationHubProps> = ({ branches, shifts
 
           {/* Right: Setup Guide */}
           <div className="lg:col-span-7 space-y-6">
-
-            {/* Real LINE Broadcast Composer */}
-            <div className="bg-white p-6 sm:p-8 rounded-[32px] border-2 border-[#5A5A40]/30 shadow-xs space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold font-serif text-xl text-[#5A5A40] flex items-center gap-2">
-                  <Megaphone className="w-5 h-5 text-amber-600" />
-                  <span>發送官方 LINE 廣播訊息</span>
-                </h3>
-                <span className="text-[10px] bg-[#E6E2D3] text-[#5A5A40] px-2.5 py-0.5 rounded-full font-bold">
-                  LINE Messaging API
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 -mt-2">
-                送出後會真的推播給所有加過本官方帳號好友的志工，用於招募貼文、緊急缺工通知等官方消息。
-              </p>
-
-              <textarea
-                value={broadcastText}
-                onChange={e => setBroadcastText(e.target.value)}
-                rows={5}
-                placeholder="輸入要發送給所有志工好友的官方訊息內容..."
-                className="w-full p-3.5 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs focus:ring-2 focus:ring-[#5A5A40] focus:outline-none font-sans"
-              />
-
-              {broadcastResult && (
-                <div className={`p-3 rounded-xl text-xs font-semibold flex items-start gap-2 ${
-                  broadcastResult.ok ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-900 border border-amber-200'
-                }`}>
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>{broadcastResult.msg}</span>
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={handleSendBroadcast}
-                disabled={isBroadcasting || !broadcastText.trim()}
-                className="w-full py-3 bg-[#5A5A40] hover:bg-[#484833] disabled:opacity-50 text-white font-extrabold rounded-2xl text-xs shadow-xs transition flex items-center justify-center gap-2 cursor-pointer"
-              >
-                {isBroadcasting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 text-amber-300" />}
-                <span>{isBroadcasting ? '發送中...' : '發送給所有 LINE 好友'}</span>
-              </button>
-            </div>
 
             <div className="bg-white p-6 sm:p-8 rounded-[32px] border border-[#5A5A40]/12 shadow-xs space-y-4">
               <h3 className="font-bold font-serif text-xl text-[#5A5A40] flex items-center gap-2">
