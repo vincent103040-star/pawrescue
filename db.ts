@@ -4,7 +4,7 @@ import path from 'path';
 import { randomUUID } from 'crypto';
 import { VOLUNTEER_PROFILES, INITIAL_ATTENDANCE_RECORDS } from './src/data/mockData';
 import { RULEBOOK_CORPUS } from './src/data/rulebookCorpus';
-import type { VolunteerProfile, AttendanceRecord, SopContent, SopSection, SopDocument, SopVideo } from './src/types';
+import type { VolunteerProfile, AttendanceRecord, SopContent, SopSection, SopDocument, SopVideo, PromotionRequest } from './src/types';
 
 const dataDir = path.join(process.cwd(), 'data');
 fs.mkdirSync(dataDir, { recursive: true });
@@ -575,4 +575,101 @@ export function insertSopVideo(video: SopVideo): void {
 
 export function deleteSopVideo(id: string): void {
   db.prepare('DELETE FROM sop_videos WHERE id = ?').run(id);
+}
+
+// ============================================================================
+// Volunteer tier promotion requests
+// ============================================================================
+// The growth-checklist "通知管理員審核" button used to just fire a client-side
+// toast styled to look like a real admin notification -- nothing was ever
+// persisted, so there was genuinely nowhere for an admin to go review it. This
+// table is the real record; VolunteerRoster.tsx's admin view lists pending ones.
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS promotion_requests (
+    id TEXT PRIMARY KEY,
+    volunteerEmail TEXT NOT NULL,
+    volunteerName TEXT NOT NULL,
+    currentTier TEXT NOT NULL,
+    requestedTier TEXT NOT NULL,
+    completedItems TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    requestedAt TEXT NOT NULL,
+    reviewedAt TEXT,
+    reviewNote TEXT
+  )
+`);
+
+function rowToPromotionRequest(row: any): PromotionRequest {
+  return {
+    id: row.id,
+    volunteerEmail: row.volunteerEmail,
+    volunteerName: row.volunteerName,
+    currentTier: row.currentTier,
+    requestedTier: row.requestedTier,
+    completedItems: JSON.parse(row.completedItems),
+    status: row.status,
+    requestedAt: row.requestedAt,
+    reviewedAt: row.reviewedAt || undefined,
+    reviewNote: row.reviewNote || undefined
+  };
+}
+
+export function getAllPromotionRequests(): PromotionRequest[] {
+  const rows = db.prepare('SELECT * FROM promotion_requests ORDER BY requestedAt DESC').all();
+  return rows.map(rowToPromotionRequest);
+}
+
+// A volunteer re-clicking "通知管理員審核" (or re-triggering it via the checklist
+// auto-notify) while they already have a pending request just refreshes that same
+// row instead of piling up duplicates for the same promotion.
+export function upsertPendingPromotionRequest(params: {
+  volunteerEmail: string;
+  volunteerName: string;
+  currentTier: string;
+  requestedTier: string;
+  completedItems: string[];
+}): PromotionRequest {
+  const email = params.volunteerEmail.toLowerCase().trim();
+  const existing = db.prepare(
+    `SELECT id FROM promotion_requests WHERE volunteerEmail = ? AND requestedTier = ? AND status = 'pending'`
+  ).get(email, params.requestedTier) as { id: string } | undefined;
+
+  const nowIso = new Date().toISOString();
+
+  if (existing) {
+    db.prepare('UPDATE promotion_requests SET completedItems = ?, requestedAt = ? WHERE id = ?')
+      .run(JSON.stringify(params.completedItems), nowIso, existing.id);
+    return rowToPromotionRequest(db.prepare('SELECT * FROM promotion_requests WHERE id = ?').get(existing.id));
+  }
+
+  const id = randomUUID();
+  db.prepare(`
+    INSERT INTO promotion_requests (id, volunteerEmail, volunteerName, currentTier, requestedTier, completedItems, status, requestedAt)
+    VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
+  `).run(id, email, params.volunteerName, params.currentTier, params.requestedTier, JSON.stringify(params.completedItems), nowIso);
+
+  return rowToPromotionRequest(db.prepare('SELECT * FROM promotion_requests WHERE id = ?').get(id));
+}
+
+// Latest request for this volunteer (any status) -- lets the volunteer-facing UI
+// show "審核中" / "已核准" / "已婉拒" instead of just a fire-and-forget button.
+export function getLatestPromotionRequestForVolunteer(email: string): PromotionRequest | null {
+  const row = db.prepare('SELECT * FROM promotion_requests WHERE volunteerEmail = ? ORDER BY requestedAt DESC LIMIT 1')
+    .get(email.toLowerCase().trim());
+  return row ? rowToPromotionRequest(row) : null;
+}
+
+export function reviewPromotionRequest(id: string, status: 'approved' | 'rejected', reviewNote?: string): PromotionRequest | null {
+  db.prepare('UPDATE promotion_requests SET status = ?, reviewedAt = ?, reviewNote = ? WHERE id = ?')
+    .run(status, new Date().toISOString(), reviewNote || null, id);
+  const row = db.prepare('SELECT * FROM promotion_requests WHERE id = ?').get(id);
+  return row ? rowToPromotionRequest(row) : null;
+}
+
+// Actually changes the volunteer's tier -- called when an admin approves a
+// promotion request, so approval has a real effect instead of just flipping a
+// status flag nothing else reads.
+export function updateVolunteerTier(email: string, tier: string): void {
+  db.prepare('UPDATE volunteers SET tier = ? WHERE email = ?').run(tier, email.toLowerCase().trim());
 }

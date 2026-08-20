@@ -220,3 +220,22 @@ export interface SopVideo {
   uploadedAt: string;
 }
 
+// A volunteer's request to be reviewed for tier promotion (e.g. 正式志工 ->
+// 資深志工), submitted once their growth checklist hits 100%. Previously this
+// was just a client-side toast with nothing persisted anywhere an admin could
+// actually see it -- now a real record an admin approves or rejects.
+export type PromotionStatus = 'pending' | 'approved' | 'rejected';
+
+export interface PromotionRequest {
+  id: string;
+  volunteerEmail: string;
+  volunteerName: string;
+  currentTier: string;
+  requestedTier: string;
+  completedItems: string[];
+  status: PromotionStatus;
+  requestedAt: string;
+  reviewedAt?: string;
+  reviewNote?: string;
+}
+

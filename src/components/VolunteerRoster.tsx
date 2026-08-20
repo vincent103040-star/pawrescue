@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { VolunteerProfile } from '../types';
+import React, { useState, useEffect } from 'react';
+import { VolunteerProfile, PromotionRequest } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
-import { Users, Award, Clock, Search, Shield, Phone, Mail, MessageSquare, Star, Plus, Check, Trophy, TrendingUp, Medal, Sparkles, ArrowUpDown, Filter, Download, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Users, Award, Clock, Search, Shield, Phone, Mail, MessageSquare, Star, Plus, Check, X, Trophy, TrendingUp, Medal, Sparkles, ArrowUpDown, Filter, Download, FileText, ChevronLeft, ChevronRight, BellRing } from 'lucide-react';
 import { CertificateModal } from './CertificateModal';
 
 interface VolunteerRosterProps {
@@ -14,6 +14,51 @@ export const VolunteerRoster: React.FC<VolunteerRosterProps> = ({ volunteers }) 
   const [tierFilter, setTierFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'hours_desc' | 'hours_asc' | 'shifts_desc' | 'name'>('hours_desc');
   const [selectedCertVolunteer, setSelectedCertVolunteer] = useState<VolunteerProfile | null>(null);
+
+  // Pending volunteer tier-promotion requests, awaiting admin approval/rejection
+  const [promotionRequests, setPromotionRequests] = useState<PromotionRequest[]>([]);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [rejectNoteDraftId, setRejectNoteDraftId] = useState<string | null>(null);
+  const [rejectNote, setRejectNote] = useState('');
+
+  const refreshPromotionRequests = () => {
+    fetch('/api/promotions')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) setPromotionRequests(data.requests || []);
+      })
+      .catch(() => { /* best-effort */ });
+  };
+
+  useEffect(() => {
+    refreshPromotionRequests();
+  }, []);
+
+  const pendingRequests = promotionRequests.filter(r => r.status === 'pending');
+
+  const handleApprovePromotion = (id: string) => {
+    setReviewingId(id);
+    fetch(`/api/promotions/${id}/approve`, { method: 'POST' })
+      .then(res => res.json())
+      .then(() => refreshPromotionRequests())
+      .finally(() => setReviewingId(null));
+  };
+
+  const handleRejectPromotion = (id: string) => {
+    setReviewingId(id);
+    fetch(`/api/promotions/${id}/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reviewNote: rejectNote.trim() || undefined })
+    })
+      .then(res => res.json())
+      .then(() => {
+        refreshPromotionRequests();
+        setRejectNoteDraftId(null);
+        setRejectNote('');
+      })
+      .finally(() => setReviewingId(null));
+  };
 
   // Filter volunteers
   const filteredVolunteers = volunteers.filter(vol => {
@@ -103,6 +148,95 @@ export const VolunteerRoster: React.FC<VolunteerRosterProps> = ({ volunteers }) 
           </span>
         </div>
       </div>
+
+      {/* Pending Tier Promotion Requests -- volunteers who hit 100% on their growth
+          checklist land here for admin approval/rejection */}
+      {pendingRequests.length > 0 && (
+        <div className="bg-white rounded-[28px] p-6 border border-amber-300 shadow-xs space-y-4">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+              <BellRing className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-bold font-serif text-slate-900 flex items-center gap-2">
+                <span>待審核晉升申請</span>
+                <span className="bg-rose-500 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full animate-pulse">
+                  {pendingRequests.length}
+                </span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">志工已達成晉升考核門檻，請審核是否核發新等級。</p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {pendingRequests.map(req => (
+              <div key={req.id} className="bg-amber-50/60 border border-amber-200 rounded-2xl p-4 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <p className="font-bold text-slate-900 text-sm">
+                      {req.volunteerName}
+                      <span className="mx-1.5 text-slate-400 font-normal">申請由</span>
+                      <span className="text-slate-600">{req.currentTier}</span>
+                      <span className="mx-1 text-slate-400">→</span>
+                      <span className="text-[#5A5A40] font-extrabold">{req.requestedTier}</span>
+                    </p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      申請時間：{req.requestedAt} ・ 已完成 {req.completedItems.length} 項考核項目
+                    </p>
+                    {req.completedItems.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {req.completedItems.map((item, idx) => (
+                          <span key={idx} className="text-[10px] bg-white text-slate-600 border border-amber-200 px-2 py-0.5 rounded-md">
+                            ✓ {item}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => handleApprovePromotion(req.id)}
+                      disabled={reviewingId === req.id}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3.5 py-2 rounded-xl text-xs shadow-2xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>核准晉升</span>
+                    </button>
+                    <button
+                      onClick={() => setRejectNoteDraftId(rejectNoteDraftId === req.id ? null : req.id)}
+                      disabled={reviewingId === req.id}
+                      className="bg-white hover:bg-rose-50 text-rose-700 border border-rose-300 font-bold px-3.5 py-2 rounded-xl text-xs shadow-2xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>駁回</span>
+                    </button>
+                  </div>
+                </div>
+
+                {rejectNoteDraftId === req.id && (
+                  <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-amber-200/70">
+                    <input
+                      type="text"
+                      value={rejectNote}
+                      onChange={e => setRejectNote(e.target.value)}
+                      placeholder="駁回原因（選填，將顯示給志工）"
+                      className="flex-1 px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs focus:ring-2 focus:ring-rose-400 focus:outline-none"
+                    />
+                    <button
+                      onClick={() => handleRejectPromotion(req.id)}
+                      disabled={reviewingId === req.id}
+                      className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-2xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                    >
+                      確認駁回
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Top Contributor Leaderboard Honor Roll */}
       <div className="bg-gradient-to-r from-[#5A5A40] via-[#484833] to-[#363626] rounded-[32px] p-6 text-white shadow-xl relative overflow-hidden border border-[#E6E2D3]/20">

@@ -5,7 +5,7 @@ import { writeFileSync, mkdirSync } from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
-import { getAllVolunteers, getVolunteerByEmail, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, getAllSopVideos, insertSopVideo, deleteSopVideo } from './db';
+import { getAllVolunteers, getVolunteerByEmail, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier } from './db';
 import { PDFParse } from 'pdf-parse';
 import type { SopContent, SopDocument, SopVideo } from './src/types';
 
@@ -1058,6 +1058,90 @@ ${contextText}
     } catch (error: any) {
       console.error('Check-Out Persist Error:', error);
       return res.status(500).json({ success: false, error: error.message || '儲存簽退紀錄失敗' });
+    }
+  });
+
+  // Volunteer tier promotion requests -- a volunteer submits/refreshes a
+  // pending request once their growth checklist hits 100%, an admin reviews
+  // it from the roster page. Previously this was just a client-side toast
+  // with nothing persisted anywhere an admin could see it.
+  app.post('/api/promotions/request', (req, res) => {
+    try {
+      const { volunteerEmail, volunteerName, currentTier, requestedTier, completedItems } = req.body;
+      if (!volunteerEmail || !volunteerName || !currentTier || !requestedTier) {
+        return res.status(400).json({ success: false, error: '缺少晉升申請所需欄位' });
+      }
+      const request = upsertPendingPromotionRequest({
+        volunteerEmail,
+        volunteerName,
+        currentTier,
+        requestedTier,
+        completedItems: Array.isArray(completedItems) ? completedItems : []
+      });
+      return res.json({ success: true, request });
+    } catch (error: any) {
+      console.error('Promotion Request Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '提交晉升申請失敗' });
+    }
+  });
+
+  app.get('/api/promotions', (req, res) => {
+    try {
+      const { volunteerEmail } = req.query;
+      if (typeof volunteerEmail === 'string' && volunteerEmail) {
+        const request = getLatestPromotionRequestForVolunteer(volunteerEmail);
+        return res.json({ success: true, request });
+      }
+      const requests = getAllPromotionRequests();
+      return res.json({ success: true, requests });
+    } catch (error: any) {
+      console.error('Fetch Promotion Requests Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '讀取晉升申請失敗' });
+    }
+  });
+
+  app.post('/api/promotions/:id/approve', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const requests = getAllPromotionRequests();
+      const target = requests.find(r => r.id === id);
+      if (!target) {
+        return res.status(404).json({ success: false, error: '找不到該筆晉升申請' });
+      }
+
+      const updated = reviewPromotionRequest(id, 'approved');
+      updateVolunteerTier(target.volunteerEmail, target.requestedTier);
+
+      const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+      const linkedLine = getLineUserIdByName(target.volunteerName);
+      if (lineToken && linkedLine) {
+        const pushText = `【浪浪家園】恭喜 ${target.volunteerName}！您的志工等級已審核通過，正式晉升為「${target.requestedTier}」🎉 感謝您長期以來的付出與陪伴。`;
+        fetch('https://api.line.me/v2/bot/message/push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${lineToken}` },
+          body: JSON.stringify({ to: linkedLine.lineUserId, messages: [{ type: 'text', text: pushText }] })
+        }).catch(() => { /* best-effort, ignore failures */ });
+      }
+
+      return res.json({ success: true, request: updated });
+    } catch (error: any) {
+      console.error('Approve Promotion Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '審核通過失敗' });
+    }
+  });
+
+  app.post('/api/promotions/:id/reject', (req, res) => {
+    try {
+      const { id } = req.params;
+      const { reviewNote } = req.body;
+      const updated = reviewPromotionRequest(id, 'rejected', reviewNote);
+      if (!updated) {
+        return res.status(404).json({ success: false, error: '找不到該筆晉升申請' });
+      }
+      return res.json({ success: true, request: updated });
+    } catch (error: any) {
+      console.error('Reject Promotion Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '駁回失敗' });
     }
   });
 

@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { PositionShift, Branch, BranchId, SkillLevel, ZoneCategory, LineNotificationPreferences, VolunteerUserSession, AttendanceRecord, VolunteerApplication } from '../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { PositionShift, Branch, BranchId, SkillLevel, ZoneCategory, LineNotificationPreferences, VolunteerUserSession, AttendanceRecord, VolunteerApplication, PromotionRequest } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { VolunteerWelcomeCard } from './VolunteerWelcomeCard';
 import { ShiftCalendarView } from './ShiftCalendarView';
@@ -283,10 +283,57 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
     return localStorage.getItem('volunteer_growth_notified') === 'true';
   });
 
+  const [promotionStatus, setPromotionStatus] = useState<PromotionRequest | null>(null);
+
   const completedGrowthCount = growthItems.filter(i => i.completed).length;
   const totalGrowthCount = growthItems.length;
   const growthProgressPercent = Math.round((completedGrowthCount / totalGrowthCount) * 100);
   const isGrowthThresholdReached = completedGrowthCount === totalGrowthCount;
+
+  useEffect(() => {
+    if (!profileEmail) return;
+    fetch(`/api/promotions?volunteerEmail=${encodeURIComponent(profileEmail)}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.request) {
+          setPromotionStatus(data.request);
+          if (data.request.status === 'pending') {
+            setHasAutoNotifiedAdmin(true);
+          }
+        }
+      })
+      .catch(() => { /* best-effort */ });
+  }, [profileEmail]);
+
+  const submitPromotionRequest = (items: GrowthChecklistItem[]) => {
+    if (!profileEmail) {
+      onSendLineToast(`🚨 [通知管理員] 志工【${profileName}】向管理員送出【資深志工】晉升審核！`);
+      return;
+    }
+    fetch('/api/promotions/request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        volunteerEmail: profileEmail,
+        volunteerName: profileName,
+        currentTier: currentUser?.tier || '正式志工',
+        requestedTier: '資深志工',
+        completedItems: items.filter(i => i.completed).map(i => i.title)
+      })
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setPromotionStatus(data.request);
+          onSendLineToast(
+            `🚨 [已送出] 志工【${profileName}】向管理員送出【資深志工】晉升審核申請，已記錄於管理後台，請等待審核。`
+          );
+        } else {
+          onSendLineToast(`⚠️ 送出晉升申請失敗，請稍後再試。`);
+        }
+      })
+      .catch(() => onSendLineToast(`⚠️ 送出晉升申請失敗，請確認網路連線後再試。`));
+  };
 
   const handleToggleGrowthItem = (itemId: string) => {
     setGrowthItems(prev => {
@@ -297,9 +344,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
       if (comp === updated.length && !hasAutoNotifiedAdmin) {
         setHasAutoNotifiedAdmin(true);
         localStorage.setItem('volunteer_growth_notified', 'true');
-        onSendLineToast(
-          `🚨 [系統自動通知管理員] 志工【${profileName}】已達標【資深志工】升級門檻（5/5 項考核全數完成 100%）！已自動通報管理員後台核發晉升認證。`
-        );
+        submitPromotionRequest(updated);
       }
       return updated;
     });
@@ -311,18 +356,13 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
     localStorage.setItem('volunteer_growth_items', JSON.stringify(allCompleted));
     setHasAutoNotifiedAdmin(true);
     localStorage.setItem('volunteer_growth_notified', 'true');
-
-    onSendLineToast(
-      `🎉 [全數考核達成] 志工【${profileName}】已完成 100% 資深志工考核！已自動推播 LINE 通知與社工管理員後台，等待核發【資深志工】徽章！`
-    );
+    submitPromotionRequest(allCompleted);
   };
 
   const handleManualNotifyAdmin = () => {
     setHasAutoNotifiedAdmin(true);
     localStorage.setItem('volunteer_growth_notified', 'true');
-    onSendLineToast(
-      `🚨 [手動通知管理員] 志工【${profileName}】向管理員送出【資深志工】晉升審核！目前完成率：${growthProgressPercent}% (${completedGrowthCount}/${totalGrowthCount}項)。`
-    );
+    submitPromotionRequest(growthItems);
   };
 
   // Apply Form states
@@ -1005,31 +1045,55 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
 
             {/* Auto Admin Notification Banner */}
             {isGrowthThresholdReached && (
-              <div className="bg-emerald-50 border border-emerald-300 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in shadow-2xs">
+              <div className={`rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in shadow-2xs border ${
+                promotionStatus?.status === 'approved'
+                  ? 'bg-amber-50 border-amber-300'
+                  : promotionStatus?.status === 'rejected'
+                  ? 'bg-rose-50 border-rose-300'
+                  : 'bg-emerald-50 border-emerald-300'
+              }`}>
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <div className={`w-10 h-10 rounded-full text-white flex items-center justify-center shrink-0 shadow-xs ${
+                    promotionStatus?.status === 'approved'
+                      ? 'bg-amber-500'
+                      : promotionStatus?.status === 'rejected'
+                      ? 'bg-rose-500'
+                      : 'bg-emerald-500'
+                  }`}>
                     <CheckCircle2 className="w-6 h-6" />
                   </div>
                   <div>
                     <h4 className="font-bold text-emerald-950 text-sm flex items-center gap-1.5">
-                      <span>🎉 恭喜！您已 100% 達成『資深志工』晉升門檻</span>
+                      <span>
+                        {promotionStatus?.status === 'approved'
+                          ? '🏆 恭喜！管理員已審核通過您的『資深志工』晉升申請'
+                          : promotionStatus?.status === 'rejected'
+                          ? '📋 您的『資深志工』晉升申請尚未通過審核'
+                          : '🎉 恭喜！您已 100% 達成『資深志工』晉升門檻'}
+                      </span>
                     </h4>
                     <p className="text-xs text-emerald-800 mt-0.5">
-                      {hasAutoNotifiedAdmin
-                        ? '✅ 系統已自動發送 LINE 通知給社工管理員！管理員將審核並發放【資深志工】認證徽章。'
+                      {promotionStatus?.status === 'approved'
+                        ? '✅ 您的志工等級已正式晉升為「資深志工」，感謝您的長期付出！'
+                        : promotionStatus?.status === 'rejected'
+                        ? `${promotionStatus?.reviewNote ? `管理員回覆：${promotionStatus.reviewNote}` : '請聯繫管理員了解詳情，或持續累積服務紀錄後再次提出申請。'}`
+                        : hasAutoNotifiedAdmin
+                        ? '✅ 已送出申請至社工管理員後台，等待審核中。管理員將審核並發放【資深志工】認證徽章。'
                         : '點擊下方按鈕將立即發送升級申請至管理員後台。'}
                     </p>
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleManualNotifyAdmin}
-                  className="bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold px-4 py-2 rounded-xl text-xs transition flex items-center gap-1.5 shrink-0 shadow-2xs cursor-pointer"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>再次通知管理員審核</span>
-                </button>
+                {promotionStatus?.status !== 'approved' && (
+                  <button
+                    type="button"
+                    onClick={handleManualNotifyAdmin}
+                    className="bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold px-4 py-2 rounded-xl text-xs transition flex items-center gap-1.5 shrink-0 shadow-2xs cursor-pointer"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>{hasAutoNotifiedAdmin ? '再次通知管理員審核' : '通知管理員審核'}</span>
+                  </button>
+                )}
               </div>
             )}
 
