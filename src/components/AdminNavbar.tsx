@@ -1,10 +1,10 @@
 import React from 'react';
-import { PawPrint, Calendar, MapPin, MessageSquare, Shield, UserCheck, PlusCircle, Sparkles, Building2, QrCode, BookOpen, LogOut, ArrowRightLeft, User } from 'lucide-react';
+import { PawPrint, Calendar, MapPin, Shield, UserCheck, PlusCircle, Sparkles, Building2, QrCode, BookOpen, LogOut, ArrowRightLeft, User } from 'lucide-react';
 import { BranchId, Branch, AdminUserSession } from '../types';
 
 interface AdminNavbarProps {
-  activeTab: 'dashboard' | 'positions' | 'applications' | 'integration' | 'roster';
-  setActiveTab: (tab: 'dashboard' | 'positions' | 'applications' | 'integration' | 'roster') => void;
+  activeTab: 'dashboard' | 'positions' | 'applications' | 'roster';
+  setActiveTab: (tab: 'dashboard' | 'positions' | 'applications' | 'roster') => void;
   selectedBranch: BranchId | 'all';
   setSelectedBranch: (branch: BranchId | 'all') => void;
   branches: Branch[];
@@ -203,18 +203,6 @@ export const AdminNavbar: React.FC<AdminNavbarProps> = ({
           </button>
 
           <button
-            onClick={() => setActiveTab('integration')}
-            className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap flex items-center space-x-1.5 transition cursor-pointer ${
-              activeTab === 'integration'
-                ? 'bg-[#5A5A40] text-white shadow-xs'
-                : 'text-slate-600 hover:bg-[#E6E2D3]/40 hover:text-[#5A5A40]'
-            }`}
-          >
-            <MessageSquare className="w-4 h-4 text-emerald-300" />
-            <span>4. 地圖 / 日曆 / LINE 串聯</span>
-          </button>
-
-          <button
             onClick={() => setActiveTab('roster')}
             className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap flex items-center space-x-1.5 transition cursor-pointer ${
               activeTab === 'roster'
@@ -223,7 +211,7 @@ export const AdminNavbar: React.FC<AdminNavbarProps> = ({
             }`}
           >
             <Sparkles className="w-4 h-4 text-amber-300" />
-            <span>5. 志工人才庫名冊</span>
+            <span>4. 志工人才庫名冊</span>
           </button>
         </div>
       </div>

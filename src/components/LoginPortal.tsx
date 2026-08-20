@@ -355,10 +355,6 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#5A5A40] mt-1.5 shrink-0"></span>
-                  <span><strong>地圖 / 日曆 / LINE 串聯</strong>：三方 API 同步中心與 LINE 圖文選單</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#5A5A40] mt-1.5 shrink-0"></span>
                   <span><strong>志工人才庫名冊</strong>：志工等級維護、服務時數紀錄、月度排班報表匯出</span>
                 </div>
               </div>

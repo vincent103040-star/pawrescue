@@ -13,7 +13,6 @@ import { ApplicantReview } from './components/ApplicantReview';
 import { VolunteerPortal } from './components/VolunteerPortal';
 import { VolunteerMyShifts } from './components/VolunteerMyShifts';
 import { VolunteerSopGuide } from './components/VolunteerSopGuide';
-import { IntegrationHub } from './components/IntegrationHub';
 import { VolunteerRoster } from './components/VolunteerRoster';
 import { AiPostModal } from './components/AiPostModal';
 import { VolunteerCheckInModal } from './components/VolunteerCheckInModal';
@@ -72,7 +71,7 @@ export default function App() {
   });
 
   // Tab states for separate roles
-  const [adminActiveTab, setAdminActiveTab] = useState<'dashboard' | 'positions' | 'applications' | 'integration' | 'roster'>('dashboard');
+  const [adminActiveTab, setAdminActiveTab] = useState<'dashboard' | 'positions' | 'applications' | 'roster'>('dashboard');
   const [volunteerActiveTab, setVolunteerActiveTab] = useState<VolunteerActiveTab>('shifts');
   const [selectedBranch, setSelectedBranch] = useState<BranchId | 'all'>('all');
 
@@ -678,13 +677,6 @@ export default function App() {
               />
             )}
 
-            {adminActiveTab === 'integration' && (
-              <IntegrationHub
-                branches={BRANCHES}
-                shifts={shifts}
-              />
-            )}
-
             {adminActiveTab === 'roster' && (
               <VolunteerRoster
                 volunteers={volunteers}
@@ -812,7 +804,7 @@ export default function App() {
           onShareToLine={() => {
             showToast('已成功推播廣播文案至 LINE 志工群組！');
             if (userRole === 'admin') {
-              setAdminActiveTab('integration');
+              setAdminActiveTab('dashboard');
             }
           }}
         />

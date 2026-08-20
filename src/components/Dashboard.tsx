@@ -22,7 +22,7 @@ interface DashboardProps {
   branches: Branch[];
   selectedBranch: BranchId | 'all';
   attendanceRecords?: AttendanceRecord[];
-  onNavigateToTab: (tab: 'dashboard' | 'positions' | 'applications' | 'portal' | 'integration' | 'roster') => void;
+  onNavigateToTab: (tab: 'dashboard' | 'positions' | 'applications' | 'portal' | 'roster') => void;
   onApplyForShift: (shiftId: string) => void;
   onOpenCheckInModal?: () => void;
   checkedInCount?: number;
@@ -384,12 +384,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <ArrowRight className="w-4 h-4" />
             </button>
 
-            <button
-              onClick={() => onNavigateToTab('integration')}
-              className="bg-white/10 hover:bg-white/20 text-white px-5 py-2.5 rounded-full font-semibold text-xs border border-white/20 transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <span>🗺️ 查看 Google 地圖/日曆串聯教學</span>
-            </button>
           </div>
         </div>
       </div>
