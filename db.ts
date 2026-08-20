@@ -1,8 +1,10 @@
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'fs';
 import path from 'path';
+import { randomUUID } from 'crypto';
 import { VOLUNTEER_PROFILES, INITIAL_ATTENDANCE_RECORDS } from './src/data/mockData';
-import type { VolunteerProfile, AttendanceRecord } from './src/types';
+import { RULEBOOK_CORPUS } from './src/data/rulebookCorpus';
+import type { VolunteerProfile, AttendanceRecord, SopContent, SopSection, SopDocument, SopVideo } from './src/types';
 
 const dataDir = path.join(process.cwd(), 'data');
 fs.mkdirSync(dataDir, { recursive: true });
@@ -373,4 +375,204 @@ export function updateAttendanceCheckout(
   );
   const row = db.prepare('SELECT * FROM attendance_records WHERE id = ?').get(id);
   return row ? rowToAttendanceRecord(row) : null;
+}
+
+// ============================================================================
+// Volunteer rulebook / SOP content management (admin-editable) + RAG corpus
+// ============================================================================
+// This used to be two separate static, build-time things: the hardcoded JSX in
+// VolunteerSopGuide.tsx, and a one-time-precomputed embeddings JSON file for
+// /api/ai/rag-ask. Both now live here instead, so an admin editing the SOP
+// content (or uploading a reference PDF) actually changes what volunteers see
+// AND what the RAG Q&A answers from -- re-embedding happens on every save.
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS sop_content (
+    id TEXT PRIMARY KEY,
+    contentJson TEXT NOT NULL,
+    updatedAt TEXT NOT NULL
+  )
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS rag_chunks (
+    id TEXT PRIMARY KEY,
+    source TEXT NOT NULL,
+    sourceId TEXT NOT NULL,
+    title TEXT NOT NULL,
+    text TEXT NOT NULL,
+    embedding TEXT NOT NULL,
+    updatedAt TEXT NOT NULL
+  )
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS sop_documents (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    fileUrl TEXT NOT NULL,
+    uploadedAt TEXT NOT NULL
+  )
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS sop_videos (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT,
+    fileUrl TEXT NOT NULL,
+    uploadedAt TEXT NOT NULL
+  )
+`);
+
+const DEFAULT_SOP_CONTENT: SopContent = {
+  bannerTitle: '志工服務安全規範與毛孩照護 SOP 🐾',
+  bannerSubtitle: '服務毛孩的第一原則是「安全第一」。請在每次出勤前複習相關場域規範，遇到特殊狀況立即通報值日社工或駐院獸醫。',
+  sections: [
+    {
+      id: 'sop-dog-walk',
+      icon: '🐕',
+      colorTheme: 'emerald',
+      title: '大狗運動場 & 放風散步 SOP',
+      subtitle: 'B區大型犬戶外放電指導',
+      items: [
+        { label: '雙扣牽繩規範', text: '胸背帶與項圈必須使用雙頭安全扣，出舍前確認鎖緊。' },
+        { label: '防爆衝距離', text: '放風時兩犬距離保持至少 3 公尺，嚴禁讓未社會化犬隻正面嗅聞接觸。' },
+        { label: '高溫防燙爪', text: '夏季地面超過 35°C 時縮短柏油路行走，改至遮蔭草坪。' }
+      ]
+    },
+    {
+      id: 'sop-cat-room',
+      icon: '🐱',
+      colorTheme: 'rose',
+      title: '貓舍區清消與陪伴 SOP',
+      subtitle: 'A棟親人貓房與隔離舍規範',
+      items: [
+        { label: '進出雙道門', text: '進入貓舍必須「關一扇才能開下一扇」，嚴防貓咪奪門暴衝。' },
+        { label: '分區清消不混用', text: '隔離房抹布與拖把不得跨房使用，每次接觸後使用次氯酸消毒手部。' },
+        { label: '安撫觀察情緒', text: '若貓咪飛機耳或低吼，請暫停互動並通知資深隊長。' }
+      ]
+    },
+    {
+      id: 'sop-puppy-nursery',
+      icon: '🍼',
+      colorTheme: 'amber',
+      title: '幼犬育幼與保暖 SOP',
+      subtitle: 'C棟幼幼犬照護特別規範',
+      items: [
+        { label: '泡奶溫度測試', text: '代母乳泡製以 38°C 微溫為準，手背測試不燙方可餵食。' },
+        { label: '定時排便刺激', text: '餵食後使用微濕溫棉花輕柔刺激肛門與尿道排泄。' },
+        { label: '保暖燈監測', text: '確認保暖燈高度維持 45 公分，避免幼犬過熱或受寒。' }
+      ]
+    }
+  ],
+  emergencyTitle: '緊急事件處置與受傷第一道防線',
+  emergencyText: '若不幸遭犬貓咬傷抓傷，請立即使用大量生理食鹽水沖洗 15 分鐘，並立即告知督導安排就醫破傷風評估。',
+  emergencyPhone: '(02) 2211-8899 #108'
+};
+
+// Seed sop_content with the default (previously hardcoded) content on first run only.
+const sopContentSeedCount = db.prepare('SELECT COUNT(*) AS c FROM sop_content').get() as { c: number };
+if (sopContentSeedCount.c === 0) {
+  db.prepare('INSERT INTO sop_content (id, contentJson, updatedAt) VALUES (?, ?, ?)')
+    .run('default', JSON.stringify(DEFAULT_SOP_CONTENT), new Date().toISOString());
+}
+
+// Seed rag_chunks from the precomputed embeddings file (scripts/embed-rulebook.ts's
+// output) on first run only -- reuses those existing vectors instead of spending
+// Gemini embedding quota again just to reach the same starting state. Chunks whose
+// id matches a default SOP section (or the emergency block) are tagged so future
+// admin edits to that section correctly replace rather than duplicate them; every
+// other chunk (the "how do I use the admin dashboard" background knowledge) is
+// tagged 'static' and is never touched by the SOP content editor.
+const ragChunksSeedCount = db.prepare('SELECT COUNT(*) AS c FROM rag_chunks').get() as { c: number };
+if (ragChunksSeedCount.c === 0) {
+  try {
+    const precomputed = JSON.parse(
+      fs.readFileSync(path.join(dataDir, 'rulebook_embeddings.json'), 'utf-8')
+    ) as { id: string; title: string; text: string; embedding: number[] }[];
+    const sectionIds = new Set(DEFAULT_SOP_CONTENT.sections.map(s => s.id));
+    const insertChunk = db.prepare(`
+      INSERT INTO rag_chunks (id, source, sourceId, title, text, embedding, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    const nowIso = new Date().toISOString();
+    for (const chunk of precomputed) {
+      const source = sectionIds.has(chunk.id) ? 'section' : chunk.id === 'emergency-protocol' ? 'emergency' : 'static';
+      insertChunk.run(randomUUID(), source, chunk.id, chunk.title, chunk.text, JSON.stringify(chunk.embedding), nowIso);
+    }
+  } catch {
+    // data/rulebook_embeddings.json not found (e.g. the offline embed script was
+    // never run) -- RAG just starts empty and falls back to the keyword matcher
+    // in server.ts until an admin saves SOP content or uploads a PDF.
+  }
+}
+
+export function getSopContent(): SopContent {
+  const row = db.prepare('SELECT contentJson FROM sop_content WHERE id = ?').get('default') as { contentJson: string } | undefined;
+  return row ? JSON.parse(row.contentJson) : DEFAULT_SOP_CONTENT;
+}
+
+export function saveSopContent(content: SopContent): void {
+  db.prepare('UPDATE sop_content SET contentJson = ?, updatedAt = ? WHERE id = ?')
+    .run(JSON.stringify(content), new Date().toISOString(), 'default');
+}
+
+export interface RagChunkRow {
+  id: string;
+  source: string;
+  sourceId: string;
+  title: string;
+  text: string;
+  embedding: number[];
+}
+
+export function getAllRagChunks(): RagChunkRow[] {
+  const rows = db.prepare('SELECT * FROM rag_chunks').all() as any[];
+  return rows.map(r => ({ id: r.id, source: r.source, sourceId: r.sourceId, title: r.title, text: r.text, embedding: JSON.parse(r.embedding) }));
+}
+
+// Replaces every chunk previously stored for this (source, sourceId) pair with a
+// fresh set -- used both for a single-chunk SOP section re-embed and a
+// multi-chunk PDF re-embed (a PDF's text gets split into several chunks).
+export function replaceRagChunks(source: string, sourceId: string, chunks: { title: string; text: string; embedding: number[] }[]): void {
+  db.prepare('DELETE FROM rag_chunks WHERE source = ? AND sourceId = ?').run(source, sourceId);
+  const insertChunk = db.prepare(`
+    INSERT INTO rag_chunks (id, source, sourceId, title, text, embedding, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+  const nowIso = new Date().toISOString();
+  for (const c of chunks) {
+    insertChunk.run(randomUUID(), source, sourceId, c.title, c.text, JSON.stringify(c.embedding), nowIso);
+  }
+}
+
+export function deleteRagChunks(source: string, sourceId: string): void {
+  db.prepare('DELETE FROM rag_chunks WHERE source = ? AND sourceId = ?').run(source, sourceId);
+}
+
+export function getAllSopDocuments(): SopDocument[] {
+  return db.prepare('SELECT * FROM sop_documents ORDER BY uploadedAt DESC').all() as any[] as SopDocument[];
+}
+
+export function insertSopDocument(doc: SopDocument): void {
+  db.prepare('INSERT INTO sop_documents (id, title, fileUrl, uploadedAt) VALUES (?, ?, ?, ?)')
+    .run(doc.id, doc.title, doc.fileUrl, doc.uploadedAt);
+}
+
+export function deleteSopDocument(id: string): void {
+  db.prepare('DELETE FROM sop_documents WHERE id = ?').run(id);
+}
+
+export function getAllSopVideos(): SopVideo[] {
+  return db.prepare('SELECT * FROM sop_videos ORDER BY uploadedAt DESC').all() as any[] as SopVideo[];
+}
+
+export function insertSopVideo(video: SopVideo): void {
+  db.prepare('INSERT INTO sop_videos (id, title, description, fileUrl, uploadedAt) VALUES (?, ?, ?, ?, ?)')
+    .run(video.id, video.title, video.description || null, video.fileUrl, video.uploadedAt);
+}
+
+export function deleteSopVideo(id: string): void {
+  db.prepare('DELETE FROM sop_videos WHERE id = ?').run(id);
 }

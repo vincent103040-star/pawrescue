@@ -9,4 +9,6 @@ coverage/
 /data/*.db
 /data/photos/
 /data/avatars/
+/data/sop-docs/
+/data/sop-videos/
 dogcat.png

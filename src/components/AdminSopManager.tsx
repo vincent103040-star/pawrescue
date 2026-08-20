@@ -1,0 +1,523 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { BookOpen, Save, Plus, Trash2, FileText, Video, Upload, Loader2, ShieldAlert } from 'lucide-react';
+import { SopContent, SopSection, SopDocument, SopVideo } from '../types';
+
+interface AdminSopManagerProps {
+  onSendLineToast: (msg: string) => void;
+}
+
+const COLOR_THEME_OPTIONS: { value: SopSection['colorTheme']; label: string }[] = [
+  { value: 'emerald', label: '綠色' },
+  { value: 'rose', label: '粉紅' },
+  { value: 'amber', label: '琥珀' },
+  { value: 'sky', label: '天藍' },
+  { value: 'purple', label: '紫色' }
+];
+
+const COLOR_PREVIEW: Record<string, string> = {
+  emerald: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+  rose: 'bg-rose-100 text-rose-800 border-rose-300',
+  amber: 'bg-amber-100 text-amber-800 border-amber-300',
+  sky: 'bg-sky-100 text-sky-800 border-sky-300',
+  purple: 'bg-purple-100 text-purple-800 border-purple-300'
+};
+
+function fileToBase64(file: File): Promise<{ base64: string; mimeType: string }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      resolve({ base64: dataUrl.split(',')[1], mimeType: file.type });
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToast }) => {
+  const [content, setContent] = useState<SopContent | null>(null);
+  const [documents, setDocuments] = useState<SopDocument[]>([]);
+  const [videos, setVideos] = useState<SopVideo[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const [docTitle, setDocTitle] = useState('');
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+
+  const [videoTitle, setVideoTitle] = useState('');
+  const [videoDescription, setVideoDescription] = useState('');
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [isUploadingVideo, setIsUploadingVideo] = useState(false);
+
+  const docFileInputRef = useRef<HTMLInputElement>(null);
+  const videoFileInputRef = useRef<HTMLInputElement>(null);
+
+  const loadContent = () => {
+    setIsLoading(true);
+    fetch('/api/sop-content')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setContent(data.content);
+          setDocuments(data.documents || []);
+          setVideos(data.videos || []);
+        }
+      })
+      .catch(() => onSendLineToast('⚠️ 讀取手冊內容失敗，請重新整理頁面再試一次。'))
+      .finally(() => setIsLoading(false));
+  };
+
+  useEffect(() => {
+    loadContent();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleSave = async () => {
+    if (!content) return;
+    setIsSaving(true);
+    try {
+      const res = await fetch('/api/admin/sop-content', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(content)
+      });
+      const data = await res.json();
+      if (data.success) {
+        setContent(data.content);
+        onSendLineToast('✅ 手冊內容已儲存，並已同步更新 AI 問答的向量參考資料！');
+      } else {
+        onSendLineToast(`⚠️ 儲存失敗：${data.error || '未知錯誤'}`);
+      }
+    } catch (err: any) {
+      onSendLineToast(`⚠️ 儲存失敗：${err.message || '網路連線異常'}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const updateSection = (index: number, updates: Partial<SopSection>) => {
+    if (!content) return;
+    const sections = [...content.sections];
+    sections[index] = { ...sections[index], ...updates };
+    setContent({ ...content, sections });
+  };
+
+  const updateSectionItem = (sectionIndex: number, itemIndex: number, field: 'label' | 'text', value: string) => {
+    if (!content) return;
+    const sections = [...content.sections];
+    const items = [...sections[sectionIndex].items];
+    items[itemIndex] = { ...items[itemIndex], [field]: value };
+    sections[sectionIndex] = { ...sections[sectionIndex], items };
+    setContent({ ...content, sections });
+  };
+
+  const addSectionItem = (sectionIndex: number) => {
+    if (!content) return;
+    const sections = [...content.sections];
+    sections[sectionIndex] = { ...sections[sectionIndex], items: [...sections[sectionIndex].items, { label: '新規範', text: '說明內容...' }] };
+    setContent({ ...content, sections });
+  };
+
+  const removeSectionItem = (sectionIndex: number, itemIndex: number) => {
+    if (!content) return;
+    const sections = [...content.sections];
+    sections[sectionIndex] = { ...sections[sectionIndex], items: sections[sectionIndex].items.filter((_, i) => i !== itemIndex) };
+    setContent({ ...content, sections });
+  };
+
+  const addSection = () => {
+    if (!content) return;
+    const newSection: SopSection = {
+      id: `sop-custom-${Date.now()}`,
+      icon: '📋',
+      colorTheme: 'sky',
+      title: '新 SOP 項目',
+      subtitle: '請填寫說明',
+      items: [{ label: '規範一', text: '說明內容...' }]
+    };
+    setContent({ ...content, sections: [...content.sections, newSection] });
+  };
+
+  const removeSection = (index: number) => {
+    if (!content) return;
+    setContent({ ...content, sections: content.sections.filter((_, i) => i !== index) });
+  };
+
+  const handleUploadDoc = async () => {
+    if (!docTitle.trim() || !docFile) return;
+    setIsUploadingDoc(true);
+    try {
+      const { base64 } = await fileToBase64(docFile);
+      const res = await fetch('/api/admin/sop-documents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: docTitle.trim(), fileBase64: base64 })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDocuments(prev => [data.document, ...prev]);
+        setDocTitle('');
+        setDocFile(null);
+        if (docFileInputRef.current) docFileInputRef.current.value = '';
+        onSendLineToast(`✅ 已上傳「${data.document.title}」，並索引 ${data.chunksIndexed} 段內容供 AI 問答參考！`);
+      } else {
+        onSendLineToast(`⚠️ 上傳失敗：${data.error || '未知錯誤'}`);
+      }
+    } catch (err: any) {
+      onSendLineToast(`⚠️ 上傳失敗：${err.message || '網路連線異常'}`);
+    } finally {
+      setIsUploadingDoc(false);
+    }
+  };
+
+  const handleDeleteDoc = async (id: string) => {
+    try {
+      await fetch(`/api/admin/sop-documents/${id}`, { method: 'DELETE' });
+      setDocuments(prev => prev.filter(d => d.id !== id));
+      onSendLineToast('🗑️ 已刪除該份文件與其 AI 參考資料。');
+    } catch {
+      onSendLineToast('⚠️ 刪除失敗，請稍後再試。');
+    }
+  };
+
+  const handleUploadVideo = async () => {
+    if (!videoTitle.trim() || !videoFile) return;
+    setIsUploadingVideo(true);
+    try {
+      const { base64, mimeType } = await fileToBase64(videoFile);
+      const res = await fetch('/api/admin/sop-videos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: videoTitle.trim(), description: videoDescription.trim(), fileBase64: base64, mimeType })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setVideos(prev => [data.video, ...prev]);
+        setVideoTitle('');
+        setVideoDescription('');
+        setVideoFile(null);
+        if (videoFileInputRef.current) videoFileInputRef.current.value = '';
+        onSendLineToast(`✅ 已上傳教學影片「${data.video.title}」！`);
+      } else {
+        onSendLineToast(`⚠️ 上傳失敗：${data.error || '未知錯誤'}`);
+      }
+    } catch (err: any) {
+      onSendLineToast(`⚠️ 上傳失敗：${err.message || '網路連線異常，影片檔案可能過大。'}`);
+    } finally {
+      setIsUploadingVideo(false);
+    }
+  };
+
+  const handleDeleteVideo = async (id: string) => {
+    try {
+      await fetch(`/api/admin/sop-videos/${id}`, { method: 'DELETE' });
+      setVideos(prev => prev.filter(v => v.id !== id));
+      onSendLineToast('🗑️ 已刪除該部教學影片。');
+    } catch {
+      onSendLineToast('⚠️ 刪除失敗，請稍後再試。');
+    }
+  };
+
+  if (isLoading || !content) {
+    return (
+      <div className="py-24 flex items-center justify-center text-slate-400 text-sm gap-2">
+        <Loader2 className="w-5 h-5 animate-spin" />
+        <span>載入手冊內容中...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto font-sans">
+
+      {/* Header */}
+      <div className="bg-white p-6 rounded-[28px] border border-[#5A5A40]/15 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-[#5A5A40] text-white flex items-center justify-center shrink-0 shadow-xs">
+            <BookOpen className="w-6 h-6 text-amber-300" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold font-serif italic text-slate-900">手冊與 SOP 內容管理</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              編輯的內容會即時同步到志工端「園區安全守則與 SOP」頁面，並自動轉換為向量提供 AI 問答（RAG）參考。
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={handleSave}
+          disabled={isSaving}
+          className="bg-[#5A5A40] hover:bg-[#484833] disabled:opacity-50 text-white font-extrabold px-6 py-3 rounded-full text-xs shadow-md transition flex items-center gap-2 cursor-pointer shrink-0"
+        >
+          {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 text-amber-300" />}
+          <span>{isSaving ? '儲存並產生向量中...' : '儲存並同步至志工端'}</span>
+        </button>
+      </div>
+
+      {/* Banner Text */}
+      <div className="bg-white p-6 rounded-[28px] border border-[#5A5A40]/15 shadow-xs space-y-3">
+        <h3 className="font-bold font-serif text-slate-900 text-sm border-b border-[#5A5A40]/10 pb-2">頁面標題橫幅</h3>
+        <div>
+          <label className="block text-xs font-bold text-[#5A5A40] mb-1">標題</label>
+          <input
+            type="text"
+            value={content.bannerTitle}
+            onChange={e => setContent({ ...content, bannerTitle: e.target.value })}
+            className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs font-medium focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-bold text-[#5A5A40] mb-1">副標說明</label>
+          <textarea
+            value={content.bannerSubtitle}
+            onChange={e => setContent({ ...content, bannerSubtitle: e.target.value })}
+            rows={2}
+            className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs focus:ring-2 focus:ring-[#5A5A40] focus:outline-none resize-none"
+          />
+        </div>
+      </div>
+
+      {/* SOP Section Cards (editable) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {content.sections.map((section, sIdx) => (
+          <div key={section.id} className={`bg-white rounded-[28px] p-6 border-2 ${COLOR_PREVIEW[section.colorTheme] || COLOR_PREVIEW.emerald} shadow-xs space-y-4`}>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 flex-1">
+                <input
+                  type="text"
+                  value={section.icon}
+                  onChange={e => updateSection(sIdx, { icon: e.target.value })}
+                  className="w-12 p-2 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-xl text-center text-lg"
+                  maxLength={4}
+                />
+                <select
+                  value={section.colorTheme}
+                  onChange={e => updateSection(sIdx, { colorTheme: e.target.value as SopSection['colorTheme'] })}
+                  className="p-2 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-xl text-[11px] font-bold cursor-pointer"
+                >
+                  {COLOR_THEME_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+              <button
+                onClick={() => removeSection(sIdx)}
+                className="text-rose-500 hover:bg-rose-50 p-2 rounded-xl transition cursor-pointer shrink-0"
+                title="刪除此 SOP 項目"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+
+            <input
+              type="text"
+              value={section.title}
+              onChange={e => updateSection(sIdx, { title: e.target.value })}
+              placeholder="SOP 標題"
+              className="w-full p-2.5 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+            />
+            <input
+              type="text"
+              value={section.subtitle}
+              onChange={e => updateSection(sIdx, { subtitle: e.target.value })}
+              placeholder="副標說明"
+              className="w-full p-2.5 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-xl text-xs focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+            />
+
+            <div className="space-y-2">
+              {section.items.map((item, iIdx) => (
+                <div key={iIdx} className="flex items-start gap-1.5 bg-[#fdfdfb] p-2.5 rounded-xl border border-[#5A5A40]/10">
+                  <div className="flex-1 space-y-1.5">
+                    <input
+                      type="text"
+                      value={item.label}
+                      onChange={e => updateSectionItem(sIdx, iIdx, 'label', e.target.value)}
+                      placeholder="規範名稱"
+                      className="w-full p-1.5 bg-white border border-[#5A5A40]/15 rounded-lg text-[11px] font-bold focus:ring-1 focus:ring-[#5A5A40] focus:outline-none"
+                    />
+                    <textarea
+                      value={item.text}
+                      onChange={e => updateSectionItem(sIdx, iIdx, 'text', e.target.value)}
+                      rows={2}
+                      placeholder="規範說明內容"
+                      className="w-full p-1.5 bg-white border border-[#5A5A40]/15 rounded-lg text-[11px] focus:ring-1 focus:ring-[#5A5A40] focus:outline-none resize-none"
+                    />
+                  </div>
+                  <button
+                    onClick={() => removeSectionItem(sIdx, iIdx)}
+                    className="text-rose-400 hover:bg-rose-50 p-1.5 rounded-lg transition cursor-pointer shrink-0"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={() => addSectionItem(sIdx)}
+                className="w-full py-2 border border-dashed border-[#5A5A40]/25 text-[#5A5A40] rounded-xl text-[11px] font-bold hover:bg-[#f5f5f0] transition cursor-pointer flex items-center justify-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>新增規範項目</span>
+              </button>
+            </div>
+          </div>
+        ))}
+
+        <button
+          onClick={addSection}
+          className="bg-[#fdfdfb] border-2 border-dashed border-[#5A5A40]/25 rounded-[28px] p-6 text-[#5A5A40] font-bold text-sm hover:bg-[#f5f5f0] transition cursor-pointer flex items-center justify-center gap-2 min-h-[200px]"
+        >
+          <Plus className="w-5 h-5" />
+          <span>新增一組 SOP 卡片</span>
+        </button>
+      </div>
+
+      {/* Emergency Block */}
+      <div className="bg-white p-6 rounded-[28px] border border-rose-200 shadow-xs space-y-3">
+        <h3 className="font-bold font-serif text-rose-900 text-sm border-b border-rose-100 pb-2 flex items-center gap-1.5">
+          <ShieldAlert className="w-4 h-4 text-rose-600" />
+          <span>緊急事件處置區塊</span>
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-bold text-rose-800 mb-1">標題</label>
+            <input
+              type="text"
+              value={content.emergencyTitle}
+              onChange={e => setContent({ ...content, emergencyTitle: e.target.value })}
+              className="w-full p-3 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-medium focus:ring-2 focus:ring-rose-400 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-rose-800 mb-1">值班社工專線</label>
+            <input
+              type="text"
+              value={content.emergencyPhone}
+              onChange={e => setContent({ ...content, emergencyPhone: e.target.value })}
+              className="w-full p-3 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-medium focus:ring-2 focus:ring-rose-400 focus:outline-none"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-bold text-rose-800 mb-1">處置說明</label>
+          <textarea
+            value={content.emergencyText}
+            onChange={e => setContent({ ...content, emergencyText: e.target.value })}
+            rows={2}
+            className="w-full p-3 bg-rose-50 border border-rose-200 rounded-2xl text-xs focus:ring-2 focus:ring-rose-400 focus:outline-none resize-none"
+          />
+        </div>
+      </div>
+
+      {/* PDF Reference Documents */}
+      <div className="bg-white p-6 rounded-[28px] border border-[#5A5A40]/15 shadow-xs space-y-4">
+        <div className="flex items-center gap-2 font-bold font-serif text-slate-900 text-sm border-b border-[#5A5A40]/10 pb-2">
+          <FileText className="w-4 h-4 text-[#5A5A40]" />
+          <span>上傳 PDF 說明教學文件</span>
+          <span className="text-[10px] font-sans font-normal text-slate-400">會自動擷取文字並轉為向量，供 AI 問答參考</span>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            type="text"
+            value={docTitle}
+            onChange={e => setDocTitle(e.target.value)}
+            placeholder="文件標題，例如：新進志工完整訓練手冊 2026"
+            className="flex-1 p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+          />
+          <input
+            ref={docFileInputRef}
+            type="file"
+            accept="application/pdf"
+            onChange={e => setDocFile(e.target.files?.[0] || null)}
+            className="flex-1 p-2.5 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs file:mr-2 file:px-3 file:py-1.5 file:rounded-full file:border-0 file:bg-[#5A5A40] file:text-white file:text-[11px] file:font-bold file:cursor-pointer"
+          />
+          <button
+            onClick={handleUploadDoc}
+            disabled={!docTitle.trim() || !docFile || isUploadingDoc}
+            className="bg-[#5A5A40] hover:bg-[#484833] disabled:opacity-40 text-white font-bold px-5 py-2.5 rounded-2xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+          >
+            {isUploadingDoc ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4 text-amber-300" />}
+            <span>{isUploadingDoc ? '解析並索引中...' : '上傳'}</span>
+          </button>
+        </div>
+
+        {documents.length > 0 && (
+          <div className="space-y-2">
+            {documents.map(doc => (
+              <div key={doc.id} className="flex items-center justify-between gap-2 bg-[#fdfdfb] p-3 rounded-xl border border-[#5A5A40]/10 text-xs">
+                <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[#5A5A40] font-bold hover:underline truncate">
+                  <FileText className="w-4 h-4 shrink-0" />
+                  <span className="truncate">{doc.title}</span>
+                </a>
+                <button onClick={() => handleDeleteDoc(doc.id)} className="text-rose-500 hover:bg-rose-50 p-1.5 rounded-lg transition cursor-pointer shrink-0">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Teaching Videos */}
+      <div className="bg-white p-6 rounded-[28px] border border-[#5A5A40]/15 shadow-xs space-y-4">
+        <div className="flex items-center gap-2 font-bold font-serif text-slate-900 text-sm border-b border-[#5A5A40]/10 pb-2">
+          <Video className="w-4 h-4 text-[#5A5A40]" />
+          <span>上傳教學影片</span>
+          <span className="text-[10px] font-sans font-normal text-slate-400">影片檔案請盡量壓縮，避免上傳過大檔案</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <input
+            type="text"
+            value={videoTitle}
+            onChange={e => setVideoTitle(e.target.value)}
+            placeholder="影片標題"
+            className="p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+          />
+          <input
+            type="text"
+            value={videoDescription}
+            onChange={e => setVideoDescription(e.target.value)}
+            placeholder="簡短說明（選填）"
+            className="p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+          />
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            ref={videoFileInputRef}
+            type="file"
+            accept="video/*"
+            onChange={e => setVideoFile(e.target.files?.[0] || null)}
+            className="flex-1 p-2.5 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs file:mr-2 file:px-3 file:py-1.5 file:rounded-full file:border-0 file:bg-[#5A5A40] file:text-white file:text-[11px] file:font-bold file:cursor-pointer"
+          />
+          <button
+            onClick={handleUploadVideo}
+            disabled={!videoTitle.trim() || !videoFile || isUploadingVideo}
+            className="bg-[#5A5A40] hover:bg-[#484833] disabled:opacity-40 text-white font-bold px-5 py-2.5 rounded-2xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+          >
+            {isUploadingVideo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4 text-amber-300" />}
+            <span>{isUploadingVideo ? '上傳中...' : '上傳'}</span>
+          </button>
+        </div>
+
+        {videos.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {videos.map(video => (
+              <div key={video.id} className="bg-[#fdfdfb] p-3 rounded-xl border border-[#5A5A40]/10 space-y-2">
+                <video src={video.fileUrl} controls className="w-full rounded-lg bg-black max-h-40" />
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-slate-800 truncate">{video.title}</p>
+                    {video.description && <p className="text-[10px] text-slate-500 truncate">{video.description}</p>}
+                  </div>
+                  <button onClick={() => handleDeleteVideo(video.id)} className="text-rose-500 hover:bg-rose-50 p-1.5 rounded-lg transition cursor-pointer shrink-0">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+    </div>
+  );
+};

@@ -3,8 +3,8 @@ import { PawPrint, Calendar, MapPin, Shield, UserCheck, PlusCircle, Sparkles, Bu
 import { BranchId, Branch, AdminUserSession } from '../types';
 
 interface AdminNavbarProps {
-  activeTab: 'dashboard' | 'positions' | 'applications' | 'roster';
-  setActiveTab: (tab: 'dashboard' | 'positions' | 'applications' | 'roster') => void;
+  activeTab: 'dashboard' | 'positions' | 'applications' | 'roster' | 'sopManager';
+  setActiveTab: (tab: 'dashboard' | 'positions' | 'applications' | 'roster' | 'sopManager') => void;
   selectedBranch: BranchId | 'all';
   setSelectedBranch: (branch: BranchId | 'all') => void;
   branches: Branch[];
@@ -212,6 +212,18 @@ export const AdminNavbar: React.FC<AdminNavbarProps> = ({
           >
             <Sparkles className="w-4 h-4 text-amber-300" />
             <span>4. 志工人才庫名冊</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('sopManager')}
+            className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap flex items-center space-x-1.5 transition cursor-pointer ${
+              activeTab === 'sopManager'
+                ? 'bg-[#5A5A40] text-white shadow-xs'
+                : 'text-slate-600 hover:bg-[#E6E2D3]/40 hover:text-[#5A5A40]'
+            }`}
+          >
+            <BookOpen className="w-4 h-4 text-emerald-300" />
+            <span>5. 手冊與 SOP 內容管理</span>
           </button>
         </div>
       </div>

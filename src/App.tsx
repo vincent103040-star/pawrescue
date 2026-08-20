@@ -13,6 +13,7 @@ import { ApplicantReview } from './components/ApplicantReview';
 import { VolunteerPortal } from './components/VolunteerPortal';
 import { VolunteerMyShifts } from './components/VolunteerMyShifts';
 import { VolunteerSopGuide } from './components/VolunteerSopGuide';
+import { AdminSopManager } from './components/AdminSopManager';
 import { VolunteerRoster } from './components/VolunteerRoster';
 import { AiPostModal } from './components/AiPostModal';
 import { VolunteerCheckInModal } from './components/VolunteerCheckInModal';
@@ -71,7 +72,7 @@ export default function App() {
   });
 
   // Tab states for separate roles
-  const [adminActiveTab, setAdminActiveTab] = useState<'dashboard' | 'positions' | 'applications' | 'roster'>('dashboard');
+  const [adminActiveTab, setAdminActiveTab] = useState<'dashboard' | 'positions' | 'applications' | 'roster' | 'sopManager'>('dashboard');
   const [volunteerActiveTab, setVolunteerActiveTab] = useState<VolunteerActiveTab>('shifts');
   const [selectedBranch, setSelectedBranch] = useState<BranchId | 'all'>('all');
 
@@ -681,6 +682,10 @@ export default function App() {
               <VolunteerRoster
                 volunteers={volunteers}
               />
+            )}
+
+            {adminActiveTab === 'sopManager' && (
+              <AdminSopManager onSendLineToast={showToast} />
             )}
           </main>
         </>

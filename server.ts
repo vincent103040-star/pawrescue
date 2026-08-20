@@ -1,11 +1,13 @@
 import express from 'express';
 import path from 'path';
 import { createHmac, timingSafeEqual } from 'crypto';
-import { readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { writeFileSync, mkdirSync } from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
-import { getAllVolunteers, getVolunteerByEmail, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout } from './db';
+import { getAllVolunteers, getVolunteerByEmail, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, getAllSopVideos, insertSopVideo, deleteSopVideo } from './db';
+import { PDFParse } from 'pdf-parse';
+import type { SopContent, SopDocument, SopVideo } from './src/types';
 
 // dotenv.config() alone only loads a file literally named ".env" — this project
 // (like Vite) keeps secrets in ".env.local", so load that explicitly. ".env" is
@@ -21,16 +23,16 @@ interface RulebookEmbeddingEntry {
   embedding: number[];
 }
 
-// Precomputed by scripts/embed-rulebook.ts -- run that script again (once)
-// whenever rulebookCorpus.ts changes. Loaded once at startup rather than
-// re-embedding the whole corpus on every query, since embedding calls count
-// against the same scarce daily quota as everything else.
+// The RAG corpus now lives in the DB (rag_chunks table) instead of a static
+// precomputed file -- an admin editing SOP content or uploading a reference PDF
+// changes this. Kept as an in-memory cache (refreshed after any mutation) rather
+// than querying the DB on every single question, since it's read far more often
+// than it changes.
 let rulebookEmbeddings: RulebookEmbeddingEntry[] = [];
-try {
-  rulebookEmbeddings = JSON.parse(readFileSync('data/rulebook_embeddings.json', 'utf-8'));
-} catch {
-  console.warn('data/rulebook_embeddings.json not found -- run `npx tsx scripts/embed-rulebook.ts` to enable the rulebook Q&A feature.');
+function refreshRulebookEmbeddings() {
+  rulebookEmbeddings = getAllRagChunks().map(c => ({ id: c.sourceId, title: c.title, text: c.text, embedding: c.embedding }));
 }
+refreshRulebookEmbeddings();
 
 function cosineSimilarity(a: number[], b: number[]): number {
   let dot = 0, normA = 0, normB = 0;
@@ -50,8 +52,13 @@ async function startServer() {
   // `verify` stashes the raw bytes on the request so the LINE webhook handler can
   // recompute the x-line-signature HMAC over the exact same bytes LINE signed --
   // the parsed/re-serialized JSON is not guaranteed to match byte-for-byte.
+  // 30mb accommodates a base64-encoded PDF or a short teaching video clip in
+  // addition to the smaller check-in-photo uploads this limit already covered.
+  // Kept well short of, say, 100mb+ deliberately -- the deploy VM only has 1GB
+  // RAM, and buffering a much larger request body in memory risks the same OOM
+  // crash a bare npm install once caused there.
   app.use(express.json({
-    limit: '8mb',
+    limit: '30mb',
     verify: (req, _res, buf) => { (req as any).rawBody = buf; }
   }));
 
@@ -62,6 +69,14 @@ async function startServer() {
   const avatarsDir = path.join(process.cwd(), 'data', 'avatars');
   mkdirSync(avatarsDir, { recursive: true });
   app.use('/avatars', express.static(avatarsDir));
+
+  const sopDocsDir = path.join(process.cwd(), 'data', 'sop-docs');
+  mkdirSync(sopDocsDir, { recursive: true });
+  app.use('/sop-docs', express.static(sopDocsDir));
+
+  const sopVideosDir = path.join(process.cwd(), 'data', 'sop-videos');
+  mkdirSync(sopVideosDir, { recursive: true });
+  app.use('/sop-videos', express.static(sopVideosDir));
 
   // API endpoint: AI Recruitment Post Generator using Gemini API
   app.post('/api/ai/generate-post', async (req, res) => {
@@ -600,6 +615,192 @@ ${contextText}
     }
     const result = await answerRulebookQuestion(question);
     return res.json({ success: true, ...result });
+  });
+
+  // Embeds one piece of text for the RAG corpus. Returns null (rather than
+  // throwing) when there's no API key or the call fails, so callers can decide
+  // whether that's fatal for their specific operation.
+  async function embedText(text: string): Promise<number[] | null> {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) return null;
+    try {
+      const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { 'User-Agent': 'aistudio-build' } } });
+      const res = await ai.models.embedContent({ model: 'gemini-embedding-001', contents: text });
+      return res.embeddings?.[0]?.values || null;
+    } catch (error: any) {
+      console.warn('Embed Text Error:', error?.message || error);
+      return null;
+    }
+  }
+
+  // API endpoint: the volunteer rulebook/SOP content -- read by both the
+  // volunteer-facing SOP guide page and the admin content editor, so they're
+  // always showing the exact same data.
+  app.get('/api/sop-content', (req, res) => {
+    try {
+      return res.json({
+        success: true,
+        content: getSopContent(),
+        documents: getAllSopDocuments(),
+        videos: getAllSopVideos()
+      });
+    } catch (error: any) {
+      console.error('Get SOP Content Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '讀取手冊內容失敗' });
+    }
+  });
+
+  // API endpoint (admin only, enforced client-side by the tab it's wired into):
+  // save the SOP guide content, and re-embed every section + the emergency block
+  // for RAG. Sections that changed get fresh vectors; the "static" background
+  // chunks (admin/volunteer process descriptions, seeded from the original
+  // rulebookCorpus.ts) are untouched since they aren't part of this content.
+  app.put('/api/admin/sop-content', async (req, res) => {
+    try {
+      const content: SopContent = req.body;
+      if (!content || !Array.isArray(content.sections)) {
+        return res.status(400).json({ success: false, error: '手冊內容格式不正確' });
+      }
+
+      saveSopContent(content);
+
+      // Drop rag_chunks for any section that got removed in this save.
+      const keptSectionIds = new Set(content.sections.map(s => s.id));
+      for (const existing of getAllRagChunks().filter(c => c.source === 'section')) {
+        if (!keptSectionIds.has(existing.sourceId)) deleteRagChunks('section', existing.sourceId);
+      }
+
+      for (const section of content.sections) {
+        const text = `${section.title}\n${section.items.map(i => `${i.label}：${i.text}`).join('\n')}`;
+        const embedding = await embedText(text);
+        if (embedding) {
+          replaceRagChunks('section', section.id, [{ title: section.title, text, embedding }]);
+        }
+        // If embedding fails (no API key / quota), the old vectors for this
+        // section just stay as-is -- the displayed content still updates either way.
+      }
+
+      const emergencyText = `${content.emergencyTitle}\n${content.emergencyText}\n值班社工專線：${content.emergencyPhone}`;
+      const emergencyEmbedding = await embedText(emergencyText);
+      if (emergencyEmbedding) {
+        replaceRagChunks('emergency', 'emergency-protocol', [{ title: content.emergencyTitle, text: emergencyText, embedding: emergencyEmbedding }]);
+      }
+
+      refreshRulebookEmbeddings();
+      return res.json({ success: true, content: getSopContent() });
+    } catch (error: any) {
+      console.error('Save SOP Content Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '儲存手冊內容失敗' });
+    }
+  });
+
+  // API endpoint (admin only): upload a reference PDF. Extracts its text,
+  // splits into ~1200-character chunks, and embeds each chunk into the RAG
+  // corpus so "問手冊 AI 小幫手" can answer from it -- not just display it as a
+  // download link.
+  app.post('/api/admin/sop-documents', async (req, res) => {
+    try {
+      const { title, fileBase64 } = req.body;
+      if (!title || !fileBase64) {
+        return res.status(400).json({ success: false, error: '缺少文件標題或檔案內容' });
+      }
+
+      const id = `doc-${Date.now()}`;
+      const filename = `${id}.pdf`;
+      const fileBuffer = Buffer.from(fileBase64, 'base64');
+      writeFileSync(path.join(sopDocsDir, filename), fileBuffer);
+
+      let extractedText = '';
+      try {
+        const parser = new PDFParse({ data: fileBuffer });
+        const textResult = await parser.getText();
+        extractedText = textResult.text || '';
+        await parser.destroy();
+      } catch (error: any) {
+        console.warn('PDF Text Extraction Error:', error?.message || error);
+      }
+
+      const doc: SopDocument = { id, title, fileUrl: `/sop-docs/${filename}`, uploadedAt: new Date().toISOString() };
+      insertSopDocument(doc);
+
+      // Chunk + embed the extracted text (best-effort -- a PDF that fails to
+      // extract or embed still gets saved as a downloadable file above).
+      const CHUNK_SIZE = 1200;
+      const chunks: { title: string; text: string; embedding: number[] }[] = [];
+      const cleanedText = extractedText.replace(/\s+/g, ' ').trim();
+      for (let i = 0; i < cleanedText.length; i += CHUNK_SIZE) {
+        const slice = cleanedText.slice(i, i + CHUNK_SIZE);
+        if (!slice.trim()) continue;
+        const embedding = await embedText(slice);
+        if (embedding) {
+          chunks.push({ title: `${title}（第 ${chunks.length + 1} 段）`, text: slice, embedding });
+        }
+      }
+      if (chunks.length > 0) {
+        replaceRagChunks('pdf', id, chunks);
+        refreshRulebookEmbeddings();
+      }
+
+      return res.json({ success: true, document: doc, chunksIndexed: chunks.length });
+    } catch (error: any) {
+      console.error('Upload SOP Document Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '上傳文件失敗' });
+    }
+  });
+
+  app.delete('/api/admin/sop-documents/:id', (req, res) => {
+    try {
+      deleteSopDocument(req.params.id);
+      deleteRagChunks('pdf', req.params.id);
+      refreshRulebookEmbeddings();
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error('Delete SOP Document Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '刪除文件失敗' });
+    }
+  });
+
+  // API endpoint (admin only): upload a teaching video. Stored + served as a
+  // static file, same pattern as check-in photos/avatars; only its title +
+  // description (not the video content itself) get embedded for RAG searchability.
+  app.post('/api/admin/sop-videos', async (req, res) => {
+    try {
+      const { title, description, fileBase64, mimeType } = req.body;
+      if (!title || !fileBase64) {
+        return res.status(400).json({ success: false, error: '缺少影片標題或檔案內容' });
+      }
+
+      const id = `video-${Date.now()}`;
+      const ext = mimeType?.includes('webm') ? 'webm' : mimeType?.includes('quicktime') ? 'mov' : 'mp4';
+      const filename = `${id}.${ext}`;
+      writeFileSync(path.join(sopVideosDir, filename), Buffer.from(fileBase64, 'base64'));
+
+      const video: SopVideo = { id, title, description, fileUrl: `/sop-videos/${filename}`, uploadedAt: new Date().toISOString() };
+      insertSopVideo(video);
+
+      const embedding = await embedText(`${title}\n${description || ''}`);
+      if (embedding) {
+        replaceRagChunks('video', id, [{ title, text: `教學影片：${title}${description ? `\n${description}` : ''}`, embedding }]);
+        refreshRulebookEmbeddings();
+      }
+
+      return res.json({ success: true, video });
+    } catch (error: any) {
+      console.error('Upload SOP Video Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '上傳影片失敗' });
+    }
+  });
+
+  app.delete('/api/admin/sop-videos/:id', (req, res) => {
+    try {
+      deleteSopVideo(req.params.id);
+      deleteRagChunks('video', req.params.id);
+      refreshRulebookEmbeddings();
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error('Delete SOP Video Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '刪除影片失敗' });
+    }
   });
 
   // API endpoint: AI caption for a volunteer's check-out photo. Multimodal --

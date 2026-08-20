@@ -179,3 +179,44 @@ export interface VolunteerUserSession {
   totalHours: number;
 }
 
+// Volunteer rulebook / SOP content -- admin-editable, and the single source of
+// truth for both the volunteer-facing SOP guide page and the RAG Q&A corpus
+// (each section's text gets re-embedded whenever an admin saves).
+export interface SopSectionItem {
+  label: string;
+  text: string;
+}
+
+export interface SopSection {
+  id: string;
+  icon: string; // emoji
+  colorTheme: 'emerald' | 'rose' | 'amber' | 'sky' | 'purple';
+  title: string;
+  subtitle: string;
+  items: SopSectionItem[];
+}
+
+export interface SopContent {
+  bannerTitle: string;
+  bannerSubtitle: string;
+  sections: SopSection[];
+  emergencyTitle: string;
+  emergencyText: string;
+  emergencyPhone: string;
+}
+
+export interface SopDocument {
+  id: string;
+  title: string;
+  fileUrl: string;
+  uploadedAt: string;
+}
+
+export interface SopVideo {
+  id: string;
+  title: string;
+  description?: string;
+  fileUrl: string;
+  uploadedAt: string;
+}
+
