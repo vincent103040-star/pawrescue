@@ -124,6 +124,32 @@ export default function App() {
       .catch(() => { /* keep the locally cached records if the backend is unreachable */ });
   }, []);
 
+  // Deep-link support for the LINE Rich Menu: tapping a menu tile opens this app
+  // with e.g. ?tab=sop or ?checkin=1. If the volunteer is already logged in on this
+  // device (persisted session from a past real Google login), jump immediately;
+  // otherwise stash the destination and apply it once handleLoginAsVolunteer runs.
+  const [pendingDeepLinkTab, setPendingDeepLinkTab] = useState<VolunteerActiveTab | null>(null);
+  const [pendingDeepLinkCheckIn, setPendingDeepLinkCheckIn] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get('tab');
+    const checkinParam = params.get('checkin') === '1';
+    const validTabs: VolunteerActiveTab[] = ['shifts', 'myshifts', 'growth', 'settings', 'sop'];
+    const tab = validTabs.includes(tabParam as VolunteerActiveTab) ? (tabParam as VolunteerActiveTab) : null;
+    if (!tab && !checkinParam) return;
+
+    if (userRole === 'volunteer') {
+      if (tab) setVolunteerActiveTab(tab);
+      if (checkinParam) setIsCheckInModalOpen(true);
+    } else {
+      if (tab) setPendingDeepLinkTab(tab);
+      if (checkinParam) setPendingDeepLinkCheckIn(true);
+    }
+    // Drop the query string so refreshing or re-sharing this tab doesn't re-trigger it.
+    window.history.replaceState({}, '', window.location.pathname);
+  }, []);
+
   // Modals state
   const [aiModalShift, setAiModalShift] = useState<PositionShift | null>(null);
   const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
@@ -185,8 +211,11 @@ export default function App() {
   const handleLoginAsVolunteer = (volunteer: VolunteerUserSession) => {
     setUserRole('volunteer');
     setVolunteerSession(volunteer);
-    setVolunteerActiveTab('shifts');
+    setVolunteerActiveTab(pendingDeepLinkTab || 'shifts');
     setDismissedReminderShiftId(null);
+    if (pendingDeepLinkCheckIn) setIsCheckInModalOpen(true);
+    setPendingDeepLinkTab(null);
+    setPendingDeepLinkCheckIn(false);
     showToast(`🐾 歡迎回來，${volunteer.name} 志工夥伴！已進入志工服務專區。`);
   };
 
