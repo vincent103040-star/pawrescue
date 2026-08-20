@@ -22,6 +22,14 @@ import {
   Check
 } from 'lucide-react';
 
+// "Today" must follow the shelter's own timezone (Taiwan), not whatever
+// timezone the browser or server happens to be running in -- otherwise a
+// volunteer or admin viewing this past midnight UTC would see the wrong
+// day highlighted. en-CA formats as YYYY-MM-DD, matching dateStr below.
+function getTaiwanTodayStr(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' });
+}
+
 interface ShiftCalendarViewProps {
   shifts: PositionShift[];
   branches: Branch[];
@@ -74,8 +82,11 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
     setCurrentDate(new Date(year, month + 1, 1));
   };
 
+  const todayStr = getTaiwanTodayStr();
+  const [todayYear, todayMonth, todayDay] = todayStr.split('-').map(Number);
+
   const handleToday = () => {
-    setCurrentDate(new Date(2026, 7, 5)); // 2026-08-05
+    setCurrentDate(new Date(todayYear, todayMonth - 1, todayDay));
   };
 
   // Generate Days for the Calendar Month Matrix
@@ -96,7 +107,7 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
       dateStr,
       dayNum: day,
       isCurrentMonth: false,
-      isToday: dateStr === '2026-08-05'
+      isToday: dateStr === todayStr
     });
   }
 
@@ -109,7 +120,7 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
       dateStr,
       dayNum: day,
       isCurrentMonth: true,
-      isToday: dateStr === '2026-08-05'
+      isToday: dateStr === todayStr
     });
   }
 
@@ -122,7 +133,7 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
       dateStr,
       dayNum: day,
       isCurrentMonth: false,
-      isToday: dateStr === '2026-08-05'
+      isToday: dateStr === todayStr
     });
   }
 
@@ -302,7 +313,7 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
             onClick={handleToday}
             className="bg-white hover:bg-[#f5f5f0] text-[#5A5A40] border border-[#5A5A40]/20 font-bold text-xs px-3 py-2 rounded-2xl transition cursor-pointer"
           >
-            今天 (2026/8/5)
+            今天 ({todayYear}/{todayMonth}/{todayDay})
           </button>
 
           <div className="flex items-center gap-2 pl-2 border-l border-slate-200">

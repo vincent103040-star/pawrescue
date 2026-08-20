@@ -56,7 +56,9 @@ export const DailyDutyTaskboard: React.FC<DailyDutyTaskboardProps> = ({
   onToggleCollapse,
   onHide
 }) => {
-  const todayStr = '2026-08-05'; // Current mock date in system
+  // Follows the shelter's own timezone (Taiwan), not the browser/server's --
+  // en-CA formats as YYYY-MM-DD, matching the date strings used elsewhere.
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' });
 
   // Filter today's shifts or active shifts
   const todayShifts = shifts.filter(s => {
