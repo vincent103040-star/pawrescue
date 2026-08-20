@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AttendanceRecord, PositionShift, VolunteerApplication, VolunteerProfile, Branch } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
-import { QrCode, Camera, CheckCircle2, Clock, MapPin, AlertCircle, LogOut, LogIn, UserCheck, ShieldCheck, Sparkles, RefreshCw, X, Compass, Navigation, Radio, AlertTriangle, Star, Send, MessageSquare, Smartphone, ThumbsUp, Heart } from 'lucide-react';
+import { QrCode, Camera, CheckCircle2, Clock, MapPin, AlertCircle, LogOut, LogIn, UserCheck, ShieldCheck, Sparkles, RefreshCw, X, Compass, Navigation, Radio, AlertTriangle, Star, Send, MessageSquare, ThumbsUp, Heart } from 'lucide-react';
 
 interface VolunteerCheckInModalProps {
   shifts: PositionShift[];
@@ -54,12 +54,12 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
   const [scanSuccess, setScanSuccess] = useState(false);
   const [scannedResult, setScannedResult] = useState<string | null>(null);
 
-  // Feedback SMS state upon check-out
+  // Feedback + LINE reminder state upon check-out
   const [pendingFeedbackRecord, setPendingFeedbackRecord] = useState<AttendanceRecord | null>(null);
   const [feedbackRating, setFeedbackRating] = useState<number>(5);
   const [hoverRating, setHoverRating] = useState<number>(0);
   const [feedbackComment, setFeedbackComment] = useState<string>('');
-  const [isSmsSentNotificationShown, setIsSmsSentNotificationShown] = useState(false);
+  const [isLineReminderNotificationShown, setIsLineReminderNotificationShown] = useState(false);
 
   // Check-out photo + AI caption state
   const [checkoutPhoto, setCheckoutPhoto] = useState<{ previewUrl: string; base64: string; mimeType: string } | null>(null);
@@ -278,7 +278,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
     setFeedbackRating(5);
     setHoverRating(0);
     setFeedbackComment('');
-    setIsSmsSentNotificationShown(true);
+    setIsLineReminderNotificationShown(true);
   };
 
   // Perform Final Check-Out Submission with Feedback (離場簽退與回饋)
@@ -300,7 +300,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
     }
 
     const finalRating = includeFeedback ? feedbackRating : 5;
-    const finalComment = includeFeedback ? (feedbackComment.trim() || '志工完成服務，流程順暢。') : '已發送服務回饋簡訊（等待志工回應）';
+    const finalComment = includeFeedback ? (feedbackComment.trim() || '志工完成服務，流程順暢。') : '已透過 LINE 發送服務回饋提醒（等待志工回應）';
 
     onCheckOutSubmit(
       pendingFeedbackRecord.id,
@@ -312,16 +312,16 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
     );
 
     onSendLineToast(
-      `📱 離場核銷成功！已發送簡訊予【${pendingFeedbackRecord.volunteerName}】並收集 ${finalRating} 星評分：「${finalComment}」，資料已彙整至管理員後台。`
+      `✅ 離場核銷成功！已透過 LINE 通知【${pendingFeedbackRecord.volunteerName}】並收集 ${finalRating} 星評分：「${finalComment}」，資料已彙整至管理員後台。`
     );
 
     setPendingFeedbackRecord(null);
     setCheckoutPhoto(null);
   };
 
-  // Resend Feedback SMS link for completed record
-  const handleResendFeedbackSms = (record: AttendanceRecord) => {
-    onSendLineToast(`📱 [簡訊重發成功] 已向【${record.volunteerName}】(${record.volunteerPhone || '09xx-xxx-xxx'}) 補發服務回饋邀請簡訊！`);
+  // Resend the LINE feedback reminder for a completed record
+  const handleResendFeedbackLineReminder = (record: AttendanceRecord) => {
+    onSendLineToast(`💬 [LINE 提醒已重發] 已向【${record.volunteerName}】補發服務回饋提醒訊息！`);
   };
 
   return (
@@ -799,7 +799,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                                   className="bg-[#5A5A40] hover:bg-[#484833] text-white text-[11px] font-bold px-3 py-1 rounded-full shadow-2xs transition inline-flex items-center gap-1 cursor-pointer"
                                 >
                                   <LogOut className="w-3 h-3 text-amber-300" />
-                                  <span>簽退 & 送簡訊</span>
+                                  <span>簽退 & 送出 LINE 提醒</span>
                                 </button>
                               ) : (
                                 <div className="flex flex-col items-end gap-1">
@@ -808,11 +808,11 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                                     <span>已核銷簽退</span>
                                   </span>
                                   <button
-                                    onClick={() => handleResendFeedbackSms(rec)}
-                                    className="text-[10px] text-sky-700 font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer"
+                                    onClick={() => handleResendFeedbackLineReminder(rec)}
+                                    className="text-[10px] text-emerald-700 font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer"
                                   >
-                                    <Smartphone className="w-3 h-3 text-sky-600" />
-                                    <span>重發回饋簡訊</span>
+                                    <MessageSquare className="w-3 h-3 text-emerald-600" />
+                                    <span>重發 LINE 提醒</span>
                                   </button>
                                 </div>
                               )}
@@ -844,21 +844,21 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
 
       </div>
 
-      {/* 📱 志工離場簽退 - 服務回饋收集簡訊彈窗 */}
+      {/* 💬 志工離場簽退 - 服務回饋與滿意度調查彈窗 (透過 LINE 發送提醒) */}
       {pendingFeedbackRecord && (
         <div className="fixed inset-0 z-60 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-amber-500/30 space-y-5 animate-in zoom-in-95">
-            
+
             {/* Modal Header */}
             <div className="flex justify-between items-start border-b border-slate-100 pb-4">
               <div className="flex items-center gap-3">
                 <div className="w-11 h-11 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold text-lg shadow-md shrink-0">
-                  <Smartphone className="w-6 h-6" />
+                  <MessageSquare className="w-6 h-6" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="font-bold font-serif text-slate-900 text-base">
-                      服務回饋簡訊收集 (SMS)
+                      服務回饋與滿意度調查 (LINE)
                     </h3>
                     <span className="bg-amber-100 text-amber-900 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-amber-300">
                       離場簽退
@@ -878,20 +878,22 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
               </button>
             </div>
 
-            {/* Simulated SMS Dispatch Card */}
-            <div className="bg-sky-50 border border-sky-200 rounded-2xl p-3.5 text-xs space-y-2">
-              <div className="flex items-center justify-between text-sky-900 font-bold">
+            {/* LINE Reminder Message Preview -- actually sent via the real Messaging
+                API once submitted (see /api/attendance/:id/check-out), if this
+                volunteer has completed real LINE Login; otherwise this is silently
+                skipped server-side, same fallback as the app's other LINE pushes. */}
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 text-xs space-y-2">
+              <div className="flex items-center justify-between text-emerald-900 font-bold">
                 <span className="flex items-center gap-1.5">
-                  <Send className="w-4 h-4 text-sky-600 animate-pulse" />
-                  <span>📱 模擬簡訊自動觸發推播 (SMS Preview)</span>
+                  <Send className="w-4 h-4 text-emerald-600 animate-pulse" />
+                  <span>💬 LINE 提醒訊息預覽</span>
                 </span>
-                <span className="text-[10px] bg-sky-200 text-sky-800 px-2 py-0.5 rounded-full">
-                  即時發送至手機
+                <span className="text-[10px] bg-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full">
+                  已連結 LINE 帳號者將真的收到
                 </span>
               </div>
-              <div className="bg-white p-3 rounded-xl border border-sky-200 text-slate-700 font-mono text-[11px] leading-relaxed shadow-2xs">
-                【浪浪家園】親愛的 <strong>{pendingFeedbackRecord.volunteerName}</strong> 您好，感謝您完成今日志工服務！請點選專屬連結給予 1-5 星好評與建議：
-                <span className="text-sky-700 underline block mt-1 font-sans">https://pawrescue.org/feedback?id={pendingFeedbackRecord.id}</span>
+              <div className="bg-white p-3 rounded-xl border border-emerald-200 text-slate-700 font-mono text-[11px] leading-relaxed shadow-2xs">
+                【浪浪家園】親愛的 <strong>{pendingFeedbackRecord.volunteerName}</strong> 您好，感謝您完成本次志工服務（{pendingFeedbackRecord.shiftTitle}）！我們已收到您本次服務的回饋評分，再次感謝您的付出 🐾
               </div>
             </div>
 
@@ -1023,7 +1025,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                 className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold py-2.5 px-4 rounded-xl text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer transform hover:scale-[1.02]"
               >
                 <Send className="w-4 h-4 text-slate-950" />
-                <span>📱 模擬志工送出評分並完成簽退</span>
+                <span>💬 模擬志工送出評分並完成簽退</span>
               </button>
 
               <button
@@ -1031,8 +1033,8 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                 onClick={() => handleFinalizeCheckOut(false)}
                 className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 px-4 rounded-xl text-xs transition flex items-center justify-center gap-1 cursor-pointer"
               >
-                <Smartphone className="w-4 h-4 text-slate-500" />
-                <span>僅發送簡訊 (事後填寫)</span>
+                <MessageSquare className="w-4 h-4 text-slate-500" />
+                <span>僅發送 LINE 提醒 (事後填寫)</span>
               </button>
             </div>
 

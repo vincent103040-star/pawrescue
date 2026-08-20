@@ -327,7 +327,7 @@ export default function App() {
           rating: rating || r.rating || 5,
           feedbackComment: comment !== undefined ? comment : (r.feedbackComment || '服務體驗良好！感謝督導細心指導。'),
           feedbackSubmittedAt: nowStr,
-          smsSent: true
+          lineReminderSent: true
         };
       }
       return r;

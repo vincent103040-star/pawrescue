@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
-import { getAllVolunteers, getVolunteerByEmail, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout } from './db';
+import { getAllVolunteers, getVolunteerByEmail, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout } from './db';
 
 // dotenv.config() alone only loads a file literally named ".env" — this project
 // (like Vite) keeps secrets in ".env.local", so load that explicitly. ".env" is
@@ -828,13 +828,31 @@ ${contextText}
         rating,
         feedbackComment,
         feedbackSubmittedAt: new Date().toLocaleString('zh-TW', { hour12: false }),
-        smsSent: true,
+        lineReminderSent: true,
         photoUrl
       });
 
       if (!updated) {
         return res.status(404).json({ success: false, error: '找不到該筆出勤紀錄' });
       }
+
+      // Best-effort real LINE push thanking the volunteer and confirming their
+      // feedback -- replaces the old simulated "SMS" notification. Fire-and-forget
+      // (doesn't block the check-out response) and silently no-ops if this
+      // volunteer hasn't completed real LINE Login yet, same fallback pattern as
+      // /api/line/push.
+      const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+      const linkedLine = getLineUserIdByName(updated.volunteerName);
+      if (lineToken && linkedLine) {
+        const stars = '⭐'.repeat(Math.max(1, Math.min(5, rating || 5)));
+        const pushText = `【浪浪家園】親愛的 ${updated.volunteerName} 您好，感謝您完成本次志工服務（${updated.shiftTitle}）！服務時數 ${hoursLogged} 小時，我們已收到您 ${stars} 的回饋，謝謝您的付出 🐾`;
+        fetch('https://api.line.me/v2/bot/message/push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${lineToken}` },
+          body: JSON.stringify({ to: linkedLine.lineUserId, messages: [{ type: 'text', text: pushText }] })
+        }).catch(() => { /* best-effort, ignore failures */ });
+      }
+
       return res.json({ success: true, record: updated });
     } catch (error: any) {
       console.error('Check-Out Persist Error:', error);

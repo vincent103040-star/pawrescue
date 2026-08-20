@@ -207,6 +207,18 @@ export function getLineUserId(email: string): { lineUserId: string; lineDisplayN
   return row;
 }
 
+// Same lookup as getLineUserId, but by name -- the check-out flow only has
+// volunteerName on the attendance record (no email), so the post-checkout LINE
+// reminder push has to match this way. Best-effort: if multiple volunteers share a
+// name, or the name doesn't exactly match, this just returns null and the caller
+// silently skips the push, same as the "not linked yet" case.
+export function getLineUserIdByName(name: string): { lineUserId: string; lineDisplayName: string } | null {
+  const row = db.prepare('SELECT lineUserId, lineDisplayName FROM volunteers WHERE name = ?')
+    .get(name) as { lineUserId: string; lineDisplayName: string } | undefined;
+  if (!row || !row.lineUserId) return null;
+  return row;
+}
+
 export interface StoredLinePreferences {
   shiftChanges: boolean;
   urgentRecruitment: boolean;
@@ -264,10 +276,21 @@ db.exec(`
     rating INTEGER,
     feedbackComment TEXT,
     feedbackSubmittedAt TEXT,
-    smsSent INTEGER NOT NULL DEFAULT 0,
+    lineReminderSent INTEGER NOT NULL DEFAULT 0,
     photoUrl TEXT
   )
 `);
+
+// Migration: the check-out "notification sent" flag used to be named smsSent from
+// back when this was a simulated SMS feature -- it's now a real LINE push (see
+// server.ts's /api/attendance/:id/check-out), so rename the column to match on any
+// database created before this change. No-ops (and is safely swallowed) on a fresh
+// database that was already created with the new column name above.
+try {
+  db.exec(`ALTER TABLE attendance_records RENAME COLUMN smsSent TO lineReminderSent`);
+} catch {
+  // already renamed, or this is a fresh install that never had the old column
+}
 
 // Seed with the original mock attendance history on first run only, same pattern as
 // the volunteers table above.
@@ -275,7 +298,7 @@ const attendanceSeedCount = db.prepare('SELECT COUNT(*) AS c FROM attendance_rec
 if (attendanceSeedCount.c === 0) {
   const insertSeed = db.prepare(`
     INSERT INTO attendance_records
-      (id, applicationId, volunteerName, volunteerPhone, lineId, shiftId, shiftTitle, branchId, zone, date, checkInTime, checkOutTime, status, hoursLogged, locationVerified, distanceMeters, qrCodeToken, rating, feedbackComment, feedbackSubmittedAt, smsSent, photoUrl)
+      (id, applicationId, volunteerName, volunteerPhone, lineId, shiftId, shiftTitle, branchId, zone, date, checkInTime, checkOutTime, status, hoursLogged, locationVerified, distanceMeters, qrCodeToken, rating, feedbackComment, feedbackSubmittedAt, lineReminderSent, photoUrl)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   for (const r of INITIAL_ATTENDANCE_RECORDS) {
@@ -284,7 +307,7 @@ if (attendanceSeedCount.c === 0) {
       r.shiftId, r.shiftTitle, r.branchId, r.zone, r.date, r.checkInTime, r.checkOutTime || null,
       r.status, r.hoursLogged ?? null, r.locationVerified ? 1 : 0, r.distanceMeters ?? null,
       r.qrCodeToken, r.rating ?? null, r.feedbackComment || null, r.feedbackSubmittedAt || null,
-      r.smsSent ? 1 : 0, r.photoUrl || null
+      r.lineReminderSent ? 1 : 0, r.photoUrl || null
     );
   }
 }
@@ -311,7 +334,7 @@ function rowToAttendanceRecord(row: any): AttendanceRecord {
     rating: row.rating ?? undefined,
     feedbackComment: row.feedbackComment || undefined,
     feedbackSubmittedAt: row.feedbackSubmittedAt || undefined,
-    smsSent: !!row.smsSent,
+    lineReminderSent: !!row.lineReminderSent,
     photoUrl: row.photoUrl || undefined
   };
 }
@@ -324,29 +347,29 @@ export function getAllAttendanceRecords(): AttendanceRecord[] {
 export function insertAttendanceRecord(r: AttendanceRecord): AttendanceRecord {
   db.prepare(`
     INSERT INTO attendance_records
-      (id, applicationId, volunteerName, volunteerPhone, lineId, shiftId, shiftTitle, branchId, zone, date, checkInTime, checkOutTime, status, hoursLogged, locationVerified, distanceMeters, qrCodeToken, rating, feedbackComment, feedbackSubmittedAt, smsSent, photoUrl)
+      (id, applicationId, volunteerName, volunteerPhone, lineId, shiftId, shiftTitle, branchId, zone, date, checkInTime, checkOutTime, status, hoursLogged, locationVerified, distanceMeters, qrCodeToken, rating, feedbackComment, feedbackSubmittedAt, lineReminderSent, photoUrl)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     r.id, r.applicationId || null, r.volunteerName, r.volunteerPhone || null, r.lineId || null,
     r.shiftId, r.shiftTitle, r.branchId, r.zone, r.date, r.checkInTime, r.checkOutTime || null,
     r.status, r.hoursLogged ?? null, r.locationVerified ? 1 : 0, r.distanceMeters ?? null,
     r.qrCodeToken, r.rating ?? null, r.feedbackComment || null, r.feedbackSubmittedAt || null,
-    r.smsSent ? 1 : 0, r.photoUrl || null
+    r.lineReminderSent ? 1 : 0, r.photoUrl || null
   );
   return r;
 }
 
 export function updateAttendanceCheckout(
   id: string,
-  updates: { checkOutTime: string; hoursLogged: number; rating?: number; feedbackComment?: string; feedbackSubmittedAt: string; smsSent: boolean; photoUrl?: string }
+  updates: { checkOutTime: string; hoursLogged: number; rating?: number; feedbackComment?: string; feedbackSubmittedAt: string; lineReminderSent: boolean; photoUrl?: string }
 ): AttendanceRecord | null {
   db.prepare(`
     UPDATE attendance_records
-    SET checkOutTime = ?, hoursLogged = ?, status = 'completed', rating = ?, feedbackComment = ?, feedbackSubmittedAt = ?, smsSent = ?, photoUrl = COALESCE(?, photoUrl)
+    SET checkOutTime = ?, hoursLogged = ?, status = 'completed', rating = ?, feedbackComment = ?, feedbackSubmittedAt = ?, lineReminderSent = ?, photoUrl = COALESCE(?, photoUrl)
     WHERE id = ?
   `).run(
     updates.checkOutTime, updates.hoursLogged, updates.rating ?? null, updates.feedbackComment || null,
-    updates.feedbackSubmittedAt, updates.smsSent ? 1 : 0, updates.photoUrl || null, id
+    updates.feedbackSubmittedAt, updates.lineReminderSent ? 1 : 0, updates.photoUrl || null, id
   );
   const row = db.prepare('SELECT * FROM attendance_records WHERE id = ?').get(id);
   return row ? rowToAttendanceRecord(row) : null;

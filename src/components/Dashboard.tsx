@@ -673,7 +673,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         );
       })();
 
-      // 6. ⭐️ 志工離場服務回饋與滿意度彙整中心 (SMS Feedback Hub)
+      // 6. ⭐️ 志工離場服務回饋與滿意度彙整中心 (LINE Feedback Hub)
       const mod6 = visibleModules.feedback_hub && (() => {
         const feedbackRecords = attendanceRecords.filter(r => r.rating || r.feedbackComment);
         const totalCount = feedbackRecords.length;
@@ -686,9 +686,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <DashboardModuleCard
             moduleId="feedback_hub"
             title="6. 志工服務回饋與滿意度彙整中心"
-            subtitle="志工完成簽退離場時自動發送簡訊收集 1-5 星好評與改善建議，提供社工團隊即時數據以優化園區動線與衛教流程"
+            subtitle="志工完成簽退離場時自動透過 LINE 發送提醒收集 1-5 星好評與改善建議，提供社工團隊即時數據以優化園區動線與衛教流程"
             icon={<Star className="w-5 h-5 text-amber-500 fill-amber-500" />}
-            badgeText="離場簡訊即時收集"
+            badgeText="離場 LINE 即時提醒"
             badgeColor="bg-amber-100 text-amber-900 border-amber-300"
             isCollapsed={collapsedModules.feedback_hub}
             onToggleCollapse={() => handleToggleModuleCollapse('feedback_hub')}
@@ -735,7 +735,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <div className="bg-[#fdfdfb] p-4 rounded-2xl border border-[#5A5A40]/15 shadow-2xs space-y-1">
                   <span className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
                     <MessageSquare className="w-3.5 h-3.5 text-[#5A5A40]" />
-                    已收集簡訊回饋數
+                    已收集 LINE 回饋數
                   </span>
                   <div className="flex items-baseline gap-2">
                     <span className="text-2xl font-extrabold text-[#5A5A40] font-mono">{totalCount}</span>
@@ -761,18 +761,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   </span>
                 </div>
 
-                {/* SMS Dispatch Status */}
-                <div className="bg-[#fdfdfb] p-4 rounded-2xl border border-sky-200/80 shadow-2xs space-y-1">
+                {/* LINE Reminder Dispatch Status */}
+                <div className="bg-[#fdfdfb] p-4 rounded-2xl border border-emerald-200/80 shadow-2xs space-y-1">
                   <span className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
-                    <Smartphone className="w-3.5 h-3.5 text-sky-600" />
-                    離場簡訊發送狀態
+                    <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
+                    離場 LINE 提醒發送狀態
                   </span>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-extrabold text-sky-700 font-mono">100%</span>
-                    <span className="text-xs text-sky-600 font-bold">成功送達</span>
+                    <span className="text-2xl font-extrabold text-emerald-700 font-mono">100%</span>
+                    <span className="text-xs text-emerald-600 font-bold">成功送達</span>
                   </div>
                   <span className="text-[10px] text-slate-400 font-medium block pt-0.5">
-                    自動夾帶志工專屬 Token 網址
+                    已連結 LINE 帳號者會收到真實推播
                   </span>
                 </div>
               </div>
@@ -814,7 +814,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     type="text"
                     value={feedbackSearchTerm}
                     onChange={e => setFeedbackSearchTerm(e.target.value)}
-                    placeholder="搜尋志工姓名、簡訊關鍵字..."
+                    placeholder="搜尋志工姓名、回饋關鍵字..."
                     className="w-full pl-8 pr-3 py-1.5 bg-white border border-[#5A5A40]/20 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#5A5A40]"
                   />
                 </div>
@@ -888,7 +888,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   if (filtered.length === 0) {
                     return (
                       <div className="col-span-2 bg-[#fdfdfb] p-8 text-center rounded-2xl border border-dashed border-[#5A5A40]/20 text-slate-400 italic text-xs">
-                        尚無符合條件的志工簡訊回饋紀錄，請至「簽到系統」完成一次離場簽退以測試簡訊收集功能！
+                        尚無符合條件的志工回饋紀錄，請至「簽到系統」完成一次離場簽退以測試 LINE 提醒收集功能！
                       </div>
                     );
                   }
@@ -958,8 +958,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-100 text-slate-500">
                           <div className="flex items-center gap-2">
                             <span className="inline-flex items-center gap-1 text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full font-bold text-[10px]">
-                              <Smartphone className="w-3 h-3 text-emerald-600" />
-                              <span>簡訊回收時間: {item.feedbackSubmittedAt || item.checkOutTime || '今天'}</span>
+                              <MessageSquare className="w-3 h-3 text-emerald-600" />
+                              <span>回饋收集時間: {item.feedbackSubmittedAt || item.checkOutTime || '今天'}</span>
                             </span>
                           </div>
 

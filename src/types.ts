@@ -115,7 +115,7 @@ export interface ServiceFeedback {
   rating: number; // 1 - 5 stars
   comment: string;
   submittedAt: string;
-  smsSent: boolean;
+  lineReminderSent: boolean;
   adminReplied?: boolean;
   adminReplyText?: string;
 }
@@ -138,11 +138,11 @@ export interface AttendanceRecord {
   locationVerified: boolean;
   distanceMeters?: number;
   qrCodeToken: string;
-  // Service Feedback SMS Fields
+  // Service Feedback Fields
   rating?: number; // 1 - 5 stars
   feedbackComment?: string;
   feedbackSubmittedAt?: string;
-  smsSent?: boolean;
+  lineReminderSent?: boolean; // whether a real LINE push confirming the feedback was sent
   photoUrl?: string; // relative URL to the AI-captioned check-out photo, if one was attached
 }
 

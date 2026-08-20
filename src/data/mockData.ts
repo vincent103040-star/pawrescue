@@ -412,7 +412,7 @@ export const INITIAL_ATTENDANCE_RECORDS: AttendanceRecord[] = [
     rating: 5,
     feedbackComment: '社工說明非常清晰，貓咪環境通風又乾淨！希望能增加自動貓砂盆的使用說明。',
     feedbackSubmittedAt: `${formatDate(-1)} 16:32:40`,
-    smsSent: true
+    lineReminderSent: true
   },
   {
     id: 'att-199',
@@ -434,7 +434,7 @@ export const INITIAL_ATTENDANCE_RECORDS: AttendanceRecord[] = [
     rating: 5,
     feedbackComment: '獸醫師跟護理師帶得很好，衛教流程很完整，傷口包紮實作收穫很多！',
     feedbackSubmittedAt: `${formatDate(-2)} 17:08:10`,
-    smsSent: true
+    lineReminderSent: true
   },
   {
     id: 'att-198',
@@ -456,7 +456,7 @@ export const INITIAL_ATTENDANCE_RECORDS: AttendanceRecord[] = [
     rating: 4,
     feedbackComment: '貓島風景很棒，假日遊客蠻多的，建議可以在入口多設置志工專屬置物櫃與水杯區。',
     feedbackSubmittedAt: `${formatDate(-3)} 15:02:50`,
-    smsSent: true
+    lineReminderSent: true
   },
   {
     id: 'att-197',
@@ -478,7 +478,7 @@ export const INITIAL_ATTENDANCE_RECORDS: AttendanceRecord[] = [
     rating: 5,
     feedbackComment: '小狗超級可愛！洗滌奶瓶區的消毒設備標示很清楚，體驗滿分！',
     feedbackSubmittedAt: `${formatDate(-4)} 13:05:12`,
-    smsSent: true
+    lineReminderSent: true
   }
 ];
 

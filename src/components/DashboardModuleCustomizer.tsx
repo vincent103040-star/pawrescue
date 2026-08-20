@@ -94,12 +94,12 @@ export const DASHBOARD_MODULE_DEFS: ModuleDefinition[] = [
   },
   {
     id: 'feedback_hub',
-    name: '6. 志工服務回饋與滿意度彙整中心 (SMS Feedback)',
+    name: '6. 志工服務回饋與滿意度彙整中心 (LINE Feedback)',
     category: 'operations',
     categoryLabel: '📋 營運與現場管理',
     icon: '⭐️',
-    description: '志工離場簽退時簡訊收集 1-5 星評分與改善建議，提供社工團隊即時審閱參採。',
-    badge: '簡訊回饋',
+    description: '志工離場簽退時透過 LINE 提醒收集 1-5 星評分與改善建議，提供社工團隊即時審閱參採。',
+    badge: 'LINE 回饋',
     badgeColor: 'bg-amber-100 text-amber-900 border-amber-300',
     defaultVisible: true
   },
