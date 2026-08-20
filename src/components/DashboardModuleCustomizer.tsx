@@ -131,11 +131,11 @@ export const DEFAULT_VISIBLE_MODULES: Record<DashboardModuleId, boolean> = {
 export const DEFAULT_COLLAPSED_MODULES: Record<DashboardModuleId, boolean> = {
   overview_stats: false,
   heatmap: false,
-  ai_warning_map: false,
+  ai_warning_map: true,
   daily_duty: false,
   monthly_report: false,
-  feedback_hub: false,
-  zone_shortage: false
+  feedback_hub: true,
+  zone_shortage: true
 };
 
 interface DashboardModuleCustomizerProps {

@@ -488,8 +488,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </DashboardModuleCard>
       )}
 
-      {/* 2. D3.js Volunteer Engagement Heatmap */}
-      {visibleModules.heatmap && (
+      {(() => {
+      // 2. D3.js Volunteer Engagement Heatmap
+      const mod2 = visibleModules.heatmap && (
         <HeatmapChart
           shifts={shifts}
           branches={branches}
@@ -499,10 +500,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
           onToggleCollapse={() => handleToggleModuleCollapse('heatmap')}
           onHide={() => handleHideModule('heatmap')}
         />
-      )}
+      );
 
-      {/* 3. 🔮 Gemini 3.6 Flash AI 資源需求預警與雙週物資人力缺口地圖 */}
-      {visibleModules.ai_warning_map && (
+      // 3. 🔮 Gemini 3.6 Flash AI 資源需求預警與雙週物資人力缺口地圖
+      const mod3 = visibleModules.ai_warning_map && (
         <ResourceWarningMap
           branches={branches}
           shifts={shifts}
@@ -511,10 +512,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
           onToggleCollapse={() => handleToggleModuleCollapse('ai_warning_map')}
           onHide={() => handleHideModule('ai_warning_map')}
         />
-      )}
+      );
 
-      {/* 4. 📋 每日志工勤務看板 & SOP 執行追蹤 */}
-      {visibleModules.daily_duty && (
+      // 4. 📋 每日志工勤務看板 & SOP 執行追蹤
+      const mod4 = visibleModules.daily_duty && (
         <DailyDutyTaskboard
           shifts={shifts}
           branches={branches}
@@ -524,10 +525,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
           onToggleCollapse={() => handleToggleModuleCollapse('daily_duty')}
           onHide={() => handleHideModule('daily_duty')}
         />
-      )}
+      );
 
-      {/* 5. 📊 月度據點績效統計與總結匯出中心 (CSV / PDF) */}
-      {visibleModules.monthly_report && (() => {
+      // 5. 📊 月度據點績效統計與總結匯出中心 (CSV / PDF)
+      const mod5 = visibleModules.monthly_report && (() => {
         const mShiftsAll = shifts.filter(s => s.date.startsWith(selectedExportMonth));
         const totalReqMonth = mShiftsAll.reduce((acc, s) => acc + s.requiredCount, 0);
         const totalFilledMonth = mShiftsAll.reduce((acc, s) => acc + s.currentCount, 0);
@@ -653,10 +654,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
           </DashboardModuleCard>
         );
-      })()}
+      })();
 
-      {/* 6. ⭐️ 志工離場服務回饋與滿意度彙整中心 (SMS Feedback Hub) */}
-      {visibleModules.feedback_hub && (() => {
+      // 6. ⭐️ 志工離場服務回饋與滿意度彙整中心 (SMS Feedback Hub)
+      const mod6 = visibleModules.feedback_hub && (() => {
         const feedbackRecords = attendanceRecords.filter(r => r.rating || r.feedbackComment);
         const totalCount = feedbackRecords.length;
         const ratingSum = feedbackRecords.reduce((acc, r) => acc + (r.rating || 5), 0);
@@ -972,10 +973,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
           </DashboardModuleCard>
         );
-      })()}
+      })();
 
-      {/* 7. 依「動物之家場域 (Zone)」分類之人力缺口與色彩管理 (Zone Shortage & Shifts) */}
-      {visibleModules.zone_shortage && (
+      // 7. 依「動物之家場域 (Zone)」分類之人力缺口與色彩管理 (Zone Shortage & Shifts)
+      const mod7 = visibleModules.zone_shortage && (
         <DashboardModuleCard
           moduleId="zone_shortage"
           title="7. 場域色標與分區排班卡片列表"
@@ -1224,7 +1225,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </div>
           </div>
         </DashboardModuleCard>
-      )}
+      );
+
+      return (
+        <>
+          {mod7}
+          {mod6}
+          {mod4}
+          {mod5}
+          {mod3}
+          {mod2}
+        </>
+      );
+      })()}
 
       {/* Modal: Urgent Shortage Auto Push */}
       {showUrgentModal && (
