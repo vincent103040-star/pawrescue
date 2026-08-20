@@ -15,6 +15,19 @@ interface VolunteerCheckInModalProps {
   onSendLineToast: (msg: string) => void;
 }
 
+// Parses a shift's "HH:MM - HH:MM" timeRange into a duration in hours, e.g.
+// "10:00 - 13:00" -> 3. Handles an overnight shift (end time earlier than start)
+// by rolling the end time to the next day. Returns null if the format doesn't match.
+function parseTimeRangeHours(timeRange: string): number | null {
+  const match = timeRange.match(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const [, h1, m1, h2, m2] = match.map(Number);
+  const startMin = h1 * 60 + m1;
+  let endMin = h2 * 60 + m2;
+  if (endMin <= startMin) endMin += 24 * 60;
+  return Math.round(((endMin - startMin) / 60) * 10) / 10;
+}
+
 // Haversine formula to calculate exact distance between two lat/lng points in meters
 function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371e3; // Earth radius in meters
@@ -286,17 +299,29 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
     if (!pendingFeedbackRecord) return;
 
     const checkOutTimeStr = getCurrentDateTimeStr();
-    
-    let hours = 3.0;
-    try {
-      const start = new Date(pendingFeedbackRecord.checkInTime.replace(' ', 'T')).getTime();
-      const end = new Date().getTime();
-      const diffHours = (end - start) / (1000 * 60 * 60);
-      if (diffHours > 0.1) {
-        hours = Math.round(diffHours * 10) / 10;
+
+    // Service hours should reflect the shift the volunteer actually signed up for
+    // (e.g. a 3-hour "10:00 - 13:00" block), not the raw wall-clock gap between
+    // tapping check-in and check-out -- a late/forgotten check-out (even a day
+    // later) would otherwise log wildly inflated hours that have nothing to do
+    // with how long the volunteer was actually there.
+    const matchedShift = shifts.find(s => s.id === pendingFeedbackRecord.shiftId);
+    const shiftHours = matchedShift ? parseTimeRangeHours(matchedShift.timeRange) : null;
+
+    let hours = shiftHours ?? 3.0;
+    if (shiftHours === null) {
+      // Fallback only for the rare case a matching shift/timeRange can't be found
+      // -- still clamp to a sane range so a stale check-in can't blow this up.
+      try {
+        const start = new Date(pendingFeedbackRecord.checkInTime.replace(' ', 'T')).getTime();
+        const end = new Date().getTime();
+        const diffHours = (end - start) / (1000 * 60 * 60);
+        if (diffHours > 0.1) {
+          hours = Math.round(Math.min(diffHours, 8) * 10) / 10;
+        }
+      } catch {
+        hours = 3.0;
       }
-    } catch {
-      hours = 3.0;
     }
 
     const finalRating = includeFeedback ? feedbackRating : 5;
