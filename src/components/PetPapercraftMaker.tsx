@@ -2,14 +2,14 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { buildAnimalHeadMesh, EarStyle, Mesh, vCross, vNormalize, vSub, Vec3 } from '../utils/papercraft/mesh';
 import { unfoldMesh, UnfoldedFace } from '../utils/papercraft/unfold';
 import { loadImage, warpTriangleToDataUrl } from '../utils/papercraft/triangleWarp';
-import { FACE_GUIDE_REGIONS, scaleGuidePoint } from '../utils/papercraft/faceRegions';
+import { FACE_GUIDE_REGIONS, scaleGuidePoint, rotateGuidePoint } from '../utils/papercraft/faceRegions';
 import { PetPhotoAligner, PhotoTransform } from './PetPhotoAligner';
 
 const GUIDE_SIZE = 320;
 
 /** Guide-space (0..1 within the 320x320 alignment square) -> the uploaded photo's own pixel space, using the user's pan/zoom/guide-scale from PetPhotoAligner. */
 function guideToImageSpace(pt: { x: number; y: number }, t: PhotoTransform) {
-  const scaled = scaleGuidePoint(pt, t.guideScale);
+  const scaled = rotateGuidePoint(scaleGuidePoint(pt, t.guideScale), t.guideRotation);
   const containerX = scaled.x * GUIDE_SIZE;
   const containerY = scaled.y * GUIDE_SIZE;
   return {
