@@ -1,8 +1,8 @@
 import React from 'react';
-import { PawPrint, Calendar, Heart, MessageSquare, QrCode, BookOpen, LogOut, User, TrendingUp, Settings, Star, Building2, CheckCircle2, HeartHandshake } from 'lucide-react';
+import { PawPrint, Calendar, Heart, MessageSquare, QrCode, BookOpen, LogOut, User, TrendingUp, Settings, Star, Building2, CheckCircle2, HeartHandshake, MapPinned } from 'lucide-react';
 import { BranchId, Branch, VolunteerUserSession } from '../types';
 
-export type VolunteerActiveTab = 'shifts' | 'myshifts' | 'growth' | 'settings' | 'sop';
+export type VolunteerActiveTab = 'shifts' | 'myshifts' | 'growth' | 'settings' | 'sop' | 'petmap';
 
 interface VolunteerNavbarProps {
   activeTab: VolunteerActiveTab;
@@ -208,6 +208,18 @@ export const VolunteerNavbar: React.FC<VolunteerNavbarProps> = ({
           >
             <BookOpen className="w-4 h-4 text-emerald-300" />
             <span>5. 園區安全守則與 SOP</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('petmap')}
+            className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap flex items-center space-x-1.5 transition cursor-pointer ${
+              activeTab === 'petmap'
+                ? 'bg-[#5A5A40] text-white shadow-xs'
+                : 'text-slate-600 hover:bg-[#E6E2D3]/40 hover:text-[#5A5A40]'
+            }`}
+          >
+            <MapPinned className="w-4 h-4 text-pink-300" />
+            <span>6. 浪浪地圖尋寶</span>
           </button>
         </div>
       </div>

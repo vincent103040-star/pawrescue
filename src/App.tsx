@@ -18,6 +18,7 @@ import { VolunteerRoster } from './components/VolunteerRoster';
 import { AiPostModal } from './components/AiPostModal';
 import { VolunteerCheckInModal } from './components/VolunteerCheckInModal';
 import { RulebookManualModal } from './components/RulebookManualModal';
+import { PetPapercraftMaker } from './components/PetPapercraftMaker';
 
 import { 
   UserRole, 
@@ -772,6 +773,10 @@ export default function App() {
               <VolunteerSopGuide
                 onOpenRulebookModal={() => setIsRulebookModalOpen(true)}
               />
+            )}
+
+            {volunteerActiveTab === 'petmap' && (
+              <PetPapercraftMaker />
             )}
           </main>
         </>
