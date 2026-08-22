@@ -57,10 +57,12 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
 
   const conflicts = detectApplicationConflicts(applications, shifts);
 
-  // Form state for creating a shift
+  // Form state for creating a shift. branchId is deliberately not part of this
+  // form -- it's derived from the admin's active branch filter (selectedBranch)
+  // at submit time, since duplicating that choice inside the modal was
+  // redundant with the top-level branch filter the admin already sets.
   const [formData, setFormData] = useState({
     title: '',
-    branchId: (selectedBranch !== 'all' ? selectedBranch : 'main') as BranchId,
     zone: 'dog' as ZoneCategory,
     date: new Date().toISOString().split('T')[0],
     timeRange: '10:00 - 13:00',
@@ -85,7 +87,7 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
 
     onCreateShift({
       title: formData.title || `${ZONE_CONFIGS[formData.zone]?.name || '園區'}志工班次`,
-      branchId: formData.branchId,
+      branchId: (selectedBranch !== 'all' ? selectedBranch : 'main') as BranchId,
       zone: formData.zone,
       date: formData.date,
       timeRange: formData.timeRange,
@@ -111,7 +113,6 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
     setFormData(prev => ({
       ...prev,
       title: template.title,
-      branchId: template.branchId,
       zone: template.zone,
       timeRange: template.timeRange,
       requiredCount: template.requiredCount,
@@ -473,15 +474,15 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block font-bold text-[#5A5A40] mb-1">服務園區據點</label>
+                  <label className="block font-bold text-[#5A5A40] mb-1">志工門檻</label>
                   <select
-                    value={formData.branchId}
-                    onChange={e => setFormData({ ...formData, branchId: e.target.value as BranchId })}
+                    value={formData.skillRequired}
+                    onChange={e => setFormData({ ...formData, skillRequired: e.target.value as SkillLevel })}
                     className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
                   >
-                    {branches.map(b => (
-                      <option key={b.id} value={b.id}>{b.name}</option>
-                    ))}
+                    <option value="beginner">🌱 新手皆可</option>
+                    <option value="intermediate">🌿 需具備基礎散步經驗</option>
+                    <option value="experienced">🌟 需資深志工/專業認證</option>
                   </select>
                 </div>
 
