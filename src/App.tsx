@@ -33,6 +33,7 @@ import {
 import { INITIAL_SHIFTS, INITIAL_APPLICATIONS, VOLUNTEER_PROFILES, INITIAL_ATTENDANCE_RECORDS, ZONE_CONFIGS, DEFAULT_SHELTER_LOCATION } from './data/mockData';
 import { MessageSquare, X, Bell, Clock, MapPin, QrCode, ArrowUpRight } from 'lucide-react';
 import { sendLinePush } from './utils/linePush';
+import { startLineBinding, exchangeLineLoginTicket } from './utils/lineLogin';
 
 export default function App() {
   // Authentication & Role State
@@ -162,6 +163,72 @@ export default function App() {
     // Drop the query string so refreshing or re-sharing this tab doesn't re-trigger it.
     window.history.replaceState({}, '', window.location.pathname);
   }, []);
+
+  // Returning from a LINE *sign-in* (as opposed to a LINE binding). The redirect
+  // carries only an opaque one-time ticket -- never the volunteer's email or name,
+  // which would otherwise be left sitting in browser history -- so exchange it for
+  // the real profile here.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('lineLoggedIn')) return;
+
+    const ticket = params.get('ticket') || '';
+    const succeeded = params.get('lineLoggedIn') === '1';
+    const errorCode = params.get('error') || '';
+    window.history.replaceState({}, '', window.location.pathname);
+
+    if (!succeeded || !ticket) {
+      showToast(
+        errorCode === 'line_not_registered'
+          ? '⚠️ 這個 LINE 帳號還沒綁定過志工資料，請先用 Google 帳號登入並完成綁定。'
+          : `⚠️ LINE 登入失敗（${errorCode || 'unknown'}），請改用 Google 帳號登入。`
+      );
+      return;
+    }
+
+    exchangeLineLoginTicket(ticket).then(volunteer => {
+      if (!volunteer) {
+        showToast('⚠️ LINE 登入憑證已失效，請重新登入一次。');
+        return;
+      }
+      localStorage.setItem('volunteer_profile_name', volunteer.name || '');
+      localStorage.setItem('volunteer_profile_email', volunteer.email || '');
+      localStorage.setItem('volunteer_profile_phone', volunteer.phone || '');
+      handleLoginAsVolunteer({
+        name: volunteer.name,
+        email: volunteer.email,
+        phone: volunteer.phone,
+        lineId: volunteer.lineId,
+        tier: volunteer.tier,
+        totalHours: volunteer.totalHours
+      });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Prompt a signed-in volunteer who hasn't bound LINE yet. Binding is what makes
+  // push notifications and later LINE-only sign-in possible, so this keeps asking
+  // on each login rather than only once at registration -- but stays skippable, so
+  // a LINE outage or a failed authorization can never block someone out of the
+  // system entirely.
+  const [lineBindPrompt, setLineBindPrompt] = useState<{ email: string; name: string } | null>(null);
+
+  useEffect(() => {
+    if (userRole !== 'volunteer' || !volunteerSession?.email) return;
+    if (sessionStorage.getItem('paw_line_bind_dismissed') === '1') return;
+
+    let cancelled = false;
+    fetch(`/api/volunteers/line-status?email=${encodeURIComponent(volunteerSession.email)}`)
+      .then(res => res.json())
+      .then(data => {
+        if (cancelled) return;
+        if (data.success && !data.linked) {
+          setLineBindPrompt({ email: volunteerSession.email, name: volunteerSession.name });
+        }
+      })
+      .catch(() => { /* best-effort -- never block the portal on this */ });
+    return () => { cancelled = true; };
+  }, [userRole, volunteerSession?.email, volunteerSession?.name]);
 
   // Modals state
   const [aiModalShift, setAiModalShift] = useState<PositionShift | null>(null);
@@ -795,6 +862,60 @@ export default function App() {
             )}
           </main>
         </>
+      )}
+
+      {/* First-login LINE binding prompt (skippable -- see the effect above) */}
+      {lineBindPrompt && (
+        <div className="fixed inset-0 z-60 bg-[#4A3D34]/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-[28px] max-w-md w-full p-6 border-4 border-[#716053] shadow-xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-[#06C755] text-white flex items-center justify-center shrink-0 border-3 border-[#716053]">
+                <MessageSquare className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold font-serif text-lg text-[#716053]">
+                  🎈 最後一步：綁定 LINE 帳號
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {lineBindPrompt.name} 你好，綁定後才能收到班次提醒喔！
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-[#FAF6EE] border-3 border-[#716053] rounded-2xl p-4 text-xs text-slate-700 space-y-2">
+              <p className="font-bold text-[#716053]">綁定後你將可以：</p>
+              <p>🐾 收到班次異動、緊急招募、簽到提醒的 LINE 推播</p>
+              <p>🌟 下次直接用 LINE 一鍵登入，不必再開 Google</p>
+              <p>🎈 簽退後自動收到服務時數與回饋確認</p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  startLineBinding(lineBindPrompt.email).catch(err =>
+                    showToast(`⚠️ 無法開啟 LINE 授權：${err.message || '請稍後再試'}`)
+                  );
+                }}
+                className="flex-1 bg-[#06C755] hover:brightness-95 text-white font-extrabold py-3 px-4 rounded-2xl text-sm border-3 border-[#716053] shadow-sm transition cursor-pointer flex items-center justify-center gap-2"
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span>立即綁定 LINE</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  sessionStorage.setItem('paw_line_bind_dismissed', '1');
+                  setLineBindPrompt(null);
+                  showToast('👌 已略過 LINE 綁定，你隨時可以到「4. LINE 通知與個人設定」完成綁定。');
+                }}
+                className="bg-[#F2EAD9] hover:bg-[#E6DCCB] text-[#716053] font-bold py-3 px-4 rounded-2xl text-sm border-3 border-[#716053] transition cursor-pointer shrink-0"
+              >
+                稍後再綁
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Volunteer Check-In / Check-Out QR Modal */}

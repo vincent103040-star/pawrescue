@@ -5,7 +5,7 @@ import { VolunteerWelcomeCard } from './VolunteerWelcomeCard';
 import { ShiftCalendarView } from './ShiftCalendarView';
 import { Heart, MapPin, Calendar, Clock, Check, Users, ExternalLink, Sparkles, AlertCircle, ArrowUpRight, CheckCircle2, QrCode, Settings, Bell, BellRing, User, Save, Send, Smartphone, ShieldCheck, ToggleLeft, ToggleRight, Sparkle, TrendingUp, Award, CheckSquare, Square, Crown, Medal, Star, Trophy, BookOpen, Zap, ChevronRight, LayoutGrid, MessageSquare, Camera, ShieldAlert } from 'lucide-react';
 import { buildGoogleCalendarLink } from '../utils/googleCalendar';
-import { buildLineLoginUrl } from '../utils/lineLogin';
+import { startLineBinding } from '../utils/lineLogin';
 import { getLiffVolunteerIdentity } from '../utils/liff';
 
 export interface GrowthChecklistItem {
@@ -1307,13 +1307,18 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                     ? '個別測試推播現在會真的發送到你的 LINE。'
                     : '連結後，下方「班次異動 / 緊急招募 / 簽到提醒」測試推播才會真的發送給你本人，而不是站內模擬效果。'}
                 </p>
-                <a
-                  href={buildLineLoginUrl(profileEmail)}
-                  className="inline-flex items-center gap-1.5 bg-[#06C755] hover:brightness-95 text-white font-bold text-xs px-3.5 py-2 rounded-full transition"
+                <button
+                  type="button"
+                  onClick={() => {
+                    startLineBinding(profileEmail).catch(err =>
+                      onSendLineToast(`⚠️ 無法開啟 LINE 授權：${err.message || '請稍後再試'}`)
+                    );
+                  }}
+                  className="inline-flex items-center gap-1.5 bg-[#06C755] hover:brightness-95 text-white font-bold text-xs px-3.5 py-2 rounded-full transition cursor-pointer"
                 >
                   <MessageSquare className="w-3.5 h-3.5" />
                   <span>{lineLinkStatus?.linked ? '重新連結 LINE 帳號' : '連結真實 LINE 帳號'}</span>
-                </a>
+                </button>
               </div>
             </div>
 

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { PawPrint, Shield, Heart, Sparkles, Calendar, MapPin, MessageSquare, CheckCircle2, ArrowRight, User, Phone, Users, ShieldCheck, Award, QrCode, BookOpen, Clock, HeartHandshake, ChevronRight, Check, Smartphone, KeyRound, Star, Quote, Home, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { AdminUserSession, VolunteerUserSession } from '../types';
 import { GooglePhoneAuthModal } from './GooglePhoneAuthModal';
+import { startLineLogin } from '../utils/lineLogin';
 
 interface LoginPortalProps {
   onLoginAsAdmin: (admin: AdminUserSession) => void;
@@ -102,6 +103,7 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
   };
 
   // Volunteer Google Auth Modal state
+  const [lineLoginError, setLineLoginError] = useState('');
   const [showGoogleAuthModal, setShowGoogleAuthModal] = useState(false);
   const [modalInitialGoogleData, setModalInitialGoogleData] = useState<{
     email: string;
@@ -520,9 +522,40 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
                 <ArrowRight className="w-4 h-4 text-amber-200" />
               </button>
 
+              {/* Returning volunteers who bound LINE during onboarding can skip
+                  straight past Google. New volunteers can't start here: LINE only
+                  returns an opaque userId, so there's no verified identity behind
+                  it until it's been bound to a Google-verified record. */}
+              <div className="flex items-center gap-2 pt-1">
+                <div className="flex-1 h-px bg-[#E6DCCB]"></div>
+                <span className="text-[10px] text-slate-400 font-bold">已註冊過的志工</span>
+                <div className="flex-1 h-px bg-[#E6DCCB]"></div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setLineLoginError('');
+                  startLineLogin().catch(err =>
+                    setLineLoginError(err.message || '無法開啟 LINE 授權，請稍後再試。')
+                  );
+                }}
+                className="w-full py-3 bg-[#06C755] hover:brightness-95 text-white font-extrabold rounded-2xl text-sm shadow-sm transition flex items-center justify-center gap-2.5 cursor-pointer active:scale-95"
+              >
+                <MessageSquare className="w-5 h-5" />
+                <span>使用 LINE 帳號登入</span>
+                <ArrowRight className="w-4 h-4 text-white/80" />
+              </button>
+
+              {lineLoginError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-300 text-center">
+                  <p className="text-[11px] text-rose-800 leading-tight">⚠️ {lineLoginError}</p>
+                </div>
+              )}
+
               <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/60 text-center">
                 <p className="text-[11px] text-amber-900 leading-tight">
-                  🔒 <strong>實名安全規範</strong>：必須通過真實 Google 帳號授權並登記聯絡電話，後台審核通過方可進入志工專屬平台。
+                  🔒 <strong>實名安全規範</strong>：首次註冊必須通過真實 Google 帳號授權並登記聯絡電話；完成後綁定 LINE，下次即可用 LINE 一鍵登入。
                 </p>
               </div>
 

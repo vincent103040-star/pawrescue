@@ -209,6 +209,17 @@ export function getLineUserId(email: string): { lineUserId: string; lineDisplayN
   return row;
 }
 
+// Reverse of getLineUserId: resolves a LINE userId back to the volunteer who
+// bound it. This is what makes "sign in with LINE alone" possible on later
+// visits -- LINE Login only ever returns an opaque userId (its `email` scope
+// needs separate approval from LINE and isn't enabled here), so the account can
+// only be recognised if that userId was bound during Google onboarding first.
+export function getVolunteerByLineUserId(lineUserId: string): VolunteerProfile | null {
+  if (!lineUserId) return null;
+  const row = db.prepare('SELECT * FROM volunteers WHERE lineUserId = ?').get(lineUserId);
+  return row ? rowToProfile(row) : null;
+}
+
 // Same lookup as getLineUserId, but by name -- the check-out flow only has
 // volunteerName on the attendance record (no email), so the post-checkout LINE
 // reminder push has to match this way. Best-effort: if multiple volunteers share a

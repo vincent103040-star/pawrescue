@@ -1,11 +1,11 @@
 import express from 'express';
 import path from 'path';
-import { createHmac, timingSafeEqual } from 'crypto';
+import { createHmac, timingSafeEqual, randomUUID } from 'crypto';
 import { writeFileSync, mkdirSync, createWriteStream, statSync, readFileSync, unlinkSync } from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
-import { getAllVolunteers, getVolunteerByEmail, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation } from './db';
+import { getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation } from './db';
 import { PDFParse } from 'pdf-parse';
 import type { SopContent, SopDocument, SopVideo } from './src/types';
 
@@ -1415,9 +1415,104 @@ ${contextText}
   // API endpoint: LINE Login OAuth callback. Exchanges the authorization code for a
   // token, fetches the real LINE profile (userId), and links it to the volunteer
   // identified by the `state` param (their email). Redirects back into the SPA.
+  // OAuth `state` must be an unguessable, single-use value -- it used to carry
+  // the volunteer's email in plain text, which meant anyone could craft a LINE
+  // Login URL with someone else's email as the state and bind their own LINE
+  // account to that volunteer's record. That was already an impersonation risk
+  // for push notifications; now that a bound LINE account can *sign in*, it
+  // would have been full account takeover. States are issued here, are random,
+  // expire quickly, and are consumed on first use.
+  //
+  // Held in memory rather than SQLite deliberately: they live for minutes, and
+  // a server restart invalidating a half-finished login is the safe failure.
+  interface PendingLineState { mode: 'bind' | 'login'; email?: string; expiresAt: number }
+  const pendingLineStates = new Map<string, PendingLineState>();
+  const LINE_STATE_TTL_MS = 10 * 60 * 1000;
+
+  function issueLineState(payload: Omit<PendingLineState, 'expiresAt'>): string {
+    // Opportunistic sweep so the map can't grow unbounded.
+    const now = Date.now();
+    for (const [key, value] of pendingLineStates) {
+      if (value.expiresAt < now) pendingLineStates.delete(key);
+    }
+    const state = randomUUID().replace(/-/g, '') + randomUUID().replace(/-/g, '');
+    pendingLineStates.set(state, { ...payload, expiresAt: now + LINE_STATE_TTL_MS });
+    return state;
+  }
+
+  function consumeLineState(state: string): PendingLineState | null {
+    const entry = pendingLineStates.get(state);
+    if (!entry) return null;
+    pendingLineStates.delete(state); // single use
+    if (entry.expiresAt < Date.now()) return null;
+    return entry;
+  }
+
+  // One-time tickets that hand a completed LINE *login* back to the browser.
+  // The callback is a redirect, and putting the volunteer's email/name straight
+  // into the query string would leak personal data into history and logs, so the
+  // redirect carries only an opaque ticket the client exchanges for the profile.
+  interface LoginTicket { email: string; expiresAt: number }
+  const loginTickets = new Map<string, LoginTicket>();
+  const LOGIN_TICKET_TTL_MS = 2 * 60 * 1000;
+
+  // Returns the LINE authorize URL for either binding (to a known volunteer) or
+  // signing in. Building it server-side is what lets the state stay secret.
+  app.post('/api/auth/line-login-url', (req, res) => {
+    try {
+      const { mode, email } = req.body || {};
+      const channelId = process.env.LINE_LOGIN_CHANNEL_ID;
+      const appUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+
+      if (!channelId) {
+        return res.status(503).json({ success: false, error: 'LINE Login 尚未設定（缺少 LINE_LOGIN_CHANNEL_ID）' });
+      }
+      if (mode !== 'bind' && mode !== 'login') {
+        return res.status(400).json({ success: false, error: '未知的 LINE 授權模式' });
+      }
+      const normalizedEmail = mode === 'bind' ? String(email || '').toLowerCase().trim() : undefined;
+      if (mode === 'bind' && !normalizedEmail) {
+        return res.status(400).json({ success: false, error: '綁定 LINE 需要先完成 Google 登入' });
+      }
+
+      const state = issueLineState({ mode, email: normalizedEmail });
+      const params = new URLSearchParams({
+        response_type: 'code',
+        client_id: channelId,
+        redirect_uri: `${appUrl}/api/auth/line-callback`,
+        state,
+        scope: 'profile openid'
+      });
+
+      return res.json({ success: true, url: `https://access.line.me/oauth2/v2.1/authorize?${params.toString()}` });
+    } catch (error: any) {
+      console.error('Issue LINE Login URL Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '無法產生 LINE 授權連結' });
+    }
+  });
+
+  // Exchanges the one-time ticket from a LINE sign-in for the volunteer profile.
+  app.post('/api/auth/line-session', (req, res) => {
+    try {
+      const ticket = String(req.body?.ticket || '');
+      const entry = loginTickets.get(ticket);
+      loginTickets.delete(ticket); // single use
+      if (!entry || entry.expiresAt < Date.now()) {
+        return res.status(401).json({ success: false, error: '登入憑證已失效，請重新以 LINE 登入' });
+      }
+      const volunteer = getVolunteerByEmail(entry.email);
+      if (!volunteer) {
+        return res.status(404).json({ success: false, error: '找不到對應的志工資料' });
+      }
+      return res.json({ success: true, volunteer });
+    } catch (error: any) {
+      console.error('LINE Session Exchange Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '登入失敗' });
+    }
+  });
+
   app.get('/api/auth/line-callback', async (req, res) => {
     const appUrl = process.env.APP_URL || 'http://localhost:3000';
-    const email = decodeURIComponent(String(req.query.state || ''));
 
     try {
       const code = String(req.query.code || '');
@@ -1427,9 +1522,12 @@ ${contextText}
       if (req.query.error) {
         return res.redirect(`${appUrl}/?lineLinked=0&error=${encodeURIComponent(String(req.query.error))}`);
       }
-      if (!code || !email) {
-        return res.redirect(`${appUrl}/?lineLinked=0&error=missing_code_or_state`);
+
+      const stateEntry = consumeLineState(String(req.query.state || ''));
+      if (!code || !stateEntry) {
+        return res.redirect(`${appUrl}/?lineLinked=0&error=invalid_or_expired_state`);
       }
+      const email = stateEntry.email || '';
       if (!channelId || !channelSecret) {
         return res.redirect(`${appUrl}/?lineLinked=0&error=line_login_not_configured`);
       }
@@ -1465,8 +1563,21 @@ ${contextText}
       }
 
       const profile: any = await profileRes.json();
-      setLineUserId(email, profile.userId, profile.displayName || '');
 
+      if (stateEntry.mode === 'login') {
+        // Signing in with LINE alone: the userId must already be bound to a
+        // volunteer (which only happens during Google onboarding), otherwise
+        // there's no verified identity behind it and we must not create one.
+        const volunteer = getVolunteerByLineUserId(profile.userId);
+        if (!volunteer) {
+          return res.redirect(`${appUrl}/?lineLoggedIn=0&error=line_not_registered`);
+        }
+        const ticket = randomUUID().replace(/-/g, '') + randomUUID().replace(/-/g, '');
+        loginTickets.set(ticket, { email: volunteer.email, expiresAt: Date.now() + LOGIN_TICKET_TTL_MS });
+        return res.redirect(`${appUrl}/?lineLoggedIn=1&ticket=${ticket}`);
+      }
+
+      setLineUserId(email, profile.userId, profile.displayName || '');
       return res.redirect(`${appUrl}/?lineLinked=1&lineName=${encodeURIComponent(profile.displayName || '')}`);
     } catch (error: any) {
       console.error('LINE Login Callback Error:', error);
