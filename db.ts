@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'fs';
 import path from 'path';
-import { randomUUID } from 'crypto';
+import { randomUUID, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { VOLUNTEER_PROFILES, INITIAL_ATTENDANCE_RECORDS, INITIAL_SHIFTS, INITIAL_APPLICATIONS, DEFAULT_SHELTER_LOCATION } from './src/data/mockData';
 import { RULEBOOK_CORPUS } from './src/data/rulebookCorpus';
 import type { VolunteerProfile, AttendanceRecord, PositionShift, VolunteerApplication, SopContent, SopSection, SopDocument, SopVideo, PromotionRequest, ShiftTemplate, ShelterLocation } from './src/types';
@@ -222,6 +222,9 @@ export function deleteVolunteer(email: string): boolean {
 
   db.prepare('DELETE FROM promotion_requests WHERE volunteerEmail = ?').run(normalizedEmail);
   db.prepare('DELETE FROM volunteers WHERE email = ?').run(normalizedEmail);
+  // Any session they still hold has to die with the account, otherwise a
+  // deleted volunteer keeps a working token until it expires.
+  db.prepare('DELETE FROM sessions WHERE identity = ?').run(normalizedEmail);
   return true;
 }
 
@@ -1108,4 +1111,131 @@ if (shiftSeedCount.c === 0) {
 const applicationSeedCount = db.prepare('SELECT COUNT(*) AS c FROM volunteer_applications').get() as { c: number };
 if (applicationSeedCount.c === 0) {
   for (const a of INITIAL_APPLICATIONS) insertApplication(a);
+}
+
+// ============================================================================
+// Authentication: admin accounts + server-side sessions
+// ----------------------------------------------------------------------------
+// Until now "auth" was decorative: the admin password was compared in the
+// browser, the signed-in role lived only in localStorage, and every
+// /api/admin/* endpoint answered anyone who knew the URL. Anybody could edit
+// the rulebook, delete volunteers or approve promotions straight from a
+// console. These two tables make the server the authority instead.
+//
+// Passwords are stored as scrypt hashes with a per-account salt -- never in
+// clear text, and never reversible -- using only node:crypto so this adds no
+// dependency to a 1GB VM that has OOM-ed during npm install before.
+// ============================================================================
+db.exec(`
+  CREATE TABLE IF NOT EXISTS admin_users (
+    username TEXT PRIMARY KEY,
+    passwordSalt TEXT NOT NULL,
+    passwordHash TEXT NOT NULL,
+    roleTitle TEXT NOT NULL DEFAULT '系統管理員',
+    email TEXT NOT NULL DEFAULT '',
+    createdAt TEXT NOT NULL
+  )
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS sessions (
+    token TEXT PRIMARY KEY,
+    role TEXT NOT NULL,
+    identity TEXT NOT NULL,
+    displayName TEXT NOT NULL DEFAULT '',
+    createdAt TEXT NOT NULL,
+    expiresAt INTEGER NOT NULL
+  )
+`);
+
+export function hashPassword(password: string, salt?: string): { salt: string; hash: string } {
+  const useSalt = salt || randomBytes(16).toString('hex');
+  const hash = scryptSync(password, useSalt, 64).toString('hex');
+  return { salt: useSalt, hash };
+}
+
+/** Constant-time comparison so a wrong password can't be found by timing. */
+function passwordMatches(password: string, salt: string, expectedHash: string): boolean {
+  const { hash } = hashPassword(password, salt);
+  const a = Buffer.from(hash, 'hex');
+  const b = Buffer.from(expectedHash, 'hex');
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
+// Seed the demo administrator on first run. The password stays "0000" so the
+// existing walkthrough still works, but it is now verified server-side against
+// a hash -- ADMIN_PASSWORD in the environment overrides it for a real deploy.
+const adminSeedCount = db.prepare('SELECT COUNT(*) AS c FROM admin_users').get() as { c: number };
+if (adminSeedCount.c === 0) {
+  const initialPassword = process.env.ADMIN_PASSWORD || '0000';
+  const { salt, hash } = hashPassword(initialPassword);
+  db.prepare(`
+    INSERT INTO admin_users (username, passwordSalt, passwordHash, roleTitle, email, createdAt)
+    VALUES (?, ?, ?, '系統管理員', 'admin@pawrescue.org.tw', ?)
+  `).run('Admin', salt, hash, new Date().toISOString());
+}
+
+export function verifyAdminCredentials(
+  username: string,
+  password: string
+): { username: string; roleTitle: string; email: string } | null {
+  const row = db.prepare('SELECT * FROM admin_users WHERE username = ?').get(String(username || '').trim()) as any;
+  if (!row) return null;
+  if (!passwordMatches(String(password || ''), row.passwordSalt, row.passwordHash)) return null;
+  return { username: row.username, roleTitle: row.roleTitle, email: row.email };
+}
+
+export function changeAdminPassword(username: string, newPassword: string): boolean {
+  const row = db.prepare('SELECT username FROM admin_users WHERE username = ?').get(username);
+  if (!row) return false;
+  const { salt, hash } = hashPassword(newPassword);
+  db.prepare('UPDATE admin_users SET passwordSalt = ?, passwordHash = ? WHERE username = ?')
+    .run(salt, hash, username);
+  // Every existing session for this account is dropped, so a password change
+  // actually locks out whoever was already signed in with the old one.
+  db.prepare(`DELETE FROM sessions WHERE role = 'admin' AND identity = ?`).run(username);
+  return true;
+}
+
+export interface SessionRecord {
+  token: string;
+  role: 'admin' | 'volunteer';
+  identity: string;     // admin username, or volunteer email
+  displayName: string;
+}
+
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+export function createSession(role: 'admin' | 'volunteer', identity: string, displayName: string): string {
+  // Opportunistic cleanup so expired rows don't accumulate forever.
+  db.prepare('DELETE FROM sessions WHERE expiresAt < ?').run(Date.now());
+
+  const token = randomBytes(32).toString('hex');
+  db.prepare(`
+    INSERT INTO sessions (token, role, identity, displayName, createdAt, expiresAt)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(token, role, identity, displayName || '', new Date().toISOString(), Date.now() + SESSION_TTL_MS);
+  return token;
+}
+
+export function getSession(token: string): SessionRecord | null {
+  if (!token) return null;
+  const row = db.prepare('SELECT * FROM sessions WHERE token = ?').get(token) as any;
+  if (!row) return null;
+  if (row.expiresAt < Date.now()) {
+    db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+    return null;
+  }
+  return { token: row.token, role: row.role, identity: row.identity, displayName: row.displayName };
+}
+
+export function destroySession(token: string): void {
+  if (!token) return;
+  db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+}
+
+/** Drops every session belonging to a volunteer -- used when they're deleted. */
+export function destroySessionsForIdentity(identity: string): void {
+  db.prepare('DELETE FROM sessions WHERE identity = ?').run(identity.toLowerCase().trim());
 }

@@ -5,7 +5,7 @@ import { writeFileSync, mkdirSync, createWriteStream, statSync, readFileSync, un
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
-import { getAllShifts, insertShift, updateShift, deleteShift, adjustShiftCount, getAllApplications, insertApplication, updateApplicationStatus, deleteApplication, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation } from './db';
+import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, adjustShiftCount, getAllApplications, insertApplication, updateApplicationStatus, deleteApplication, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation } from './db';
 import { PDFParse } from 'pdf-parse';
 import type { SopContent, SopDocument, SopVideo } from './src/types';
 
@@ -61,6 +61,111 @@ async function startServer() {
     limit: '30mb',
     verify: (req, _res, buf) => { (req as any).rawBody = buf; }
   }));
+
+  // ==========================================================================
+  // Authentication middleware
+  // --------------------------------------------------------------------------
+  // Previously the signed-in role existed only as a value in the browser's
+  // localStorage, and no endpoint checked it -- so every /api/admin/* route
+  // answered anyone who knew the URL, whatever their claimed role. The server
+  // now decides, from a token it issued itself and stores in SQLite.
+  // ==========================================================================
+  function readToken(req: express.Request): string {
+    const header = String(req.headers['authorization'] || '');
+    return header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+  }
+
+  /** Attaches req.session when a valid token is present. Never rejects. */
+  function attachSession(req: any, _res: express.Response, next: express.NextFunction) {
+    req.session = getSession(readToken(req));
+    next();
+  }
+
+  function requireAuth(req: any, res: express.Response, next: express.NextFunction) {
+    if (!req.session) {
+      return res.status(401).json({ success: false, error: '尚未登入或登入已逾期，請重新登入。' });
+    }
+    next();
+  }
+
+  function requireAdmin(req: any, res: express.Response, next: express.NextFunction) {
+    if (!req.session) {
+      return res.status(401).json({ success: false, error: '尚未登入或登入已逾期，請重新登入。' });
+    }
+    if (req.session.role !== 'admin') {
+      return res.status(403).json({ success: false, error: '此操作僅限管理者。' });
+    }
+    next();
+  }
+
+  app.use(attachSession);
+  // Every current and future /api/admin/* route is covered by this one line,
+  // rather than relying on each handler remembering to check.
+  app.use('/api/admin', requireAdmin);
+
+  // Admin sign-in. The password is verified here against a scrypt hash -- it
+  // used to be compared in the browser, which meant the check could simply be
+  // skipped by calling the API directly.
+  app.post('/api/auth/admin-login', (req, res) => {
+    try {
+      const { username, password } = req.body || {};
+      const admin = verifyAdminCredentials(username, password);
+      if (!admin) {
+        return res.status(401).json({ success: false, error: '帳號或密碼錯誤，請重新輸入。' });
+      }
+      const token = createSession('admin', admin.username, admin.username);
+      return res.json({
+        success: true,
+        token,
+        admin: { name: admin.username, roleTitle: admin.roleTitle, email: admin.email }
+      });
+    } catch (error: any) {
+      console.error('Admin Login Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '登入失敗' });
+    }
+  });
+
+  // Lets an admin rotate the demo password without editing code.
+  app.post('/api/admin/change-password', (req: any, res) => {
+    try {
+      const { currentPassword, newPassword } = req.body || {};
+      if (!newPassword || String(newPassword).length < 4) {
+        return res.status(400).json({ success: false, error: '新密碼至少需要 4 個字元。' });
+      }
+      if (!verifyAdminCredentials(req.session.identity, currentPassword)) {
+        return res.status(401).json({ success: false, error: '目前密碼錯誤。' });
+      }
+      changeAdminPassword(req.session.identity, String(newPassword));
+      return res.json({ success: true, note: '密碼已更新，所有裝置都需要重新登入。' });
+    } catch (error: any) {
+      console.error('Change Password Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '變更密碼失敗' });
+    }
+  });
+
+  // The client calls this on load to find out whether its stored token is still
+  // good -- so a revoked or expired session can't keep showing a signed-in UI.
+  app.get('/api/auth/me', (req: any, res) => {
+    if (!req.session) {
+      return res.status(401).json({ success: false, error: '未登入' });
+    }
+    const { role, identity, displayName } = req.session;
+    if (role === 'volunteer') {
+      const volunteer = getVolunteerByEmail(identity);
+      if (!volunteer) {
+        // Account deleted while the token was still alive.
+        destroySession(readToken(req));
+        return res.status(401).json({ success: false, error: '帳號已不存在' });
+      }
+      return res.json({ success: true, role, volunteer });
+    }
+    return res.json({ success: true, role, admin: { name: identity, displayName } });
+  });
+
+  app.post('/api/auth/logout', (req, res) => {
+    destroySession(readToken(req));
+    return res.json({ success: true });
+  });
 
   const photosDir = path.join(process.cwd(), 'data', 'photos');
   mkdirSync(photosDir, { recursive: true });
@@ -937,6 +1042,9 @@ ${contextText}
       return res.json({
         success: true,
         message: '志工資料已同步寫入資料庫',
+        // Issued here so the volunteer's later requests carry a token the
+        // server can verify, instead of the browser just asserting a role.
+        token: createSession('volunteer', userRecord.email, userRecord.name),
         user: {
           uid: `google-uid-${email.replace(/[@.]/g, '_')}`,
           email: userRecord.email,
@@ -971,7 +1079,7 @@ ${contextText}
     }
   });
 
-  app.post('/api/shifts', (req, res) => {
+  app.post('/api/shifts', requireAdmin, (req, res) => {
     try {
       const shift = req.body;
       if (!shift?.id || !shift?.title || !shift?.date) {
@@ -984,7 +1092,7 @@ ${contextText}
     }
   });
 
-  app.put('/api/shifts/:id', (req, res) => {
+  app.put('/api/shifts/:id', requireAdmin, (req, res) => {
     try {
       const updated = updateShift({ ...req.body, id: req.params.id });
       if (!updated) {
@@ -997,7 +1105,7 @@ ${contextText}
     }
   });
 
-  app.delete('/api/shifts/:id', (req, res) => {
+  app.delete('/api/shifts/:id', requireAdmin, (req, res) => {
     try {
       const removed = deleteShift(req.params.id);
       if (!removed) {
@@ -1023,7 +1131,7 @@ ${contextText}
   // two stay consistent even if two volunteers apply from different devices at
   // the same time -- the headcount is incremented server-side, not sent up by
   // whichever client happened to compute it last.
-  app.post('/api/applications', (req, res) => {
+  app.post('/api/applications', requireAuth, (req, res) => {
     try {
       const application = req.body;
       if (!application?.id || !application?.shiftId || !application?.volunteerName) {
@@ -1040,7 +1148,7 @@ ${contextText}
 
   // Rejecting a previously-approved application frees the seat back up; the
   // client no longer has to work that out for itself.
-  app.put('/api/applications/:id/status', (req, res) => {
+  app.put('/api/applications/:id/status', requireAdmin, (req, res) => {
     try {
       const { status, reviewNotes } = req.body || {};
       if (!status) {
@@ -1065,8 +1173,22 @@ ${contextText}
     }
   });
 
-  app.delete('/api/applications/:id', (req, res) => {
+  app.delete('/api/applications/:id', requireAuth, (req: any, res) => {
     try {
+      // A volunteer may cancel their own application; anything else is an
+      // admin action. Without this check any signed-in volunteer could cancel
+      // somebody else's shift just by knowing its id.
+      const target = getAllApplications().find(a => a.id === req.params.id);
+      if (!target) {
+        return res.status(404).json({ success: false, error: '找不到該筆報名' });
+      }
+      const isOwner = req.session.role === 'volunteer'
+        && target.volunteerEmail
+        && target.volunteerEmail.toLowerCase() === req.session.identity.toLowerCase();
+      if (req.session.role !== 'admin' && !isOwner) {
+        return res.status(403).json({ success: false, error: '只能取消自己的報名。' });
+      }
+
       const removed = deleteApplication(req.params.id);
       if (!removed) {
         return res.status(404).json({ success: false, error: '找不到該筆報名' });
@@ -1702,7 +1824,8 @@ ${contextText}
       if (!volunteer) {
         return res.status(404).json({ success: false, error: '找不到對應的志工資料' });
       }
-      return res.json({ success: true, volunteer });
+      const token = createSession('volunteer', volunteer.email, volunteer.name);
+      return res.json({ success: true, token, volunteer });
     } catch (error: any) {
       console.error('LINE Session Exchange Error:', error);
       return res.status(500).json({ success: false, error: error.message || '登入失敗' });

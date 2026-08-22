@@ -33,6 +33,7 @@ import {
 import { INITIAL_SHIFTS, INITIAL_APPLICATIONS, VOLUNTEER_PROFILES, INITIAL_ATTENDANCE_RECORDS, ZONE_CONFIGS, DEFAULT_SHELTER_LOCATION } from './data/mockData';
 import { MessageSquare, X, Bell, Clock, MapPin, QrCode, ArrowUpRight } from 'lucide-react';
 import { sendLinePush } from './utils/linePush';
+import { setToken, clearToken, authFetch, fetchCurrentSession, logout as serverLogout } from './utils/session';
 import { startLineBinding, exchangeLineLoginTicket } from './utils/lineLogin';
 
 export default function App() {
@@ -130,6 +131,42 @@ export default function App() {
   useEffect(() => {
     refreshShifts();
     refreshApplications();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Validate the stored session token against the server on load. The signed-in
+  // role used to be believed purely because localStorage said so, which meant it
+  // survived being revoked -- or edited by hand. If the server doesn't recognise
+  // the token, the UI drops straight back to the login page.
+  useEffect(() => {
+    if (!userRole) return;
+    let cancelled = false;
+    fetchCurrentSession().then(session => {
+      if (cancelled) return;
+      if (!session) {
+        clearToken();
+        setUserRole(null);
+        localStorage.removeItem('paw_user_role');
+        return;
+      }
+      // Trust the server's answer over whatever the browser had stored.
+      if (session.role !== userRole) {
+        setUserRole(session.role);
+        localStorage.setItem('paw_user_role', session.role);
+      }
+      if (session.role === 'volunteer' && session.volunteer) {
+        setVolunteerSession(prev => ({
+          ...(prev as any),
+          name: session.volunteer.name,
+          email: session.volunteer.email,
+          phone: session.volunteer.phone,
+          lineId: session.volunteer.lineId,
+          tier: session.volunteer.tier,
+          totalHours: session.volunteer.totalHours
+        }));
+      }
+    });
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -347,6 +384,9 @@ export default function App() {
   }, [userRole, volunteerSession, applications, shifts]);
 
   const handleLogout = () => {
+    // Revoke the token on the server too, so logging out actually ends the
+    // session rather than just hiding the UI on this device.
+    serverLogout();
     setUserRole(null);
     localStorage.removeItem('paw_user_role');
     showToast('👋 已成功登出，返回身分選擇登入首頁');
@@ -457,7 +497,7 @@ export default function App() {
     setShifts(prev => [newShift, ...prev]); // optimistic, reconciled by refreshShifts below
     showToast(`✅ 成功發布班次【${newShift.title}】！已有對應 Google 地圖定位與 LINE 預約卡片。`);
 
-    fetch('/api/shifts', {
+    authFetch('/api/shifts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newShift)
@@ -468,7 +508,7 @@ export default function App() {
     // Best-effort: keep the reusable "班次範本" library (see AdminSopManager)
     // up to date so future shifts of the same title can be applied from the
     // create-shift form's template dropdown instead of retyped from scratch.
-    fetch('/api/shift-templates/sync', {
+    authFetch('/api/shift-templates/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -489,7 +529,7 @@ export default function App() {
     const original = shifts.find(s => s.id === updated.id);
     setShifts(prev => prev.map(s => s.id === updated.id ? updated : s));
 
-    fetch(`/api/shifts/${encodeURIComponent(updated.id)}`, {
+    authFetch(`/api/shifts/${encodeURIComponent(updated.id)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated)
@@ -525,7 +565,7 @@ export default function App() {
     showToast('🗑️ 已成功刪除該班次');
 
     // The server also drops this shift's applications, so pull both back.
-    fetch(`/api/shifts/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    authFetch(`/api/shifts/${encodeURIComponent(id)}`, { method: 'DELETE' })
       .then(() => { refreshShifts(); refreshApplications(); })
       .catch(() => showToast('⚠️ 刪除未能同步到伺服器，請重新整理確認。'));
   };
@@ -586,7 +626,7 @@ export default function App() {
 
     // The server owns the headcount, so it recomputes it and we take its answer
     // -- two volunteers applying from different devices can't overwrite it.
-    fetch('/api/applications', {
+    authFetch('/api/applications', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newApp)
@@ -617,7 +657,7 @@ export default function App() {
 
     showToast('🗑️ 已成功取消該班次報名，名額已重新釋出。');
 
-    fetch(`/api/applications/${encodeURIComponent(appId)}`, { method: 'DELETE' })
+    authFetch(`/api/applications/${encodeURIComponent(appId)}`, { method: 'DELETE' })
       .then(() => { refreshApplications(); refreshShifts(); })
       .catch(() => showToast('⚠️ 取消報名未能同步到伺服器，請重新整理確認。'));
   };
@@ -665,7 +705,7 @@ export default function App() {
       return app;
     }));
 
-    fetch(`/api/applications/${encodeURIComponent(id)}/status`, {
+    authFetch(`/api/applications/${encodeURIComponent(id)}/status`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: newStatus, reviewNotes })
@@ -704,7 +744,7 @@ export default function App() {
     };
     setApplications(prev => [newApp, ...prev]);
 
-    fetch('/api/applications', {
+    authFetch('/api/applications', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newApp)

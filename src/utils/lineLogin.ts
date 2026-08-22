@@ -1,3 +1,5 @@
+import { setToken } from './session';
+
 /**
  * Starts a real LINE Login (OAuth authorization-code flow, full-page redirect --
  * not a popup like Google's GIS). The token exchange happens server-side in
@@ -45,7 +47,11 @@ export async function exchangeLineLoginTicket(ticket: string): Promise<any | nul
       body: JSON.stringify({ ticket })
     });
     const data = await res.json();
-    return data.success ? data.volunteer : null;
+    if (!data.success) return null;
+    // The server issues a session token with the profile; store it so this
+    // volunteer's later requests are actually authenticated.
+    if (data.token) setToken(data.token);
+    return data.volunteer;
   } catch {
     return null;
   }

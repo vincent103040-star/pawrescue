@@ -3,6 +3,7 @@ import { PawPrint, Shield, Heart, Sparkles, Calendar, MapPin, MessageSquare, Che
 import { AdminUserSession, VolunteerUserSession } from '../types';
 import { GooglePhoneAuthModal } from './GooglePhoneAuthModal';
 import { startLineLogin } from '../utils/lineLogin';
+import { setToken } from '../utils/session';
 
 interface LoginPortalProps {
   onLoginAsAdmin: (admin: AdminUserSession) => void;
@@ -79,10 +80,11 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
   totalServiceHours,
   shelterLocationName
 }) => {
-  // Admin username/password login state. This is a demo credential check, not real
-  // backend authentication -- the password defaults to a visible "0000" specifically
-  // so it reads as an obvious placeholder to be changed before any real deployment,
-  // rather than looking like a genuine (and thus falsely reassuring) secured login.
+  // Admin username/password login state. The credentials are now verified by the
+  // server against a scrypt hash and exchanged for a session token. The password
+  // still defaults to a visible "0000" so the demo walkthrough keeps working and
+  // the placeholder stays obviously temporary -- set ADMIN_PASSWORD on the server,
+  // or use the change-password endpoint, before any real deployment.
   const [adminUsername, setAdminUsername] = useState('Admin');
   const [adminPassword, setAdminPassword] = useState('0000');
   const [showAdminPassword, setShowAdminPassword] = useState(true);
@@ -104,6 +106,7 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
 
   // Volunteer Google Auth Modal state
   const [lineLoginError, setLineLoginError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [showGoogleAuthModal, setShowGoogleAuthModal] = useState(false);
   const [modalInitialGoogleData, setModalInitialGoogleData] = useState<{
     email: string;
@@ -115,20 +118,31 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
     phone: '0912-345-678'
   });
 
-  // Demo credential check (client-side only -- see the state comment above). A real
-  // deployment would replace this with an actual authenticated backend session.
-  const handleAdminLoginSubmit = (e: React.FormEvent) => {
+  // The password is checked by the server against a scrypt hash and exchanged
+  // for a session token. It used to be compared right here in the browser,
+  // which meant the check could be skipped entirely by calling the API directly.
+  const handleAdminLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (adminUsername.trim() !== 'Admin' || adminPassword !== '0000') {
-      setAdminLoginError('帳號或密碼錯誤，請重新輸入。');
-      return;
-    }
+    setIsLoggingIn(true);
     setAdminLoginError('');
-    onLoginAsAdmin({
-      name: 'Admin',
-      roleTitle: '系統管理員',
-      email: 'admin@pawrescue.org.tw'
-    });
+    try {
+      const res = await fetch('/api/auth/admin-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: adminUsername.trim(), password: adminPassword })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setAdminLoginError(data.error || '帳號或密碼錯誤，請重新輸入。');
+        return;
+      }
+      setToken(data.token);
+      onLoginAsAdmin(data.admin);
+    } catch {
+      setAdminLoginError('無法連線到伺服器，請稍後再試。');
+    } finally {
+      setIsLoggingIn(false);
+    }
   };
 
   const handleOpenGoogleAuth = (name: string = '熱血志工', email: string = 'vincent103040@gmail.com', phone: string = '0912-345-678') => {
@@ -423,6 +437,7 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
               {/* Main Enter Button */}
               <button
                 type="submit"
+                disabled={isLoggingIn}
                 className="w-full py-3.5 bg-[#716053] hover:bg-[#5A4A3F] text-white font-extrabold rounded-2xl text-xs shadow-md transition flex items-center justify-center gap-2 cursor-pointer transform group-hover:scale-[1.01]"
               >
                 <Shield className="w-4 h-4 text-[#F5E6D0]" />
