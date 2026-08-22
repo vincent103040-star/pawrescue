@@ -12,21 +12,6 @@ export function scaleGuidePoint(pt: Point2, scale: number): Point2 {
   };
 }
 
-/** Rotates a guide-space point around GUIDE_CENTER by `angleDeg` (clockwise, matching CSS/SVG rotate()) -- lets the user tilt the face guide to match a pet's head angle in the photo instead of only resizing it. */
-export function rotateGuidePoint(pt: Point2, angleDeg: number): Point2 {
-  const deg = Number.isFinite(angleDeg) ? angleDeg : 0;
-  if (deg === 0) return pt;
-  const rad = (deg * Math.PI) / 180;
-  const cos = Math.cos(rad);
-  const sin = Math.sin(rad);
-  const dx = pt.x - GUIDE_CENTER.x;
-  const dy = pt.y - GUIDE_CENTER.y;
-  return {
-    x: GUIDE_CENTER.x + dx * cos - dy * sin,
-    y: GUIDE_CENTER.y + dx * sin + dy * cos,
-  };
-}
-
 // The 5 landmarks the alignment guide shows the user (nose + 4 points
 // around it), in guide-space (0..1 within the 320x320 alignment square).
 // PetPhotoAligner draws these as the draggable-guide dots.

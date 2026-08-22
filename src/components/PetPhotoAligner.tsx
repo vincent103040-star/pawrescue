@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { GUIDE_CENTER, GUIDE_LANDMARKS, scaleGuidePoint, rotateGuidePoint } from '../utils/papercraft/faceRegions';
+import { GUIDE_CENTER, GUIDE_LANDMARKS, scaleGuidePoint } from '../utils/papercraft/faceRegions';
 
 export interface PhotoTransform {
   imageSrc: string;
@@ -12,8 +12,6 @@ export interface PhotoTransform {
   panY: number;
   /** How much the face guide (oval + landmarks) is scaled from its default size, around GUIDE_CENTER. 1 = default. */
   guideScale: number;
-  /** How much the face guide (oval + landmarks) is rotated (clockwise degrees) around GUIDE_CENTER, to match a tilted pet head. 0 = default. */
-  guideRotation: number;
 }
 
 const GUIDE_SIZE = 320;
@@ -43,7 +41,6 @@ export const PetPhotoAligner: React.FC<PetPhotoAlignerProps> = ({ onChange }) =>
           panX: (GUIDE_SIZE - img.naturalWidth * baseZoom) / 2,
           panY: (GUIDE_SIZE - img.naturalHeight * baseZoom) / 2,
           guideScale: 1,
-          guideRotation: 0,
         };
         setTransform(next);
         onChange(next);
@@ -73,13 +70,6 @@ export const PetPhotoAligner: React.FC<PetPhotoAlignerProps> = ({ onChange }) =>
   function onGuideScaleChange(newScale: number) {
     if (!transform) return;
     const next = { ...transform, guideScale: newScale };
-    setTransform(next);
-    onChange(next);
-  }
-
-  function onGuideRotationChange(newRotation: number) {
-    if (!transform) return;
-    const next = { ...transform, guideRotation: newRotation };
     setTransform(next);
     onChange(next);
   }
@@ -154,15 +144,14 @@ export const PetPhotoAligner: React.FC<PetPhotoAlignerProps> = ({ onChange }) =>
                 rx={GUIDE_SIZE * 0.26 * transform.guideScale}
                 ry={GUIDE_SIZE * 0.34 * transform.guideScale}
                 fill="none" stroke="white" strokeWidth={2} strokeDasharray="6 5" opacity={0.85}
-                transform={`rotate(${transform.guideRotation} ${GUIDE_CENTER.x * GUIDE_SIZE} ${GUIDE_CENTER.y * GUIDE_SIZE})`}
               />
               {Object.entries(GUIDE_LANDMARKS).map(([key, pt]) => {
-                const scaled = rotateGuidePoint(scaleGuidePoint(pt, transform.guideScale), transform.guideRotation);
+                const scaled = scaleGuidePoint(pt, transform.guideScale);
                 return <circle key={key} cx={scaled.x * GUIDE_SIZE} cy={scaled.y * GUIDE_SIZE} r={5} fill="#F59E0B" stroke="white" strokeWidth={1.5} />;
               })}
             </svg>
           </div>
-          <p className="text-xs text-slate-500 mt-2">拖曳照片 + 縮放,讓毛孩的鼻子、額頭、下巴與雙頰對準 5 個黃點;圈圈大小與角度也可以調整,配合毛孩臉型比例與頭部傾斜角度</p>
+          <p className="text-xs text-slate-500 mt-2">拖曳照片 + 縮放,讓毛孩的鼻子、額頭、下巴與雙頰對準 5 個黃點;圈圈大小也可以調整,配合毛孩臉型比例</p>
           <div className="flex items-center gap-2 mt-1">
             <span className="text-xs text-slate-400 w-10">照片</span>
             <input
@@ -186,23 +175,6 @@ export const PetPhotoAligner: React.FC<PetPhotoAlignerProps> = ({ onChange }) =>
               onChange={e => onGuideScaleChange(Number(e.target.value))}
               className="flex-1"
             />
-          </div>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-xs text-slate-400 w-10">旋轉</span>
-            <input
-              type="range"
-              min={-180}
-              max={180}
-              step={1}
-              value={Number.isFinite(transform.guideRotation) ? transform.guideRotation : 0}
-              onChange={e => onGuideRotationChange(Number(e.target.value))}
-              onDoubleClick={() => onGuideRotationChange(0)}
-              title="雙擊可重設為 0 度"
-              className="flex-1"
-            />
-            <span className="text-xs text-slate-400 w-9 text-right">
-              {Math.round(Number.isFinite(transform.guideRotation) ? transform.guideRotation : 0)}°
-            </span>
           </div>
           <button
             onClick={() => { setTransform(null); onChange(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
