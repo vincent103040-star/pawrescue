@@ -647,7 +647,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Volunteer Name */}
                   <div>
-                    <label className="block font-bold text-[#716053] mb-1">志工姓名 / LINE 名稱 *</label>
+                    <label className="block font-bold text-[#716053] mb-1">志工姓名 / LINE 名稱</label>
                     <select
                       value={selectedVolunteerName}
                       onChange={e => {
@@ -672,7 +672,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
 
                   {/* Shift Selection */}
                   <div>
-                    <label className="block font-bold text-[#716053] mb-1">簽到班次 *</label>
+                    <label className="block font-bold text-[#716053] mb-1">簽到班次</label>
                     <select
                       value={selectedShiftId}
                       onChange={e => setSelectedShiftId(e.target.value)}

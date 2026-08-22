@@ -1579,7 +1579,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
               <form onSubmit={handleConfirmApply} className="space-y-4 text-xs font-sans">
                 
                 <div>
-                  <label className="block font-bold text-[#716053] mb-1">您的真實姓名 *</label>
+                  <label className="block font-bold text-[#716053] mb-1">您的真實姓名</label>
                   <input
                     type="text"
                     required
@@ -1592,7 +1592,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block font-bold text-[#716053] mb-1">電話號碼 *</label>
+                    <label className="block font-bold text-[#716053] mb-1">電話號碼</label>
                     <input
                       type="tel"
                       required
@@ -1604,7 +1604,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                   </div>
 
                   <div>
-                    <label className="block font-bold text-[#716053] mb-1">LINE ID (推播提醒用) *</label>
+                    <label className="block font-bold text-[#716053] mb-1">LINE ID (推播提醒用)</label>
                     <input
                       type="text"
                       required
@@ -1617,7 +1617,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block font-bold text-[#716053] mb-1">電子郵件 Email *</label>
+                  <label className="block font-bold text-[#716053] mb-1">電子郵件 Email</label>
                   <input
                     type="email"
                     required
