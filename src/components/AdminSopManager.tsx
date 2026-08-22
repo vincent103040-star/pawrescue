@@ -23,16 +23,40 @@ const COLOR_PREVIEW: Record<string, string> = {
   purple: 'bg-purple-100 text-purple-800 border-purple-300'
 };
 
-function fileToBase64(file: File): Promise<{ base64: string; mimeType: string }> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      resolve({ base64: dataUrl.split(',')[1], mimeType: file.type });
+// Uploads a file as the raw request body rather than base64 inside JSON.
+// Sending the File directly lets the browser stream it, avoids the ~33% base64
+// size penalty, and keeps the server from having to buffer the whole thing in
+// memory (see the streaming note on /api/admin/sop-documents in server.ts).
+// Title/description travel in headers, URL-encoded because HTTP headers can't
+// carry raw Chinese characters.
+async function uploadFileRaw(
+  url: string,
+  file: File,
+  meta: { title: string; description?: string }
+): Promise<any> {
+  const headers: Record<string, string> = {
+    'Content-Type': file.type || 'application/octet-stream',
+    'X-Upload-Title': encodeURIComponent(meta.title)
+  };
+  if (meta.description) {
+    headers['X-Upload-Description'] = encodeURIComponent(meta.description);
+  }
+
+  const res = await fetch(url, { method: 'POST', headers, body: file });
+
+  // An oversized upload can be rejected with a non-JSON response; read as text
+  // first so we surface a real message instead of a JSON parse error.
+  const raw = await res.text();
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {
+      success: false,
+      error: res.status === 413
+        ? '檔案過大，伺服器拒絕接收'
+        : `伺服器回應異常 (HTTP ${res.status})`
     };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+  }
 }
 
 export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToast }) => {
@@ -173,19 +197,17 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
     if (!docTitle.trim() || !docFile) return;
     setIsUploadingDoc(true);
     try {
-      const { base64 } = await fileToBase64(docFile);
-      const res = await fetch('/api/admin/sop-documents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: docTitle.trim(), fileBase64: base64 })
-      });
-      const data = await res.json();
+      const data = await uploadFileRaw('/api/admin/sop-documents', docFile, { title: docTitle.trim() });
       if (data.success) {
         setDocuments(prev => [data.document, ...prev]);
         setDocTitle('');
         setDocFile(null);
         if (docFileInputRef.current) docFileInputRef.current.value = '';
-        onSendLineToast(`✅ 已上傳「${data.document.title}」，並索引 ${data.chunksIndexed} 段內容供 AI 問答參考！`);
+        onSendLineToast(
+          data.note
+            ? `✅ 已上傳「${data.document.title}」（${data.note}）`
+            : `✅ 已上傳「${data.document.title}」，並索引 ${data.chunksIndexed} 段內容供 AI 問答參考！`
+        );
       } else {
         onSendLineToast(`⚠️ 上傳失敗：${data.error || '未知錯誤'}`);
       }
@@ -210,13 +232,10 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
     if (!videoTitle.trim() || !videoFile) return;
     setIsUploadingVideo(true);
     try {
-      const { base64, mimeType } = await fileToBase64(videoFile);
-      const res = await fetch('/api/admin/sop-videos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: videoTitle.trim(), description: videoDescription.trim(), fileBase64: base64, mimeType })
+      const data = await uploadFileRaw('/api/admin/sop-videos', videoFile, {
+        title: videoTitle.trim(),
+        description: videoDescription.trim()
       });
-      const data = await res.json();
       if (data.success) {
         setVideos(prev => [data.video, ...prev]);
         setVideoTitle('');

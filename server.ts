@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'path';
 import { createHmac, timingSafeEqual } from 'crypto';
-import { writeFileSync, mkdirSync } from 'fs';
+import { writeFileSync, mkdirSync, createWriteStream, statSync, readFileSync, unlinkSync } from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
@@ -599,30 +599,107 @@ ${contextText}
     }
   });
 
+  // File uploads (SOP PDFs, teaching videos) stream the raw request body
+  // straight to disk instead of arriving as base64 inside a JSON body.
+  //
+  // The base64-in-JSON approach they used before was memory-fatal here: a
+  // 88MB PDF becomes ~123MB of base64, and express.json would hold the raw
+  // body buffer, the decoded JSON string, AND the extracted base64 string
+  // simultaneously (~370MB) before a single byte reached disk -- on a 1GB VM,
+  // on top of the ~450MB pdf.js then needs to parse it. Streaming keeps the
+  // transfer at ~0 extra memory and skips the 33% base64 overhead entirely.
+  //
+  // Metadata (title/description) rides in headers rather than the body, since
+  // the body is now the file itself. Header values are URL-encoded by the
+  // client because HTTP headers must be latin-1 and these are Chinese.
+  const MAX_UPLOAD_BYTES = 150 * 1024 * 1024;   // 150MB stored
+  const MAX_PDF_PARSE_BYTES = 100 * 1024 * 1024; // only parse text below this (see note at the call site)
+
+  function decodeHeaderValue(raw: string | string[] | undefined): string {
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    if (!value) return '';
+    try {
+      return decodeURIComponent(value).trim();
+    } catch {
+      return String(value).trim();
+    }
+  }
+
+  function safeUnlink(filePath: string) {
+    try { unlinkSync(filePath); } catch { /* already gone */ }
+  }
+
+  // Streams the request body to disk, aborting if it exceeds maxBytes.
+  // Resolves with the number of bytes written.
+  function streamRequestToFile(req: express.Request, filePath: string, maxBytes: number): Promise<number> {
+    return new Promise((resolve, reject) => {
+      let bytes = 0;
+      let aborted = false;
+      const out = createWriteStream(filePath);
+
+      req.on('data', (chunk: Buffer) => {
+        if (aborted) return;
+        bytes += chunk.length;
+        if (bytes > maxBytes) {
+          aborted = true;
+          const err: any = new Error('Upload exceeds size limit');
+          err.code = 'UPLOAD_TOO_LARGE';
+          out.destroy();
+          req.destroy();
+          reject(err);
+        }
+      });
+
+      req.on('error', err => { if (!aborted) { out.destroy(); reject(err); } });
+      out.on('error', err => { if (!aborted) reject(err); });
+      out.on('finish', () => { if (!aborted) resolve(bytes); });
+
+      req.pipe(out);
+    });
+  }
+
   // API endpoint (admin only): upload a reference PDF. Extracts its text,
   // splits into ~1200-character chunks, and embeds each chunk into the RAG
   // corpus so "問手冊 AI 小幫手" can answer from it -- not just display it as a
   // download link.
   app.post('/api/admin/sop-documents', async (req, res) => {
+    let savedPath: string | null = null;
     try {
-      const { title, fileBase64 } = req.body;
-      if (!title || !fileBase64) {
-        return res.status(400).json({ success: false, error: '缺少文件標題或檔案內容' });
+      const title = decodeHeaderValue(req.headers['x-upload-title']);
+      if (!title) {
+        return res.status(400).json({ success: false, error: '缺少文件標題' });
       }
 
       const id = `doc-${Date.now()}`;
       const filename = `${id}.pdf`;
-      const fileBuffer = Buffer.from(fileBase64, 'base64');
-      writeFileSync(path.join(sopDocsDir, filename), fileBuffer);
+      savedPath = path.join(sopDocsDir, filename);
 
+      const bytesWritten = await streamRequestToFile(req, savedPath, MAX_UPLOAD_BYTES);
+      if (bytesWritten === 0) {
+        safeUnlink(savedPath);
+        return res.status(400).json({ success: false, error: '缺少檔案內容' });
+      }
+
+      // Text extraction loads the whole PDF into memory and pdf.js needs several
+      // times the file size on top (an 88MB image-heavy PDF peaked around 450MB
+      // RSS in testing). The deploy VM only has 1GB, and a V8 out-of-memory kill
+      // is NOT catchable -- it would take the whole server down -- so skip
+      // extraction above a threshold rather than risk it. The file itself is
+      // still saved and downloadable either way.
       let extractedText = '';
-      try {
-        const parser = new PDFParse({ data: fileBuffer });
-        const textResult = await parser.getText();
-        extractedText = textResult.text || '';
-        await parser.destroy();
-      } catch (error: any) {
-        console.warn('PDF Text Extraction Error:', error?.message || error);
+      let extractionSkipped = false;
+      if (bytesWritten > MAX_PDF_PARSE_BYTES) {
+        extractionSkipped = true;
+        console.warn(`PDF too large for safe text extraction (${(bytesWritten / 1024 / 1024).toFixed(1)}MB), storing without RAG indexing.`);
+      } else {
+        try {
+          const parser = new PDFParse({ data: readFileSync(savedPath) });
+          const textResult = await parser.getText();
+          extractedText = textResult.text || '';
+          await parser.destroy();
+        } catch (error: any) {
+          console.warn('PDF Text Extraction Error:', error?.message || error);
+        }
       }
 
       const doc: SopDocument = { id, title, fileUrl: `/sop-docs/${filename}`, uploadedAt: new Date().toISOString() };
@@ -646,8 +723,22 @@ ${contextText}
         refreshRulebookEmbeddings();
       }
 
-      return res.json({ success: true, document: doc, chunksIndexed: chunks.length });
+      return res.json({
+        success: true,
+        document: doc,
+        chunksIndexed: chunks.length,
+        note: extractionSkipped
+          ? `檔案過大（${(bytesWritten / 1024 / 1024).toFixed(0)}MB），已儲存供下載，但未擷取文字建立 AI 問答索引`
+          : (chunks.length === 0 ? '此 PDF 未擷取到可索引的文字（可能是掃描圖檔）' : undefined)
+      });
     } catch (error: any) {
+      if (savedPath) safeUnlink(savedPath);
+      if (error?.code === 'UPLOAD_TOO_LARGE') {
+        return res.status(413).json({
+          success: false,
+          error: `檔案超過 ${MAX_UPLOAD_BYTES / 1024 / 1024}MB 上限，請壓縮後再上傳`
+        });
+      }
       console.error('Upload SOP Document Error:', error);
       return res.status(500).json({ success: false, error: error.message || '上傳文件失敗' });
     }
@@ -669,16 +760,25 @@ ${contextText}
   // static file, same pattern as check-in photos/avatars; only its title +
   // description (not the video content itself) get embedded for RAG searchability.
   app.post('/api/admin/sop-videos', async (req, res) => {
+    let savedPath: string | null = null;
     try {
-      const { title, description, fileBase64, mimeType } = req.body;
-      if (!title || !fileBase64) {
-        return res.status(400).json({ success: false, error: '缺少影片標題或檔案內容' });
+      const title = decodeHeaderValue(req.headers['x-upload-title']);
+      const description = decodeHeaderValue(req.headers['x-upload-description']);
+      const mimeType = String(req.headers['content-type'] || '');
+      if (!title) {
+        return res.status(400).json({ success: false, error: '缺少影片標題' });
       }
 
       const id = `video-${Date.now()}`;
-      const ext = mimeType?.includes('webm') ? 'webm' : mimeType?.includes('quicktime') ? 'mov' : 'mp4';
+      const ext = mimeType.includes('webm') ? 'webm' : mimeType.includes('quicktime') ? 'mov' : 'mp4';
       const filename = `${id}.${ext}`;
-      writeFileSync(path.join(sopVideosDir, filename), Buffer.from(fileBase64, 'base64'));
+      savedPath = path.join(sopVideosDir, filename);
+
+      const bytesWritten = await streamRequestToFile(req, savedPath, MAX_UPLOAD_BYTES);
+      if (bytesWritten === 0) {
+        safeUnlink(savedPath);
+        return res.status(400).json({ success: false, error: '缺少檔案內容' });
+      }
 
       const video: SopVideo = { id, title, description, fileUrl: `/sop-videos/${filename}`, uploadedAt: new Date().toISOString() };
       insertSopVideo(video);
@@ -691,6 +791,13 @@ ${contextText}
 
       return res.json({ success: true, video });
     } catch (error: any) {
+      if (savedPath) safeUnlink(savedPath);
+      if (error?.code === 'UPLOAD_TOO_LARGE') {
+        return res.status(413).json({
+          success: false,
+          error: `檔案超過 ${MAX_UPLOAD_BYTES / 1024 / 1024}MB 上限，請壓縮後再上傳`
+        });
+      }
       console.error('Upload SOP Video Error:', error);
       return res.status(500).json({ success: false, error: error.message || '上傳影片失敗' });
     }
