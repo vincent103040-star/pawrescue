@@ -1381,13 +1381,80 @@ ${contextText}
     }
   });
 
+  // Turns a typed address into real coordinates. Tries Google Maps Geocoding
+  // first when GOOGLE_MAPS_API_KEY is set (best accuracy for Taiwanese street
+  // addresses), and otherwise falls back to OpenStreetMap's Nominatim, which
+  // needs no API key or billing account -- so address lookup genuinely works
+  // out of the box instead of silently doing nothing.
+  //
+  // Nominatim's usage policy requires an identifying User-Agent and at most
+  // 1 request/sec; both are satisfied here since this only runs when an admin
+  // saves the shelter address (a rare, manual action).
+  async function geocodeAddress(address: string): Promise<{ lat: number; lng: number; provider: 'google' | 'osm' } | null> {
+    const mapsKey = process.env.GOOGLE_MAPS_API_KEY;
+
+    if (mapsKey) {
+      try {
+        const geoRes = await fetch(
+          `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${mapsKey}`
+        );
+        const geoData: any = await geoRes.json();
+        const loc = geoData?.results?.[0]?.geometry?.location;
+        if (geoData.status === 'OK' && loc) {
+          return { lat: loc.lat, lng: loc.lng, provider: 'google' };
+        }
+        console.warn('Google Geocoding returned no result:', geoData.status, '-- falling back to OpenStreetMap');
+      } catch (geoErr) {
+        console.warn('Google Geocoding call failed, falling back to OpenStreetMap:', geoErr);
+      }
+    }
+
+    // Nominatim's Taiwan coverage has road names ("安興路", "重慶南路一段")
+    // but NOT house numbers or lane numbers -- "安興路88號" returns nothing
+    // while "安興路" resolves fine. So drop the most specific parts step by
+    // step until something matches, which still lands on the right street
+    // (well inside the 500m check-in geofence) instead of failing outright.
+    const candidates = Array.from(new Set([
+      address.trim(),
+      address.replace(/\d+\s*號.*$/, '').trim(),               // drop "88號" and any floor/room after it
+      address.replace(/\d+\s*[巷弄].*$/, '').trim()            // drop "88巷12號" down to the road
+    ].filter(Boolean)));
+
+    for (let i = 0; i < candidates.length; i++) {
+      const query = candidates[i];
+      try {
+        const osmRes = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`,
+          { headers: { 'User-Agent': 'PawRescue-VolunteerSystem/1.0 (shelter address geocoding)' } }
+        );
+        const osmData: any = await osmRes.json();
+        const hit = Array.isArray(osmData) ? osmData[0] : null;
+        if (hit?.lat && hit?.lon) {
+          if (query !== address.trim()) {
+            console.log(`OpenStreetMap Geocoding matched at street level ("${query}") for: ${address}`);
+          }
+          // Nominatim returns lat/lon as strings
+          return { lat: Number(hit.lat), lng: Number(hit.lon), provider: 'osm' };
+        }
+      } catch (osmErr) {
+        console.warn('OpenStreetMap Geocoding call failed:', osmErr);
+      }
+
+      // Nominatim's usage policy caps callers at 1 request/sec.
+      if (i < candidates.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1100));
+      }
+    }
+
+    console.warn('OpenStreetMap Geocoding returned no result for:', address);
+    return null;
+  }
+
   // The shelter's single physical location (previously 3 fixed hardcoded
   // "branches" -- that whole architecture was removed since the org only
   // ever operates from one place). GET is public (volunteers need the
   // address/hours/map link); PUT is admin-only and re-geocodes the address
-  // via Google Maps whenever GOOGLE_MAPS_API_KEY is configured, matching
-  // this app's established real-API-with-graceful-fallback pattern (see
-  // GEMINI_API_KEY / LINE_CHANNEL_ACCESS_TOKEN elsewhere in this file).
+  // through geocodeAddress above.
   app.get('/api/shelter-location', (req, res) => {
     try {
       return res.json({ success: true, location: getShelterLocation() });
@@ -1404,42 +1471,30 @@ ${contextText}
         return res.status(400).json({ success: false, error: '缺少名稱、地址或開放時間' });
       }
 
-      const mapsKey = process.env.GOOGLE_MAPS_API_KEY;
-      let geocodeResult: { lat: number; lng: number; googleMapsUrl: string; geocoded: boolean } | null = null;
-
-      if (mapsKey) {
-        try {
-          const geoRes = await fetch(
-            `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${mapsKey}`
-          );
-          const geoData: any = await geoRes.json();
-          const loc = geoData?.results?.[0]?.geometry?.location;
-          if (geoData.status === 'OK' && loc) {
-            geocodeResult = {
-              lat: loc.lat,
-              lng: loc.lng,
-              googleMapsUrl: `https://maps.google.com/?q=${loc.lat},${loc.lng}`,
-              geocoded: true
-            };
-          } else {
-            console.warn('Geocode API returned no result:', geoData.status);
-          }
-        } catch (geoErr) {
-          console.warn('Geocode API call failed:', geoErr);
-        }
-      }
+      const geocoded = await geocodeAddress(address);
 
       const updated = updateShelterLocation({
         name, address, openHours,
-        ...(geocodeResult ? { lat: geocodeResult.lat, lng: geocodeResult.lng, googleMapsUrl: geocodeResult.googleMapsUrl, geocoded: true } : { geocoded: false })
+        ...(geocoded
+          ? {
+              lat: geocoded.lat,
+              lng: geocoded.lng,
+              // Always a Google Maps link regardless of who resolved the
+              // coordinates -- it's what volunteers tap for navigation.
+              googleMapsUrl: `https://maps.google.com/?q=${geocoded.lat},${geocoded.lng}`,
+              geocoded: true
+            }
+          : { geocoded: false })
       });
 
       return res.json({
         success: true,
         location: updated,
-        note: mapsKey
-          ? (geocodeResult ? undefined : '地址定位失敗，地圖座標維持原樣，請確認地址是否正確')
-          : 'GOOGLE_MAPS_API_KEY 尚未設定，地圖座標維持原樣未重新定位'
+        note: geocoded
+          ? (geocoded.provider === 'osm' && !process.env.GOOGLE_MAPS_API_KEY
+              ? '已使用 OpenStreetMap 免費定位服務完成定位'
+              : undefined)
+          : '地址定位失敗，地圖座標維持原樣，請確認地址是否正確（建議填寫完整門牌，例如「新北市新店區安興路88號」）'
       });
     } catch (error: any) {
       console.error('Update Shelter Location Error:', error);
