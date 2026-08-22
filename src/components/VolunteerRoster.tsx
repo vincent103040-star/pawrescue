@@ -1,19 +1,103 @@
 import React, { useState, useEffect } from 'react';
 import { VolunteerProfile, PromotionRequest } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
-import { Users, Award, Clock, Search, Shield, Phone, Mail, MessageSquare, Star, Plus, Check, X, Trophy, TrendingUp, Medal, Sparkles, ArrowUpDown, Filter, Download, FileText, ChevronLeft, ChevronRight, BellRing } from 'lucide-react';
+import { Users, Award, Clock, Search, Shield, Phone, Mail, MessageSquare, Star, Plus, Check, X, Trophy, TrendingUp, Medal, Sparkles, ArrowUpDown, Filter, Download, FileText, ChevronLeft, ChevronRight, BellRing, Edit2, Trash2, Save } from 'lucide-react';
 import { CertificateModal } from './CertificateModal';
 
 interface VolunteerRosterProps {
   volunteers: VolunteerProfile[];
   onAddVolunteer?: (vol: VolunteerProfile) => void;
+  /** Re-fetches the roster from the backend after an edit or delete. */
+  onVolunteersChanged?: () => void;
+  onSendLineToast?: (msg: string) => void;
 }
 
-export const VolunteerRoster: React.FC<VolunteerRosterProps> = ({ volunteers }) => {
+export const VolunteerRoster: React.FC<VolunteerRosterProps> = ({
+  volunteers,
+  onVolunteersChanged,
+  onSendLineToast = (_msg: string) => {}
+}) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [tierFilter, setTierFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'hours_desc' | 'hours_asc' | 'shifts_desc' | 'name'>('hours_desc');
   const [selectedCertVolunteer, setSelectedCertVolunteer] = useState<VolunteerProfile | null>(null);
+
+  // Inline editing of a volunteer's roster details. Hours / shift count / tier
+  // are deliberately not editable -- they're earned via check-outs and the
+  // promotion review flow (see updateVolunteerDetails in db.ts).
+  const [editingEmail, setEditingEmail] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState({ skills: '', preferredZones: [] as string[], emergencyContact: '' });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [deletingEmail, setDeletingEmail] = useState<string | null>(null);
+
+  const startEditing = (vol: VolunteerProfile) => {
+    setEditingEmail(vol.email);
+    setEditDraft({
+      skills: vol.skills.join('、'),
+      preferredZones: [...vol.preferredZones],
+      emergencyContact: vol.emergencyContact || ''
+    });
+  };
+
+  const toggleDraftZone = (zoneKey: string) => {
+    setEditDraft(prev => ({
+      ...prev,
+      preferredZones: prev.preferredZones.includes(zoneKey)
+        ? prev.preferredZones.filter(z => z !== zoneKey)
+        : [...prev.preferredZones, zoneKey]
+    }));
+  };
+
+  const handleSaveEdit = async (email: string) => {
+    setIsSavingEdit(true);
+    try {
+      const res = await fetch(`/api/admin/volunteers/${encodeURIComponent(email)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          skills: editDraft.skills.split(/[、,，]/).map(s => s.trim()).filter(Boolean),
+          preferredZones: editDraft.preferredZones,
+          emergencyContact: editDraft.emergencyContact.trim()
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setEditingEmail(null);
+        onVolunteersChanged?.();
+        onSendLineToast(`✅ 已更新【${data.volunteer.name}】的志工資料。`);
+      } else {
+        onSendLineToast(`⚠️ 更新失敗：${data.error || '未知錯誤'}`);
+      }
+    } catch (err: any) {
+      onSendLineToast(`⚠️ 更新失敗：${err.message || '網路連線異常'}`);
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  const handleDeleteVolunteer = async (vol: VolunteerProfile) => {
+    if (!window.confirm(
+      `確定要刪除志工「${vol.name}」的資料嗎？\n\n` +
+      `這會一併移除他的 LINE 綁定與待審核的晉升申請，之後可用同一個 Google 帳號重新註冊一次（用來重演首次設定流程）。\n\n` +
+      `注意：過去的出勤簽到紀錄會保留在系統中，不會被刪除。此操作無法復原。`
+    )) return;
+
+    setDeletingEmail(vol.email);
+    try {
+      const res = await fetch(`/api/admin/volunteers/${encodeURIComponent(vol.email)}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        onVolunteersChanged?.();
+        onSendLineToast(`🗑️ 已刪除志工「${vol.name}」，現在可以重新走一次首次註冊流程。`);
+      } else {
+        onSendLineToast(`⚠️ 刪除失敗：${data.error || '未知錯誤'}`);
+      }
+    } catch (err: any) {
+      onSendLineToast(`⚠️ 刪除失敗：${err.message || '網路連線異常'}`);
+    } finally {
+      setDeletingEmail(null);
+    }
+  };
 
   // Pending volunteer tier-promotion requests, awaiting admin approval/rejection
   const [promotionRequests, setPromotionRequests] = useState<PromotionRequest[]>([]);
@@ -415,6 +499,7 @@ export const VolunteerRoster: React.FC<VolunteerRosterProps> = ({ volunteers }) 
         {paginatedVolunteers.map(vol => {
           const rank = hoursRankedMap.get(vol.id) || 99;
           const isTop3 = rank <= 3;
+          const isEditing = editingEmail === vol.email;
 
           return (
             <div
@@ -444,6 +529,28 @@ export const VolunteerRoster: React.FC<VolunteerRosterProps> = ({ volunteers }) 
                   <span className="bg-[#FAF6EE] text-slate-600 font-bold text-[10px] px-2 py-0.5 rounded-full border border-[#716053]">
                     貢獻第 {rank} 名
                   </span>
+                )}
+
+                {/* Admin actions: edit this volunteer's details, or remove them
+                    entirely so first-time registration can be replayed. */}
+                {!isEditing && (
+                  <div className="flex items-center gap-1 pt-0.5">
+                    <button
+                      onClick={() => startEditing(vol)}
+                      title="編輯志工資料"
+                      className="p-1.5 rounded-lg text-[#716053] hover:bg-[#F5E6D0] transition cursor-pointer"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteVolunteer(vol)}
+                      disabled={deletingEmail === vol.email}
+                      title="刪除此志工資料"
+                      className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition cursor-pointer disabled:opacity-40"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -540,54 +647,134 @@ export const VolunteerRoster: React.FC<VolunteerRosterProps> = ({ volunteers }) 
                   </div>
                 </div>
 
-                {/* Skill Tags */}
-                <div className="space-y-1">
-                  <p className="text-[11px] font-bold text-[#716053] uppercase tracking-wider">專業與技能：</p>
-                  <div className="flex flex-wrap gap-1">
-                    {vol.skills.map((skill, idx) => (
-                      <span
-                        key={idx}
-                        className="bg-[#FAF6EE] text-slate-700 border border-[#716053] px-2.5 py-0.5 rounded-lg text-[11px]"
+                {isEditing ? (
+                  /* ---- Edit mode ---- */
+                  <div className="space-y-3 bg-[#FAF6EE] border-3 border-amber-400 rounded-2xl p-3.5">
+                    <div>
+                      <label className="text-[11px] font-bold text-[#716053] block mb-1">專業與技能（用、或逗號分隔）</label>
+                      <input
+                        type="text"
+                        value={editDraft.skills}
+                        onChange={e => setEditDraft({ ...editDraft, skills: e.target.value })}
+                        placeholder="例如：親人貓撫摸、貓砂盆清潔"
+                        className="w-full p-2 bg-white rounded-xl text-[11px] focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-[#716053] block mb-1">偏好支援場域（可複選）</label>
+                      <div className="flex flex-wrap gap-1">
+                        {Object.keys(ZONE_CONFIGS).map(zKey => {
+                          const zConf = ZONE_CONFIGS[zKey];
+                          const picked = editDraft.preferredZones.includes(zKey);
+                          return (
+                            <button
+                              key={zKey}
+                              type="button"
+                              onClick={() => toggleDraftZone(zKey)}
+                              className={`text-[10px] font-bold px-2.5 py-1 rounded-full transition cursor-pointer border-2 ${
+                                picked
+                                  ? `${zConf?.badgeBg} border-[#716053]`
+                                  : 'bg-white text-slate-400 border-slate-300'
+                              }`}
+                            >
+                              {zConf?.icon} {zConf?.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-[#716053] block mb-1">🆘 緊急聯絡人</label>
+                      <input
+                        type="text"
+                        value={editDraft.emergencyContact}
+                        onChange={e => setEditDraft({ ...editDraft, emergencyContact: e.target.value })}
+                        placeholder="例如：王媽媽 0922-888-000"
+                        className="w-full p-2 bg-white rounded-xl text-[11px] focus:outline-none"
+                      />
+                    </div>
+
+                    <p className="text-[10px] text-slate-500 leading-snug">
+                      💡 服務時數、出班次數與志工等級不可手動修改，會由簽退紀錄與晉升審核自動累計；榮譽徽章也會依此自動更新。
+                    </p>
+
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button
+                        onClick={() => setEditingEmail(null)}
+                        className="px-3 py-1.5 rounded-xl text-[11px] font-bold text-slate-500 hover:bg-slate-100 cursor-pointer"
                       >
-                        {skill}
-                      </span>
-                    ))}
+                        取消
+                      </button>
+                      <button
+                        onClick={() => handleSaveEdit(vol.email)}
+                        disabled={isSavingEdit}
+                        className="bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 font-bold px-4 py-1.5 rounded-xl text-[11px] transition flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        <span>{isSavingEdit ? '儲存中...' : '儲存變更'}</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <>
+                    {/* Skill Tags */}
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-bold text-[#716053] uppercase tracking-wider">專業與技能：</p>
+                      <div className="flex flex-wrap gap-1">
+                        {vol.skills.length > 0 ? vol.skills.map((skill, idx) => (
+                          <span
+                            key={idx}
+                            className="bg-[#FAF6EE] text-slate-700 border border-[#716053] px-2.5 py-0.5 rounded-lg text-[11px]"
+                          >
+                            {skill}
+                          </span>
+                        )) : (
+                          <span className="text-[11px] text-slate-400 italic">尚未填寫</span>
+                        )}
+                      </div>
+                    </div>
 
-                {/* Preferred Zones */}
-                <div className="space-y-1">
-                  <p className="text-[11px] font-bold text-[#716053] uppercase tracking-wider">偏好支援場域：</p>
-                  <div className="flex flex-wrap gap-1">
-                    {vol.preferredZones.map(zKey => {
-                      const zConf = ZONE_CONFIGS[zKey];
-                      return (
-                        <span
-                          key={zKey}
-                          className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${zConf?.badgeBg}`}
-                        >
-                          {zConf?.icon} {zConf?.name}
+                    {/* Preferred Zones */}
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-bold text-[#716053] uppercase tracking-wider">偏好支援場域：</p>
+                      <div className="flex flex-wrap gap-1">
+                        {vol.preferredZones.length > 0 ? vol.preferredZones.map(zKey => {
+                          const zConf = ZONE_CONFIGS[zKey];
+                          return (
+                            <span
+                              key={zKey}
+                              className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${zConf?.badgeBg}`}
+                            >
+                              {zConf?.icon} {zConf?.name}
+                            </span>
+                          );
+                        }) : (
+                          <span className="text-[11px] text-slate-400 italic">尚未填寫</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Emergency Contact & Download Certificate Button */}
+                    <div className="text-[11px] text-slate-500 pt-3 border-t border-[#716053] flex justify-between items-center gap-2">
+                      <div className="truncate">
+                        <span>🆘 緊急聯絡人：</span>
+                        <span className="font-medium text-slate-800">
+                          {vol.emergencyContact || <span className="text-slate-400 italic">尚未填寫</span>}
                         </span>
-                      );
-                    })}
-                  </div>
-                </div>
+                      </div>
 
-                {/* Emergency Contact & Download Certificate Button */}
-                <div className="text-[11px] text-slate-500 pt-3 border-t border-[#716053] flex justify-between items-center gap-2">
-                  <div className="truncate">
-                    <span>🆘 緊急聯絡人：</span>
-                    <span className="font-medium text-slate-800">{vol.emergencyContact}</span>
-                  </div>
-
-                  <button
-                    onClick={() => setSelectedCertVolunteer(vol)}
-                    className="bg-[#716053] hover:bg-[#5A4A3F] text-white font-bold px-3 py-1.5 rounded-full text-[11px] shadow-2xs transition flex items-center gap-1 shrink-0 cursor-pointer"
-                  >
-                    <Download className="w-3.5 h-3.5 text-[#F5E6D0]" />
-                    <span>下載證明</span>
-                  </button>
-                </div>
+                      <button
+                        onClick={() => setSelectedCertVolunteer(vol)}
+                        className="bg-[#716053] hover:bg-[#5A4A3F] text-white font-bold px-3 py-1.5 rounded-full text-[11px] shadow-2xs transition flex items-center gap-1 shrink-0 cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5 text-[#F5E6D0]" />
+                        <span>下載證明</span>
+                      </button>
+                    </div>
+                  </>
+                )}
 
               </div>
             </div>

@@ -767,6 +767,15 @@ export default function App() {
             {adminActiveTab === 'roster' && (
               <VolunteerRoster
                 volunteers={volunteers}
+                onSendLineToast={showToast}
+                onVolunteersChanged={() => {
+                  fetch('/api/volunteers')
+                    .then(res => res.json())
+                    .then(data => {
+                      if (data.success && Array.isArray(data.volunteers)) setVolunteers(data.volunteers);
+                    })
+                    .catch(() => { /* keep the current list if the refresh fails */ });
+                }}
               />
             )}
 

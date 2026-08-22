@@ -170,6 +170,61 @@ export function updateVolunteerProfileExtras(
   return getVolunteerByEmail(normalizedEmail);
 }
 
+// Admin-side edit of a volunteer's roster details. Deliberately covers only the
+// fields a coordinator legitimately maintains -- skills, preferred zones,
+// emergency contact, and contact details. Hours, shift count and tier are NOT
+// here: those are earned through check-outs and the promotion review flow, and
+// letting them be typed in by hand would make the roster's stats meaningless.
+// The honour badges shown on each card aren't stored at all; they're derived
+// from hours/shifts/skills, so they update themselves once these do.
+export function updateVolunteerDetails(
+  email: string,
+  updates: {
+    name?: string;
+    phone?: string;
+    lineId?: string;
+    skills?: string[];
+    preferredZones?: string[];
+    emergencyContact?: string;
+  }
+): VolunteerProfile | null {
+  const normalizedEmail = email.toLowerCase().trim();
+  const existing = db.prepare('SELECT email FROM volunteers WHERE email = ?').get(normalizedEmail);
+  if (!existing) return null;
+
+  const setField = (column: string, value: string) => {
+    db.prepare(`UPDATE volunteers SET ${column} = ? WHERE email = ?`).run(value, normalizedEmail);
+  };
+
+  if (updates.name !== undefined) setField('name', updates.name);
+  if (updates.phone !== undefined) setField('phone', updates.phone);
+  if (updates.lineId !== undefined) setField('lineId', updates.lineId);
+  if (updates.emergencyContact !== undefined) setField('emergencyContact', updates.emergencyContact);
+  if (updates.skills !== undefined) setField('skills', JSON.stringify(updates.skills));
+  if (updates.preferredZones !== undefined) setField('preferredZones', JSON.stringify(updates.preferredZones));
+
+  return getVolunteerByEmail(normalizedEmail);
+}
+
+// Removes a volunteer entirely, so the same person can go through first-time
+// registration again from scratch (which is how the LINE-binding onboarding gets
+// re-tested). Their pending promotion requests go too, since those are keyed by
+// email and would otherwise linger in the admin review queue pointing at nobody.
+//
+// Attendance records are intentionally left alone: they're the shelter's service
+// history, keyed by name rather than email, and silently erasing them would
+// change the dashboard's totals. A re-registered volunteer starts at 0 hours
+// regardless, because hours live on the volunteer row that was just deleted.
+export function deleteVolunteer(email: string): boolean {
+  const normalizedEmail = email.toLowerCase().trim();
+  const existing = db.prepare('SELECT email FROM volunteers WHERE email = ?').get(normalizedEmail);
+  if (!existing) return false;
+
+  db.prepare('DELETE FROM promotion_requests WHERE volunteerEmail = ?').run(normalizedEmail);
+  db.prepare('DELETE FROM volunteers WHERE email = ?').run(normalizedEmail);
+  return true;
+}
+
 // Update hours/shift count after a check-out (best-effort, matched by name today —
 // see the App.tsx TODO about matching by email once attendance records carry it).
 export function addCompletedShiftHours(name: string, hoursLogged: number) {

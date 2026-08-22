@@ -5,7 +5,7 @@ import { writeFileSync, mkdirSync, createWriteStream, statSync, readFileSync, un
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
-import { getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation } from './db';
+import { getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation } from './db';
 import { PDFParse } from 'pdf-parse';
 import type { SopContent, SopDocument, SopVideo } from './src/types';
 
@@ -964,6 +964,44 @@ ${contextText}
     } catch (error: any) {
       console.error('Get Volunteers Error:', error);
       return res.status(500).json({ success: false, error: error.message || '讀取志工名冊失敗' });
+    }
+  });
+
+  // Admin edit of a volunteer's roster details (skills / zones / contact info).
+  app.put('/api/admin/volunteers/:email', (req, res) => {
+    try {
+      const email = decodeURIComponent(req.params.email);
+      const { name, phone, lineId, skills, preferredZones, emergencyContact } = req.body || {};
+
+      const updated = updateVolunteerDetails(email, {
+        name, phone, lineId, emergencyContact,
+        skills: Array.isArray(skills) ? skills : undefined,
+        preferredZones: Array.isArray(preferredZones) ? preferredZones : undefined
+      });
+
+      if (!updated) {
+        return res.status(404).json({ success: false, error: '找不到該位志工' });
+      }
+      return res.json({ success: true, volunteer: updated });
+    } catch (error: any) {
+      console.error('Update Volunteer Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '更新志工資料失敗' });
+    }
+  });
+
+  // Admin delete. Irreversible, so the confirmation lives in the UI -- this just
+  // reports honestly whether a row was actually removed.
+  app.delete('/api/admin/volunteers/:email', (req, res) => {
+    try {
+      const email = decodeURIComponent(req.params.email);
+      const removed = deleteVolunteer(email);
+      if (!removed) {
+        return res.status(404).json({ success: false, error: '找不到該位志工' });
+      }
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error('Delete Volunteer Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '刪除志工失敗' });
     }
   });
 
