@@ -731,19 +731,38 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
             <div className="flex flex-wrap justify-between items-center gap-2 pt-2 border-t border-slate-100">
               {!isVolunteerMode ? (
                 <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (onUpdateShift) {
-                        handleOpenEditModal(activeShiftDetail);
-                        setActiveShiftDetail(null);
-                      }
-                    }}
-                    className="bg-[#5A5A40] hover:bg-[#484833] text-white font-bold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                    <span>編輯班次時間與名額</span>
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onUpdateShift) {
+                          handleOpenEditModal(activeShiftDetail);
+                          setActiveShiftDetail(null);
+                        }
+                      }}
+                      className="bg-[#5A5A40] hover:bg-[#484833] text-white font-bold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                      <span>編輯班次時間與名額</span>
+                    </button>
+
+                    {onDeleteShift && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm(`確定要刪除「${activeShiftDetail.title}」這個班次嗎？此操作無法復原。`)) {
+                            onDeleteShift(activeShiftDetail.id);
+                            setActiveShiftDetail(null);
+                          }
+                        }}
+                        className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-bold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+                        title="刪除此班次"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>刪除班次</span>
+                      </button>
+                    )}
+                  </div>
 
                   <button
                     type="button"
