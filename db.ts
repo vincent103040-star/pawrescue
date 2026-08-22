@@ -4,7 +4,7 @@ import path from 'path';
 import { randomUUID } from 'crypto';
 import { VOLUNTEER_PROFILES, INITIAL_ATTENDANCE_RECORDS } from './src/data/mockData';
 import { RULEBOOK_CORPUS } from './src/data/rulebookCorpus';
-import type { VolunteerProfile, AttendanceRecord, SopContent, SopSection, SopDocument, SopVideo, PromotionRequest } from './src/types';
+import type { VolunteerProfile, AttendanceRecord, SopContent, SopSection, SopDocument, SopVideo, PromotionRequest, ShiftTemplate } from './src/types';
 
 const dataDir = path.join(process.cwd(), 'data');
 fs.mkdirSync(dataDir, { recursive: true });
@@ -672,4 +672,98 @@ export function reviewPromotionRequest(id: string, status: 'approved' | 'rejecte
 // status flag nothing else reads.
 export function updateVolunteerTier(email: string, tier: string): void {
   db.prepare('UPDATE volunteers SET tier = ? WHERE email = ?').run(tier, email.toLowerCase().trim());
+}
+
+// ============================================================================
+// Shift templates ("班次" cards) -- auto-synced every time an admin publishes
+// a shift, so the create-shift form can offer "套用過去班次範本" without a
+// separate manual template-authoring step. Deliberately its own table (not
+// folded into sop_content's sections) since a shift's fields (branch/zone/
+// date/quota/tasks/location) don't fit the rulebook's title+subtitle+items
+// shape at all.
+// ============================================================================
+db.exec(`
+  CREATE TABLE IF NOT EXISTS shift_templates (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    branchId TEXT NOT NULL,
+    zone TEXT NOT NULL,
+    timeRange TEXT NOT NULL,
+    requiredCount INTEGER NOT NULL,
+    skillRequired TEXT NOT NULL,
+    description TEXT NOT NULL,
+    tasks TEXT NOT NULL,
+    locationDetails TEXT NOT NULL,
+    attachmentUrl TEXT,
+    updatedAt TEXT NOT NULL
+  )
+`);
+
+function rowToShiftTemplate(row: any): ShiftTemplate {
+  return {
+    id: row.id,
+    title: row.title,
+    branchId: row.branchId,
+    zone: row.zone,
+    timeRange: row.timeRange,
+    requiredCount: row.requiredCount,
+    skillRequired: row.skillRequired,
+    description: row.description,
+    tasks: JSON.parse(row.tasks),
+    locationDetails: row.locationDetails,
+    attachmentUrl: row.attachmentUrl || undefined,
+    updatedAt: row.updatedAt
+  };
+}
+
+export function getAllShiftTemplates(): ShiftTemplate[] {
+  const rows = db.prepare('SELECT * FROM shift_templates ORDER BY updatedAt DESC').all();
+  return rows.map(rowToShiftTemplate);
+}
+
+// Upserts by normalized title -- republishing a recurring shift (e.g. the
+// same "大狗運動場假日牽繩放風" every weekend) refreshes its one template
+// instead of piling up near-duplicate cards in the dropdown.
+export function upsertShiftTemplate(params: {
+  title: string;
+  branchId: string;
+  zone: string;
+  timeRange: string;
+  requiredCount: number;
+  skillRequired: string;
+  description: string;
+  tasks: string[];
+  locationDetails: string;
+  attachmentUrl?: string;
+}): ShiftTemplate {
+  const normalizedTitle = params.title.trim();
+  const nowIso = new Date().toISOString();
+  const existing = db.prepare('SELECT id FROM shift_templates WHERE title = ?').get(normalizedTitle) as { id: string } | undefined;
+
+  if (existing) {
+    db.prepare(`
+      UPDATE shift_templates
+      SET branchId = ?, zone = ?, timeRange = ?, requiredCount = ?, skillRequired = ?, description = ?, tasks = ?, locationDetails = ?, attachmentUrl = ?, updatedAt = ?
+      WHERE id = ?
+    `).run(
+      params.branchId, params.zone, params.timeRange, params.requiredCount, params.skillRequired,
+      params.description, JSON.stringify(params.tasks), params.locationDetails, params.attachmentUrl || null, nowIso,
+      existing.id
+    );
+    return rowToShiftTemplate(db.prepare('SELECT * FROM shift_templates WHERE id = ?').get(existing.id));
+  }
+
+  const id = randomUUID();
+  db.prepare(`
+    INSERT INTO shift_templates (id, title, branchId, zone, timeRange, requiredCount, skillRequired, description, tasks, locationDetails, attachmentUrl, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id, normalizedTitle, params.branchId, params.zone, params.timeRange, params.requiredCount, params.skillRequired,
+    params.description, JSON.stringify(params.tasks), params.locationDetails, params.attachmentUrl || null, nowIso
+  );
+  return rowToShiftTemplate(db.prepare('SELECT * FROM shift_templates WHERE id = ?').get(id));
+}
+
+export function deleteShiftTemplate(id: string): void {
+  db.prepare('DELETE FROM shift_templates WHERE id = ?').run(id);
 }

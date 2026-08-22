@@ -5,7 +5,7 @@ import { writeFileSync, mkdirSync } from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
-import { getAllVolunteers, getVolunteerByEmail, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier } from './db';
+import { getAllVolunteers, getVolunteerByEmail, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate } from './db';
 import { PDFParse } from 'pdf-parse';
 import type { SopContent, SopDocument, SopVideo } from './src/types';
 
@@ -1142,6 +1142,49 @@ ${contextText}
     } catch (error: any) {
       console.error('Reject Promotion Error:', error);
       return res.status(500).json({ success: false, error: error.message || '駁回失敗' });
+    }
+  });
+
+  // Shift templates ("班次" cards) -- read by the create-shift form's "套用過去
+  // 班次範本" dropdown, and kept up to date by /api/shift-templates/sync,
+  // which App.tsx calls (fire-and-forget) right after every shift publish.
+  app.get('/api/shift-templates', (req, res) => {
+    try {
+      return res.json({ success: true, templates: getAllShiftTemplates() });
+    } catch (error: any) {
+      console.error('Fetch Shift Templates Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '讀取班次範本失敗' });
+    }
+  });
+
+  app.post('/api/shift-templates/sync', (req, res) => {
+    try {
+      const { title, branchId, zone, timeRange, requiredCount, skillRequired, description, tasks, locationDetails, attachmentUrl } = req.body;
+      if (!title || !branchId || !zone || !timeRange || !requiredCount || !skillRequired) {
+        return res.status(400).json({ success: false, error: '缺少班次範本所需欄位' });
+      }
+      const template = upsertShiftTemplate({
+        title, branchId, zone, timeRange,
+        requiredCount: Number(requiredCount),
+        skillRequired, description: description || '',
+        tasks: Array.isArray(tasks) ? tasks : [],
+        locationDetails: locationDetails || '',
+        attachmentUrl: attachmentUrl || undefined
+      });
+      return res.json({ success: true, template });
+    } catch (error: any) {
+      console.error('Sync Shift Template Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '同步班次範本失敗' });
+    }
+  });
+
+  app.delete('/api/admin/shift-templates/:id', (req, res) => {
+    try {
+      deleteShiftTemplate(req.params.id);
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error('Delete Shift Template Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '刪除班次範本失敗' });
     }
   });
 

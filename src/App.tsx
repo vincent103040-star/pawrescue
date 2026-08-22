@@ -378,6 +378,26 @@ export default function App() {
 
     setShifts(prev => [newShift, ...prev]);
     showToast(`✅ 成功發布班次【${newShift.title}】！已有對應 Google 地圖定位與 LINE 預約卡片。`);
+
+    // Best-effort: keep the reusable "班次範本" library (see AdminSopManager)
+    // up to date so future shifts of the same title can be applied from the
+    // create-shift form's template dropdown instead of retyped from scratch.
+    fetch('/api/shift-templates/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: newShift.title,
+        branchId: newShift.branchId,
+        zone: newShift.zone,
+        timeRange: newShift.timeRange,
+        requiredCount: newShift.requiredCount,
+        skillRequired: newShift.skillRequired,
+        description: newShift.description,
+        tasks: newShift.tasks,
+        locationDetails: newShift.locationDetails,
+        attachmentUrl: newShift.attachmentUrl
+      })
+    }).catch(() => { /* best-effort, ignore failures */ });
   };
 
   const handleUpdateShift = (updated: PositionShift) => {

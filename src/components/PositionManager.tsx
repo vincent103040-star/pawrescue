@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { PositionShift, Branch, BranchId, SkillLevel, ZoneCategory, VolunteerProfile, VolunteerApplication, ApplicationStatus } from '../types';
+import React, { useState, useEffect } from 'react';
+import { PositionShift, Branch, BranchId, SkillLevel, ZoneCategory, VolunteerProfile, VolunteerApplication, ApplicationStatus, ShiftTemplate } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { detectApplicationConflicts } from '../utils/conflictChecker';
 import { ConflictCheckModal } from './ConflictCheckModal';
@@ -41,6 +41,19 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
   const [filterZone, setFilterZone] = useState<string>('all');
   const [aiScheduleModalShift, setAiScheduleModalShift] = useState<PositionShift | null>(null);
   const [showConflictModal, setShowConflictModal] = useState(false);
+
+  // Reusable "班次範本" cards (auto-synced from past published shifts, see
+  // AdminSopManager) -- lets the create-shift form prefill from a past shift
+  // instead of retyping every field.
+  const [shiftTemplates, setShiftTemplates] = useState<ShiftTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+
+  useEffect(() => {
+    fetch('/api/shift-templates')
+      .then(res => res.json())
+      .then(data => { if (data.success) setShiftTemplates(data.templates || []); })
+      .catch(() => { /* best-effort */ });
+  }, []);
 
   const conflicts = detectApplicationConflicts(applications, shifts);
 
@@ -88,6 +101,28 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
     });
 
     setShowCreateModal(false);
+    setSelectedTemplateId('');
+  };
+
+  const handleApplyTemplate = (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    const template = shiftTemplates.find(t => t.id === templateId);
+    if (!template) return;
+    setFormData(prev => ({
+      ...prev,
+      title: template.title,
+      branchId: template.branchId,
+      zone: template.zone,
+      timeRange: template.timeRange,
+      requiredCount: template.requiredCount,
+      skillRequired: template.skillRequired,
+      description: template.description,
+      tasks: template.tasks.join('、'),
+      locationDetails: template.locationDetails,
+      attachmentUrl: template.attachmentUrl || ''
+      // date is deliberately left untouched -- a template has no meaningful
+      // "next occurrence" date, so the admin picks that fresh each time.
+    }));
   };
 
   return (
@@ -397,7 +432,7 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
                 <p className="text-xs text-slate-500 font-sans mt-0.5">將自動嵌入 Google 地圖據點與 LINE 報名推播</p>
               </div>
               <button
-                onClick={() => setShowCreateModal(false)}
+                onClick={() => { setShowCreateModal(false); setSelectedTemplateId(''); }}
                 className="text-slate-400 hover:text-[#5A5A40] text-xl font-bold cursor-pointer"
               >
                 ✕
@@ -405,7 +440,25 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
             </div>
 
             <form onSubmit={handleSubmitCreate} className="space-y-4 text-xs font-sans">
-              
+
+              {shiftTemplates.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3">
+                  <label className="block font-bold text-amber-900 mb-1">套用過去班次範本 (選填，可省去重新輸入)</label>
+                  <select
+                    value={selectedTemplateId}
+                    onChange={e => handleApplyTemplate(e.target.value)}
+                    className="w-full p-3 bg-white border border-amber-300 rounded-2xl focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                  >
+                    <option value="">— 從空白表單開始 —</option>
+                    {shiftTemplates.map(t => (
+                      <option key={t.id} value={t.id}>
+                        {ZONE_CONFIGS[t.zone]?.icon} {t.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div>
                 <label className="block font-bold text-[#5A5A40] mb-1">班次招募名稱</label>
                 <input
@@ -522,7 +575,7 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
               <div className="pt-4 flex justify-end space-x-3 border-t border-[#5A5A40]/10">
                 <button
                   type="button"
-                  onClick={() => setShowCreateModal(false)}
+                  onClick={() => { setShowCreateModal(false); setSelectedTemplateId(''); }}
                   className="px-5 py-2.5 rounded-full font-bold text-slate-600 hover:bg-[#f5f5f0] cursor-pointer"
                 >
                   取消

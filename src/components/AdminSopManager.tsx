@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { BookOpen, Save, Plus, Trash2, FileText, Video, Upload, Loader2, ShieldAlert } from 'lucide-react';
-import { SopContent, SopSection, SopDocument, SopVideo } from '../types';
+import { BookOpen, Save, Plus, Trash2, FileText, Video, Upload, Loader2, ShieldAlert, CalendarClock } from 'lucide-react';
+import { SopContent, SopSection, SopDocument, SopVideo, ShiftTemplate } from '../types';
+import { ZONE_CONFIGS } from '../data/mockData';
 
 interface AdminSopManagerProps {
   onSendLineToast: (msg: string) => void;
@@ -41,6 +42,12 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
+  // "班次" cards -- auto-synced every time an admin publishes a shift (see
+  // App.tsx's handleCreateShift), not authored here. This section is
+  // read/delete only; there's no "新增" button since creation happens
+  // automatically via the shift-publishing flow.
+  const [shiftTemplates, setShiftTemplates] = useState<ShiftTemplate[]>([]);
+
   const [docTitle, setDocTitle] = useState('');
   const [docFile, setDocFile] = useState<File | null>(null);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
@@ -68,10 +75,28 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
       .finally(() => setIsLoading(false));
   };
 
+  const loadShiftTemplates = () => {
+    fetch('/api/shift-templates')
+      .then(res => res.json())
+      .then(data => { if (data.success) setShiftTemplates(data.templates || []); })
+      .catch(() => { /* best-effort */ });
+  };
+
   useEffect(() => {
     loadContent();
+    loadShiftTemplates();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleDeleteShiftTemplate = async (id: string) => {
+    try {
+      await fetch(`/api/admin/shift-templates/${id}`, { method: 'DELETE' });
+      setShiftTemplates(prev => prev.filter(t => t.id !== id));
+      onSendLineToast('🗑️ 已刪除該班次範本卡片。');
+    } catch {
+      onSendLineToast('⚠️ 刪除失敗，請稍後再試。');
+    }
+  };
 
   const handleSave = async () => {
     if (!content) return;
@@ -367,6 +392,47 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
           <Plus className="w-5 h-5" />
           <span>新增一組 SOP 卡片</span>
         </button>
+      </div>
+
+      {/* Shift Template Cards -- auto-synced from published shifts, read/delete only */}
+      <div className="bg-white p-6 rounded-[28px] border border-[#5A5A40]/15 shadow-xs space-y-4">
+        <div className="flex items-center gap-2 font-bold font-serif text-slate-900 text-sm border-b border-[#5A5A40]/10 pb-2">
+          <CalendarClock className="w-4 h-4 text-[#5A5A40]" />
+          <span>班次範本卡片庫</span>
+          <span className="text-[10px] font-sans font-normal text-slate-400">
+            每次在「職位與班次發布」發布新班次時自動同步建立，供發布表單的「套用過去班次範本」下拉選單使用
+          </span>
+        </div>
+
+        {shiftTemplates.length === 0 ? (
+          <p className="text-xs text-slate-400 py-6 text-center">尚無班次範本，發布過班次後會自動出現在這裡。</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {shiftTemplates.map(t => (
+              <div key={t.id} className="bg-[#fdfdfb] p-4 rounded-2xl border border-[#5A5A40]/10 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-[10px] font-extrabold bg-[#E6E2D3] text-[#5A5A40] px-2 py-0.5 rounded-full shrink-0">
+                    屬性：班次
+                  </span>
+                  <button
+                    onClick={() => handleDeleteShiftTemplate(t.id)}
+                    className="text-rose-400 hover:bg-rose-50 p-1 rounded-lg transition cursor-pointer shrink-0"
+                    title="刪除此範本卡片"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <p className="font-bold text-slate-800 text-xs leading-snug">
+                  {ZONE_CONFIGS[t.zone]?.icon} {t.title}
+                </p>
+                <div className="text-[11px] text-slate-500 space-y-0.5">
+                  <p>⏰ {t.timeRange}・👥 {t.requiredCount} 位</p>
+                  <p className="truncate">📍 {t.locationDetails}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Emergency Block */}

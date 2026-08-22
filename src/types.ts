@@ -239,3 +239,23 @@ export interface PromotionRequest {
   reviewNote?: string;
 }
 
+// A reusable "班次" (shift) template, auto-saved every time an admin publishes
+// a new shift (keyed/deduped by title -- republishing a recurring shift like
+// "大狗運動場假日牽繩放風" just refreshes its template instead of piling up
+// duplicates). Lets the create-shift form offer "套用過去班次範本" instead of
+// retyping every field from scratch each time.
+export interface ShiftTemplate {
+  id: string;
+  title: string;
+  branchId: BranchId;
+  zone: ZoneCategory;
+  timeRange: string;
+  requiredCount: number;
+  skillRequired: SkillLevel;
+  description: string;
+  tasks: string[];
+  locationDetails: string;
+  attachmentUrl?: string;
+  updatedAt: string;
+}
+
