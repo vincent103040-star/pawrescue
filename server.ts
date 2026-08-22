@@ -5,7 +5,7 @@ import { writeFileSync, mkdirSync, createWriteStream, statSync, readFileSync, un
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
-import { getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation } from './db';
+import { getAllShifts, insertShift, updateShift, deleteShift, adjustShiftCount, getAllApplications, insertApplication, updateApplicationStatus, deleteApplication, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation } from './db';
 import { PDFParse } from 'pdf-parse';
 import type { SopContent, SopDocument, SopVideo } from './src/types';
 
@@ -958,6 +958,127 @@ ${contextText}
   });
 
   // API endpoint: Volunteer roster — single source of truth for the admin roster page
+  // ==========================================================================
+  // Shifts & applications -- the server is now the source of truth for both,
+  // so a shift published on one device is immediately visible on every other.
+  // ==========================================================================
+  app.get('/api/shifts', (req, res) => {
+    try {
+      return res.json({ success: true, shifts: getAllShifts() });
+    } catch (error: any) {
+      console.error('Get Shifts Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '讀取班次失敗' });
+    }
+  });
+
+  app.post('/api/shifts', (req, res) => {
+    try {
+      const shift = req.body;
+      if (!shift?.id || !shift?.title || !shift?.date) {
+        return res.status(400).json({ success: false, error: '缺少班次必要欄位' });
+      }
+      return res.json({ success: true, shift: insertShift(shift) });
+    } catch (error: any) {
+      console.error('Create Shift Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '建立班次失敗' });
+    }
+  });
+
+  app.put('/api/shifts/:id', (req, res) => {
+    try {
+      const updated = updateShift({ ...req.body, id: req.params.id });
+      if (!updated) {
+        return res.status(404).json({ success: false, error: '找不到該班次' });
+      }
+      return res.json({ success: true, shift: updated });
+    } catch (error: any) {
+      console.error('Update Shift Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '更新班次失敗' });
+    }
+  });
+
+  app.delete('/api/shifts/:id', (req, res) => {
+    try {
+      const removed = deleteShift(req.params.id);
+      if (!removed) {
+        return res.status(404).json({ success: false, error: '找不到該班次' });
+      }
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error('Delete Shift Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '刪除班次失敗' });
+    }
+  });
+
+  app.get('/api/applications', (req, res) => {
+    try {
+      return res.json({ success: true, applications: getAllApplications() });
+    } catch (error: any) {
+      console.error('Get Applications Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '讀取報名紀錄失敗' });
+    }
+  });
+
+  // Applying both records the application and takes a seat on the shift, so the
+  // two stay consistent even if two volunteers apply from different devices at
+  // the same time -- the headcount is incremented server-side, not sent up by
+  // whichever client happened to compute it last.
+  app.post('/api/applications', (req, res) => {
+    try {
+      const application = req.body;
+      if (!application?.id || !application?.shiftId || !application?.volunteerName) {
+        return res.status(400).json({ success: false, error: '缺少報名必要欄位' });
+      }
+      const saved = insertApplication(application);
+      const shift = adjustShiftCount(application.shiftId, 1);
+      return res.json({ success: true, application: saved, shift });
+    } catch (error: any) {
+      console.error('Create Application Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '送出報名失敗' });
+    }
+  });
+
+  // Rejecting a previously-approved application frees the seat back up; the
+  // client no longer has to work that out for itself.
+  app.put('/api/applications/:id/status', (req, res) => {
+    try {
+      const { status, reviewNotes } = req.body || {};
+      if (!status) {
+        return res.status(400).json({ success: false, error: '缺少審核狀態' });
+      }
+
+      const before = getAllApplications().find(a => a.id === req.params.id);
+      if (!before) {
+        return res.status(404).json({ success: false, error: '找不到該筆報名' });
+      }
+
+      const updated = updateApplicationStatus(req.params.id, status, reviewNotes);
+      let shift = null;
+      const wasHolding = before.status === 'pending' || before.status === 'approved';
+      if (wasHolding && (status === 'rejected' || status === 'absent')) {
+        shift = adjustShiftCount(before.shiftId, -1);
+      }
+      return res.json({ success: true, application: updated, shift });
+    } catch (error: any) {
+      console.error('Update Application Status Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '更新報名狀態失敗' });
+    }
+  });
+
+  app.delete('/api/applications/:id', (req, res) => {
+    try {
+      const removed = deleteApplication(req.params.id);
+      if (!removed) {
+        return res.status(404).json({ success: false, error: '找不到該筆報名' });
+      }
+      const shift = adjustShiftCount(removed.shiftId, -1);
+      return res.json({ success: true, application: removed, shift });
+    } catch (error: any) {
+      console.error('Delete Application Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '取消報名失敗' });
+    }
+  });
+
   app.get('/api/volunteers', (req, res) => {
     try {
       return res.json({ success: true, volunteers: getAllVolunteers() });

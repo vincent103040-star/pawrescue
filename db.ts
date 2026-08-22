@@ -2,9 +2,9 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
-import { VOLUNTEER_PROFILES, INITIAL_ATTENDANCE_RECORDS, DEFAULT_SHELTER_LOCATION } from './src/data/mockData';
+import { VOLUNTEER_PROFILES, INITIAL_ATTENDANCE_RECORDS, INITIAL_SHIFTS, INITIAL_APPLICATIONS, DEFAULT_SHELTER_LOCATION } from './src/data/mockData';
 import { RULEBOOK_CORPUS } from './src/data/rulebookCorpus';
-import type { VolunteerProfile, AttendanceRecord, SopContent, SopSection, SopDocument, SopVideo, PromotionRequest, ShiftTemplate, ShelterLocation } from './src/types';
+import type { VolunteerProfile, AttendanceRecord, PositionShift, VolunteerApplication, SopContent, SopSection, SopDocument, SopVideo, PromotionRequest, ShiftTemplate, ShelterLocation } from './src/types';
 
 const dataDir = path.join(process.cwd(), 'data');
 fs.mkdirSync(dataDir, { recursive: true });
@@ -907,4 +907,205 @@ export function updateShelterLocation(updates: {
     WHERE id = 1
   `).run(next.name, next.address, next.openHours, next.googleMapsUrl, next.lat, next.lng, next.geocoded ? 1 : 0);
   return getShelterLocation();
+}
+
+// ============================================================================
+// Shifts & volunteer applications
+// ----------------------------------------------------------------------------
+// These two lived in the browser's localStorage until now, which meant a shift
+// published on the coordinator's desktop simply did not exist for a volunteer
+// on their phone -- the single biggest correctness gap in a scheduling system.
+// Moving them here makes the server the one source of truth, matching how
+// volunteers / attendance / SOP content already work.
+// ============================================================================
+db.exec(`
+  CREATE TABLE IF NOT EXISTS shifts (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    zone TEXT NOT NULL,
+    date TEXT NOT NULL,
+    timeRange TEXT NOT NULL,
+    shiftType TEXT NOT NULL,
+    requiredCount INTEGER NOT NULL,
+    currentCount INTEGER NOT NULL DEFAULT 0,
+    skillRequired TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    tasks TEXT NOT NULL DEFAULT '[]',
+    locationDetails TEXT NOT NULL DEFAULT '',
+    attachmentUrl TEXT,
+    status TEXT NOT NULL DEFAULT 'active',
+    createdAt TEXT NOT NULL
+  )
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS volunteer_applications (
+    id TEXT PRIMARY KEY,
+    shiftId TEXT NOT NULL,
+    volunteerName TEXT NOT NULL,
+    volunteerEmail TEXT NOT NULL DEFAULT '',
+    volunteerPhone TEXT NOT NULL DEFAULT '',
+    lineId TEXT NOT NULL DEFAULT '',
+    experienceLevel TEXT NOT NULL DEFAULT 'beginner',
+    appliedZone TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    appliedAt TEXT NOT NULL,
+    notes TEXT,
+    reviewNotes TEXT,
+    reviewedAt TEXT,
+    syncToCalendar INTEGER NOT NULL DEFAULT 1,
+    syncToLine INTEGER NOT NULL DEFAULT 1,
+    situationalQuestion TEXT,
+    situationalAnswer TEXT,
+    aiReadinessAssessment TEXT
+  )
+`);
+
+function rowToShift(row: any): PositionShift {
+  return {
+    id: row.id,
+    title: row.title,
+    zone: row.zone,
+    date: row.date,
+    timeRange: row.timeRange,
+    shiftType: row.shiftType,
+    requiredCount: row.requiredCount,
+    currentCount: row.currentCount,
+    skillRequired: row.skillRequired,
+    description: row.description,
+    tasks: JSON.parse(row.tasks),
+    locationDetails: row.locationDetails,
+    attachmentUrl: row.attachmentUrl || undefined,
+    status: row.status,
+    createdAt: row.createdAt
+  };
+}
+
+function rowToApplication(row: any): VolunteerApplication {
+  return {
+    id: row.id,
+    shiftId: row.shiftId,
+    volunteerName: row.volunteerName,
+    volunteerEmail: row.volunteerEmail,
+    volunteerPhone: row.volunteerPhone,
+    lineId: row.lineId,
+    experienceLevel: row.experienceLevel,
+    appliedZone: row.appliedZone,
+    status: row.status,
+    appliedAt: row.appliedAt,
+    notes: row.notes || undefined,
+    reviewNotes: row.reviewNotes || undefined,
+    reviewedAt: row.reviewedAt || undefined,
+    syncToCalendar: !!row.syncToCalendar,
+    syncToLine: !!row.syncToLine,
+    situationalQuestion: row.situationalQuestion || undefined,
+    situationalAnswer: row.situationalAnswer || undefined,
+    aiReadinessAssessment: row.aiReadinessAssessment ? JSON.parse(row.aiReadinessAssessment) : undefined
+  };
+}
+
+export function getAllShifts(): PositionShift[] {
+  const rows = db.prepare('SELECT * FROM shifts ORDER BY date ASC, timeRange ASC').all();
+  return rows.map(rowToShift);
+}
+
+export function insertShift(s: PositionShift): PositionShift {
+  db.prepare(`
+    INSERT INTO shifts (id, title, zone, date, timeRange, shiftType, requiredCount, currentCount, skillRequired, description, tasks, locationDetails, attachmentUrl, status, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    s.id, s.title, s.zone, s.date, s.timeRange, s.shiftType, s.requiredCount, s.currentCount,
+    s.skillRequired, s.description, JSON.stringify(s.tasks), s.locationDetails,
+    s.attachmentUrl || null, s.status, s.createdAt
+  );
+  return s;
+}
+
+export function updateShift(s: PositionShift): PositionShift | null {
+  const existing = db.prepare('SELECT id FROM shifts WHERE id = ?').get(s.id);
+  if (!existing) return null;
+  db.prepare(`
+    UPDATE shifts SET title = ?, zone = ?, date = ?, timeRange = ?, shiftType = ?, requiredCount = ?,
+      currentCount = ?, skillRequired = ?, description = ?, tasks = ?, locationDetails = ?,
+      attachmentUrl = ?, status = ? WHERE id = ?
+  `).run(
+    s.title, s.zone, s.date, s.timeRange, s.shiftType, s.requiredCount, s.currentCount,
+    s.skillRequired, s.description, JSON.stringify(s.tasks), s.locationDetails,
+    s.attachmentUrl || null, s.status, s.id
+  );
+  const row = db.prepare('SELECT * FROM shifts WHERE id = ?').get(s.id);
+  return row ? rowToShift(row) : null;
+}
+
+// Deleting a shift takes its applications with it -- an application pointing at
+// a shift that no longer exists would surface as a blank row in the review queue.
+export function deleteShift(id: string): boolean {
+  const existing = db.prepare('SELECT id FROM shifts WHERE id = ?').get(id);
+  if (!existing) return false;
+  db.prepare('DELETE FROM volunteer_applications WHERE shiftId = ?').run(id);
+  db.prepare('DELETE FROM shifts WHERE id = ?').run(id);
+  return true;
+}
+
+// Adjusts a shift's filled headcount, clamped so it can never fall below zero,
+// and keeps the active/full status in step with it.
+export function adjustShiftCount(shiftId: string, delta: number): PositionShift | null {
+  const row = db.prepare('SELECT * FROM shifts WHERE id = ?').get(shiftId) as any;
+  if (!row) return null;
+  const next = Math.max(0, row.currentCount + delta);
+  const status = next >= row.requiredCount ? 'full' : 'active';
+  db.prepare('UPDATE shifts SET currentCount = ?, status = ? WHERE id = ?').run(next, status, shiftId);
+  const updated = db.prepare('SELECT * FROM shifts WHERE id = ?').get(shiftId);
+  return updated ? rowToShift(updated) : null;
+}
+
+export function getAllApplications(): VolunteerApplication[] {
+  const rows = db.prepare('SELECT * FROM volunteer_applications ORDER BY appliedAt DESC').all();
+  return rows.map(rowToApplication);
+}
+
+export function insertApplication(a: VolunteerApplication): VolunteerApplication {
+  db.prepare(`
+    INSERT INTO volunteer_applications (id, shiftId, volunteerName, volunteerEmail, volunteerPhone, lineId, experienceLevel, appliedZone, status, appliedAt, notes, reviewNotes, reviewedAt, syncToCalendar, syncToLine, situationalQuestion, situationalAnswer, aiReadinessAssessment)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    a.id, a.shiftId, a.volunteerName, a.volunteerEmail || '', a.volunteerPhone || '', a.lineId || '',
+    a.experienceLevel, a.appliedZone, a.status, a.appliedAt, a.notes || null, a.reviewNotes || null,
+    a.reviewedAt || null, a.syncToCalendar ? 1 : 0, a.syncToLine ? 1 : 0,
+    a.situationalQuestion || null, a.situationalAnswer || null,
+    a.aiReadinessAssessment ? JSON.stringify(a.aiReadinessAssessment) : null
+  );
+  return a;
+}
+
+export function updateApplicationStatus(
+  id: string,
+  status: string,
+  reviewNotes?: string
+): VolunteerApplication | null {
+  const existing = db.prepare('SELECT id FROM volunteer_applications WHERE id = ?').get(id);
+  if (!existing) return null;
+  db.prepare('UPDATE volunteer_applications SET status = ?, reviewNotes = ?, reviewedAt = ? WHERE id = ?')
+    .run(status, reviewNotes || null, new Date().toLocaleString('zh-TW', { hour12: false }), id);
+  const row = db.prepare('SELECT * FROM volunteer_applications WHERE id = ?').get(id);
+  return row ? rowToApplication(row) : null;
+}
+
+export function deleteApplication(id: string): VolunteerApplication | null {
+  const row = db.prepare('SELECT * FROM volunteer_applications WHERE id = ?').get(id);
+  if (!row) return null;
+  db.prepare('DELETE FROM volunteer_applications WHERE id = ?').run(id);
+  return rowToApplication(row);
+}
+
+// Seeded from the original mock data on first run only, same pattern as the
+// volunteers and attendance tables. Placed after the insert helpers so they're
+// defined by the time this runs.
+const shiftSeedCount = db.prepare('SELECT COUNT(*) AS c FROM shifts').get() as { c: number };
+if (shiftSeedCount.c === 0) {
+  for (const s of INITIAL_SHIFTS) insertShift(s);
+}
+const applicationSeedCount = db.prepare('SELECT COUNT(*) AS c FROM volunteer_applications').get() as { c: number };
+if (applicationSeedCount.c === 0) {
+  for (const a of INITIAL_APPLICATIONS) insertApplication(a);
 }

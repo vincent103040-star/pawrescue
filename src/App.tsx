@@ -91,25 +91,12 @@ export default function App() {
   }, []);
 
   // Core Data Persistence
-  const [shifts, setShifts] = useState<PositionShift[]>(() => {
-    const saved = localStorage.getItem('paw_shifts');
-    return saved ? JSON.parse(saved) : INITIAL_SHIFTS;
-  });
-
-  const [applications, setApplications] = useState<VolunteerApplication[]>(() => {
-    const saved = localStorage.getItem('paw_applications');
-    return saved ? JSON.parse(saved) : INITIAL_APPLICATIONS;
-  });
-
-  const [volunteers, setVolunteers] = useState<VolunteerProfile[]>(() => {
-    const saved = localStorage.getItem('paw_volunteers');
-    return saved ? JSON.parse(saved) : VOLUNTEER_PROFILES;
-  });
-
-  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(() => {
-    const saved = localStorage.getItem('paw_attendance');
-    return saved ? JSON.parse(saved) : INITIAL_ATTENDANCE_RECORDS;
-  });
+  // Seeded from the mock data purely so the first paint isn't empty; the effects
+  // below immediately replace all four with the server's copy.
+  const [shifts, setShifts] = useState<PositionShift[]>(INITIAL_SHIFTS);
+  const [applications, setApplications] = useState<VolunteerApplication[]>(INITIAL_APPLICATIONS);
+  const [volunteers, setVolunteers] = useState<VolunteerProfile[]>(VOLUNTEER_PROFILES);
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(INITIAL_ATTENDANCE_RECORDS);
 
   // Load the authoritative volunteer roster from the backend (SQLite) once on mount,
   // replacing whatever was cached in localStorage / seeded from mock data.
@@ -122,6 +109,28 @@ export default function App() {
         }
       })
       .catch(() => { /* keep the locally cached roster if the backend is unreachable */ });
+  }, []);
+
+  // Shifts and applications now live server-side too. They used to be
+  // localStorage-only, which meant a shift published on the coordinator's
+  // desktop didn't exist for a volunteer on their phone. Re-fetching them is
+  // how every mutation below stays consistent across devices.
+  const refreshShifts = () =>
+    fetch('/api/shifts')
+      .then(res => res.json())
+      .then(data => { if (data.success && Array.isArray(data.shifts)) setShifts(data.shifts); })
+      .catch(() => { /* keep what's on screen if the backend is unreachable */ });
+
+  const refreshApplications = () =>
+    fetch('/api/applications')
+      .then(res => res.json())
+      .then(data => { if (data.success && Array.isArray(data.applications)) setApplications(data.applications); })
+      .catch(() => { /* keep what's on screen if the backend is unreachable */ });
+
+  useEffect(() => {
+    refreshShifts();
+    refreshApplications();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Same idea for attendance records: they used to live only in this browser's
@@ -259,21 +268,10 @@ export default function App() {
     }
   }, [volunteerSession]);
 
-  useEffect(() => {
-    localStorage.setItem('paw_shifts', JSON.stringify(shifts));
-  }, [shifts]);
-
-  useEffect(() => {
-    localStorage.setItem('paw_applications', JSON.stringify(applications));
-  }, [applications]);
-
-  useEffect(() => {
-    localStorage.setItem('paw_volunteers', JSON.stringify(volunteers));
-  }, [volunteers]);
-
-  useEffect(() => {
-    localStorage.setItem('paw_attendance', JSON.stringify(attendanceRecords));
-  }, [attendanceRecords]);
+  // Shifts, applications, volunteers and attendance are no longer mirrored into
+  // localStorage: the server owns them, and a stale local copy would silently
+  // win over fresher data on the next page load. They're re-fetched on mount and
+  // after every mutation instead.
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -456,8 +454,16 @@ export default function App() {
       createdAt: new Date().toISOString().split('T')[0]
     };
 
-    setShifts(prev => [newShift, ...prev]);
+    setShifts(prev => [newShift, ...prev]); // optimistic, reconciled by refreshShifts below
     showToast(`✅ 成功發布班次【${newShift.title}】！已有對應 Google 地圖定位與 LINE 預約卡片。`);
+
+    fetch('/api/shifts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newShift)
+    })
+      .then(() => refreshShifts())
+      .catch(() => showToast('⚠️ 班次已顯示在畫面上，但儲存到伺服器失敗，重新整理後可能會消失。'));
 
     // Best-effort: keep the reusable "班次範本" library (see AdminSopManager)
     // up to date so future shifts of the same title can be applied from the
@@ -482,6 +488,14 @@ export default function App() {
   const handleUpdateShift = (updated: PositionShift) => {
     const original = shifts.find(s => s.id === updated.id);
     setShifts(prev => prev.map(s => s.id === updated.id ? updated : s));
+
+    fetch(`/api/shifts/${encodeURIComponent(updated.id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated)
+    })
+      .then(() => refreshShifts())
+      .catch(() => showToast('⚠️ 班次修改未能存到伺服器，請重新整理確認。'));
 
     const hasScheduleChange = original && (
       original.date !== updated.date ||
@@ -509,6 +523,11 @@ export default function App() {
   const handleDeleteShift = (id: string) => {
     setShifts(prev => prev.filter(s => s.id !== id));
     showToast('🗑️ 已成功刪除該班次');
+
+    // The server also drops this shift's applications, so pull both back.
+    fetch(`/api/shifts/${encodeURIComponent(id)}`, { method: 'DELETE' })
+      .then(() => { refreshShifts(); refreshApplications(); })
+      .catch(() => showToast('⚠️ 刪除未能同步到伺服器，請重新整理確認。'));
   };
 
   // Handlers for Volunteer Applications
@@ -564,6 +583,16 @@ export default function App() {
 
     const updatedCount = Math.min(shift.requiredCount, shift.currentCount + 1);
     showToast(`🎉【${name}】報名【${shift.title}】成功！招募名額已更新（已報名 ${updatedCount}/${shift.requiredCount} 人），並自動同步至 Google 日曆與出勤清單。`);
+
+    // The server owns the headcount, so it recomputes it and we take its answer
+    // -- two volunteers applying from different devices can't overwrite it.
+    fetch('/api/applications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newApp)
+    })
+      .then(() => { refreshApplications(); refreshShifts(); })
+      .catch(() => showToast('⚠️ 報名未能存到伺服器，請重新整理確認。'));
   };
 
   const handleCancelVolunteerApplication = (appId: string) => {
@@ -587,6 +616,10 @@ export default function App() {
     }
 
     showToast('🗑️ 已成功取消該班次報名，名額已重新釋出。');
+
+    fetch(`/api/applications/${encodeURIComponent(appId)}`, { method: 'DELETE' })
+      .then(() => { refreshApplications(); refreshShifts(); })
+      .catch(() => showToast('⚠️ 取消報名未能同步到伺服器，請重新整理確認。'));
   };
 
   const handleUpdateAppStatus = (id: string, newStatus: ApplicationStatus, reviewNotes?: string) => {
@@ -631,6 +664,14 @@ export default function App() {
       }
       return app;
     }));
+
+    fetch(`/api/applications/${encodeURIComponent(id)}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus, reviewNotes })
+    })
+      .then(() => { refreshApplications(); refreshShifts(); })
+      .catch(() => showToast('⚠️ 審核結果未能同步到伺服器，請重新整理確認。'));
   };
 
   const handleAssignVolunteerToShift = (shiftId: string, volunteer: VolunteerProfile) => {
@@ -662,6 +703,14 @@ export default function App() {
       syncToLine: true
     };
     setApplications(prev => [newApp, ...prev]);
+
+    fetch('/api/applications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newApp)
+    })
+      .then(() => { refreshApplications(); refreshShifts(); })
+      .catch(() => showToast('⚠️ 直錄名單未能存到伺服器，請重新整理確認。'));
   };
 
   const pendingCount = applications.filter(a => a.status === 'pending').length;
