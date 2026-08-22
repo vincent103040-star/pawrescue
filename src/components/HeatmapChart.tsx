@@ -1,12 +1,11 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import * as d3 from 'd3';
-import { PositionShift, Branch } from '../types';
+import { PositionShift } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { Sparkles, AlertTriangle, TrendingUp, Calendar, Clock, MapPin, Zap, Info, ShieldAlert, CheckCircle2, ChevronRight, BarChart2, ChevronDown, ChevronUp, EyeOff } from 'lucide-react';
 
 interface HeatmapChartProps {
   shifts: PositionShift[];
-  branches: Branch[];
   onOpenUrgentModal?: () => void;
   onSendLineToast?: (msg: string) => void;
   isCollapsed?: boolean;
@@ -15,8 +14,6 @@ interface HeatmapChartProps {
 }
 
 interface HeatmapCellData {
-  branchId: string;
-  branchName: string;
   dayIndex: number; // 0=Mon, 6=Sun
   dayLabel: string; // e.g. "週一 (08/01)"
   timeSlotKey: string; // e.g. "08:00-11:00"
@@ -48,7 +45,6 @@ const TIME_SLOTS = [
 
 export const HeatmapChart: React.FC<HeatmapChartProps> = ({
   shifts,
-  branches,
   onOpenUrgentModal,
   onSendLineToast = () => {},
   isCollapsed = false,
@@ -60,70 +56,57 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
 
   // States
   const [metricMode, setMetricMode] = useState<'density' | 'shortage'>('shortage');
-  const [selectedBranchId, setSelectedBranchId] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<'days_x_time' | 'branches_x_days'>('days_x_time');
   const [hoveredCell, setHoveredCell] = useState<HeatmapCellData | null>(null);
 
   // Generate matrix data based on real shifts or generated historical density
   const heatmapData = useMemo(() => {
     const data: HeatmapCellData[] = [];
 
-    // Helper mock base metrics according to real shifts + realistic volunteer attendance patterns
-    branches.forEach(b => {
-      DAYS_OF_WEEK.forEach(day => {
-        TIME_SLOTS.forEach(slot => {
-          // Find matching shifts
-          const matchingShifts = shifts.filter(s => {
-            if (s.branchId !== b.id) return false;
-            if (slot.key === 'morning' && (s.timeRange.includes('08:') || s.timeRange.includes('09:') || s.timeRange.includes('10:'))) return true;
-            if (slot.key === 'noon' && (s.timeRange.includes('11:') || s.timeRange.includes('12:') || s.timeRange.includes('13:'))) return true;
-            if (slot.key === 'afternoon' && (s.timeRange.includes('14:') || s.timeRange.includes('15:') || s.timeRange.includes('16:'))) return true;
-            if (slot.key === 'evening' && (s.timeRange.includes('17:') || s.timeRange.includes('18:') || s.timeRange.includes('19:'))) return true;
-            return false;
-          });
+    DAYS_OF_WEEK.forEach(day => {
+      TIME_SLOTS.forEach(slot => {
+        // Find matching shifts
+        const matchingShifts = shifts.filter(s => {
+          if (slot.key === 'morning' && (s.timeRange.includes('08:') || s.timeRange.includes('09:') || s.timeRange.includes('10:'))) return true;
+          if (slot.key === 'noon' && (s.timeRange.includes('11:') || s.timeRange.includes('12:') || s.timeRange.includes('13:'))) return true;
+          if (slot.key === 'afternoon' && (s.timeRange.includes('14:') || s.timeRange.includes('15:') || s.timeRange.includes('16:'))) return true;
+          if (slot.key === 'evening' && (s.timeRange.includes('17:') || s.timeRange.includes('18:') || s.timeRange.includes('19:'))) return true;
+          return false;
+        });
 
-          let req = matchingShifts.reduce((acc, s) => acc + s.requiredCount, 0);
-          let filled = matchingShifts.reduce((acc, s) => acc + s.currentCount, 0);
+        let req = matchingShifts.reduce((acc, s) => acc + s.requiredCount, 0);
+        let filled = matchingShifts.reduce((acc, s) => acc + s.currentCount, 0);
 
-          // If no shifts matched directly in seed data, generate realistic baseline stats for smooth heatmap visualization
-          if (req === 0) {
-            // Weekend afternoon peak shortage scenario
-            const isWeekend = day.key >= 5;
-            const isAfternoon = slot.key === 'afternoon' || slot.key === 'evening';
-            req = isWeekend ? 10 : 6;
-            filled = isWeekend && isAfternoon ? 3 : (isWeekend ? 6 : (day.key % 2 === 0 ? 5 : 4));
-            
-            // Cat Island branch weekend afternoon high shortage
-            if (b.id === 'cat_island' && isWeekend && isAfternoon) {
-              filled = 2; // 2/10 -> 80% shortage
-            }
-          }
+        // If no shifts matched directly in seed data, generate realistic baseline stats for smooth heatmap visualization
+        if (req === 0) {
+          // Weekend afternoon peak shortage scenario
+          const isWeekend = day.key >= 5;
+          const isAfternoon = slot.key === 'afternoon' || slot.key === 'evening';
+          req = isWeekend ? 10 : 6;
+          filled = isWeekend && isAfternoon ? 3 : (isWeekend ? 6 : (day.key % 2 === 0 ? 5 : 4));
+        }
 
-          const gap = Math.max(0, req - filled);
-          const fillRate = req > 0 ? Math.round((filled / req) * 100) : 100;
-          const shortageRate = req > 0 ? Math.round((gap / req) * 100) : 0;
-          const isPeakShortage = shortageRate >= 50;
+        const gap = Math.max(0, req - filled);
+        const fillRate = req > 0 ? Math.round((filled / req) * 100) : 100;
+        const shortageRate = req > 0 ? Math.round((gap / req) * 100) : 0;
+        const isPeakShortage = shortageRate >= 50;
 
-          data.push({
-            branchId: b.id,
-            branchName: b.name,
-            dayIndex: day.key,
-            dayLabel: day.label,
-            timeSlotKey: slot.key,
-            timeSlotLabel: slot.label,
-            totalRequired: req,
-            totalFilled: filled,
-            gap,
-            fillRate,
-            shortageRate,
-            isPeakShortage
-          });
+        data.push({
+          dayIndex: day.key,
+          dayLabel: day.label,
+          timeSlotKey: slot.key,
+          timeSlotLabel: slot.label,
+          totalRequired: req,
+          totalFilled: filled,
+          gap,
+          fillRate,
+          shortageRate,
+          isPeakShortage
         });
       });
     });
 
     return data;
-  }, [shifts, branches]);
+  }, [shifts]);
 
   // Aggregate Top Peak Shortage slots
   const topShortagePeaks = useMemo(() => {
@@ -137,11 +120,7 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
   useEffect(() => {
     if (!svgRef.current) return;
 
-    // Filter data if single branch selected
-    let displayData = heatmapData;
-    if (selectedBranchId !== 'all') {
-      displayData = heatmapData.filter(d => d.branchId === selectedBranchId);
-    }
+    const displayData = heatmapData;
 
     const svg = d3.select(svgRef.current);
     svg.selectAll('*').remove(); // Clear previous render
@@ -155,19 +134,9 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
       .append('g')
       .attr('transform', `translate(${margin.left},${margin.top})`);
 
-    // Define X and Y domains based on viewMode
-    let xDomain: string[] = [];
-    let yDomain: string[] = [];
-
-    if (viewMode === 'days_x_time') {
-      // X = Time slots, Y = Days
-      xDomain = TIME_SLOTS.map(t => t.label.split(' ')[0]); // "早班", "午班", etc.
-      yDomain = DAYS_OF_WEEK.map(d => d.label.split(' ')[0]); // "週一", "週二", etc.
-    } else {
-      // X = Days, Y = Branches
-      xDomain = DAYS_OF_WEEK.map(d => d.label.split(' ')[0]);
-      yDomain = branches.map(b => b.name);
-    }
+    // X = Time slots, Y = Days
+    const xDomain = TIME_SLOTS.map(t => t.label.split(' ')[0]); // "早班", "午班", etc.
+    const yDomain = DAYS_OF_WEEK.map(d => d.label.split(' ')[0]); // "週一", "週二", etc.
 
     // Scales
     const xScale = d3.scaleBand()
@@ -217,16 +186,8 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
     const cellAggregates: Map<string, { value: number; fillRate: number; gap: number; req: number; filled: number; items: HeatmapCellData[] }> = new Map();
 
     displayData.forEach(d => {
-      let xKey = '';
-      let yKey = '';
-
-      if (viewMode === 'days_x_time') {
-        xKey = d.timeSlotLabel.split(' ')[0];
-        yKey = d.dayLabel.split(' ')[0];
-      } else {
-        xKey = d.dayLabel.split(' ')[0];
-        yKey = d.branchName;
-      }
+      const xKey = d.timeSlotLabel.split(' ')[0];
+      const yKey = d.dayLabel.split(' ')[0];
 
       const cellKey = `${xKey}___${yKey}`;
       if (!cellAggregates.has(cellKey)) {
@@ -326,7 +287,7 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
       setHoveredCell(null);
     });
 
-  }, [heatmapData, metricMode, selectedBranchId, viewMode, branches]);
+  }, [heatmapData, metricMode]);
 
   return (
     <div
@@ -358,7 +319,7 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
             </div>
             {!isCollapsed && (
               <p className="text-xs text-slate-500 mt-1">
-                視覺化展示近一週各據點、時段的志工排班到勤率與缺工高峰趨勢，輔助社工進行高精準度調度。
+                視覺化展示近一週各時段的志工排班到勤率與缺工高峰趨勢，輔助社工進行高精準度調度。
               </p>
             )}
           </div>
@@ -368,40 +329,6 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
         <div className="flex flex-wrap items-center gap-2 text-xs self-end lg:self-auto">
           {!isCollapsed && (
             <>
-              {/* Branch Filter Dropdown */}
-              <select
-                value={selectedBranchId}
-                onChange={(e) => setSelectedBranchId(e.target.value)}
-                className="bg-[#f5f5f0] border border-[#5A5A40]/20 text-slate-800 font-bold px-3 py-1.5 rounded-xl text-xs focus:outline-hidden"
-              >
-                <option value="all">🏢 所有據點總覽</option>
-                {branches.map(b => (
-                  <option key={b.id} value={b.id}>📍 {b.name}</option>
-                ))}
-              </select>
-
-              {/* Matrix Dimension Toggle */}
-              <div className="flex items-center bg-slate-100 p-1 rounded-xl">
-                <button
-                  type="button"
-                  onClick={() => setViewMode('days_x_time')}
-                  className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
-                    viewMode === 'days_x_time' ? 'bg-white text-[#5A5A40] shadow-2xs' : 'text-slate-600'
-                  }`}
-                >
-                  📅 一週各天 x 時段
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode('branches_x_days')}
-                  className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
-                    viewMode === 'branches_x_days' ? 'bg-white text-[#5A5A40] shadow-2xs' : 'text-slate-600'
-                  }`}
-                >
-                  🏢 各據點 x 一週
-                </button>
-              </div>
-
               {/* Metric Mode Toggle */}
               <div className="flex items-center bg-slate-100 p-1 rounded-xl">
                 <button
@@ -475,7 +402,7 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
             <span className="font-bold text-[#5A5A40] shrink-0">📌 熱力圖摘要：</span>
             <span className="text-slate-600 truncate">
               {topShortagePeaks.length > 0 
-                ? `🚨 尖峰缺工：${topShortagePeaks[0].branchName} ${topShortagePeaks[0].dayLabel} (${topShortagePeaks[0].timeSlotLabel} 缺 ${topShortagePeaks[0].gap} 人，缺額率 ${topShortagePeaks[0].shortageRate}%)`
+                ? `🚨 尖峰缺工：${topShortagePeaks[0].dayLabel} (${topShortagePeaks[0].timeSlotLabel} 缺 ${topShortagePeaks[0].gap} 人，缺額率 ${topShortagePeaks[0].shortageRate}%)`
                 : '全園區時段人力充足'}
             </span>
           </div>
@@ -528,7 +455,6 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
 
             {hoveredCell ? (
               <div className="space-y-2 pt-1">
-                <div className="font-bold text-slate-900 text-sm">{hoveredCell.branchName}</div>
                 <div className="text-xs text-slate-600 space-y-1">
                   <div>📅 日期時間：<strong>{hoveredCell.dayLabel}</strong> ({hoveredCell.timeSlotLabel})</div>
                   <div>👥 志工需求：需求 <strong>{hoveredCell.totalRequired}</strong> 人 / 已到 <strong>{hoveredCell.totalFilled}</strong> 人</div>
@@ -567,10 +493,10 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
                   <div>
                     <div className="font-bold text-slate-900 flex items-center gap-1">
                       <span className="text-rose-600 font-extrabold">#{pIdx + 1}</span>
-                      <span>{peak.branchName}</span>
+                      <span>{peak.dayLabel}</span>
                     </div>
                     <div className="text-[11px] text-slate-500">
-                      {peak.dayLabel} ({peak.timeSlotLabel.split(' ')[0]})
+                      {peak.timeSlotLabel}
                     </div>
                   </div>
 

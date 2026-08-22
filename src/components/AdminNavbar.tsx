@@ -1,13 +1,10 @@
 import React from 'react';
-import { PawPrint, Calendar, MapPin, Shield, UserCheck, PlusCircle, Sparkles, Building2, QrCode, BookOpen, LogOut, User } from 'lucide-react';
-import { BranchId, Branch, AdminUserSession } from '../types';
+import { PawPrint, Calendar, Shield, UserCheck, PlusCircle, Sparkles, QrCode, BookOpen, LogOut, User } from 'lucide-react';
+import { AdminUserSession } from '../types';
 
 interface AdminNavbarProps {
   activeTab: 'dashboard' | 'positions' | 'applications' | 'roster' | 'sopManager';
   setActiveTab: (tab: 'dashboard' | 'positions' | 'applications' | 'roster' | 'sopManager') => void;
-  selectedBranch: BranchId | 'all';
-  setSelectedBranch: (branch: BranchId | 'all') => void;
-  branches: Branch[];
   pendingCount: number;
   openCreateModal: () => void;
   openCheckInModal?: () => void;
@@ -19,9 +16,6 @@ interface AdminNavbarProps {
 export const AdminNavbar: React.FC<AdminNavbarProps> = ({
   activeTab,
   setActiveTab,
-  selectedBranch,
-  setSelectedBranch,
-  branches,
   pendingCount,
   openCreateModal,
   openCheckInModal,
@@ -80,36 +74,6 @@ export const AdminNavbar: React.FC<AdminNavbarProps> = ({
               </div>
               <p className="text-xs text-slate-500 font-sans">缺工預警 &bull; 班次發布 &bull; 報名審核 &bull; 人才庫管理</p>
             </div>
-          </div>
-
-          {/* Branch Selector */}
-          <div className="hidden md:flex items-center bg-[#f5f5f0] p-1.5 rounded-2xl border border-[#5A5A40]/10 text-xs font-medium">
-            <span className="px-2.5 text-[#5A5A40] font-bold flex items-center gap-1">
-              <Building2 className="w-3.5 h-3.5" /> 院區：
-            </span>
-            <button
-              onClick={() => setSelectedBranch('all')}
-              className={`px-3 py-1.5 rounded-xl transition cursor-pointer ${
-                selectedBranch === 'all'
-                  ? 'bg-[#5A5A40] text-white shadow-xs font-bold'
-                  : 'text-slate-600 hover:text-[#5A5A40]'
-              }`}
-            >
-              全部據點 (3)
-            </button>
-            {branches.map((b) => (
-              <button
-                key={b.id}
-                onClick={() => setSelectedBranch(b.id)}
-                className={`px-3 py-1.5 rounded-xl transition cursor-pointer ${
-                  selectedBranch === b.id
-                    ? 'bg-[#5A5A40] text-white shadow-xs font-bold'
-                    : 'text-slate-600 hover:text-[#5A5A40]'
-                }`}
-              >
-                {b.name.split(' ')[0]}
-              </button>
-            ))}
           </div>
 
           {/* Quick Action Button */}

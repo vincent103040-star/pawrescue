@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { VolunteerApplication, PositionShift, Branch, ApplicationStatus } from '../types';
+import { VolunteerApplication, PositionShift, ApplicationStatus } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { detectApplicationConflicts } from '../utils/conflictChecker';
 import { ConflictCheckModal } from './ConflictCheckModal';
@@ -10,7 +10,6 @@ import { sendLinePush } from '../utils/linePush';
 interface ApplicantReviewProps {
   applications: VolunteerApplication[];
   shifts: PositionShift[];
-  branches: Branch[];
   onUpdateStatus: (id: string, newStatus: ApplicationStatus, reviewNotes?: string) => void;
   onSendLineToast: (msg: string) => void;
 }
@@ -18,7 +17,6 @@ interface ApplicantReviewProps {
 export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
   applications,
   shifts,
-  branches,
   onUpdateStatus,
   onSendLineToast
 }) => {
@@ -208,7 +206,6 @@ export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
                 filteredApps.map(app => {
                   const shift = shifts.find(s => s.id === app.shiftId);
                   const zoneConf = ZONE_CONFIGS[app.appliedZone];
-                  const branch = branches.find(b => b?.id === shift?.branchId);
                   const conflictForApp = conflicts.find(c => c.app1.id === app.id || c.app2.id === app.id);
                   const hasConflict = !!conflictForApp;
 
@@ -298,8 +295,8 @@ export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
                                   title: `🐾 志工班次：${shift.title}`,
                                   date: shift.date,
                                   timeRange: shift.timeRange,
-                                  location: shift.locationDetails || branch?.name || '浪浪家園',
-                                  details: `浪浪家園志工服務班次\n地點：${branch?.name || ''}\n任務：${(shift.tasks || []).join('、')}`
+                                  location: shift.locationDetails || '浪浪家園',
+                                  details: `浪浪家園志工服務班次\n地點：${shift.locationDetails || ''}\n任務：${(shift.tasks || []).join('、')}`
                                 })}
                                 target="_blank"
                                 rel="noopener noreferrer"
@@ -453,7 +450,6 @@ export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
         <ConflictCheckModal
           applications={applications}
           shifts={shifts}
-          branches={branches}
           onClose={() => setShowConflictModal(false)}
           onRejectApplication={(appId, notes) => {
             onUpdateStatus(appId, 'rejected', notes);

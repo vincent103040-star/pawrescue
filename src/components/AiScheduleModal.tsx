@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
-import { PositionShift, VolunteerProfile, Branch } from '../types';
+import { PositionShift, VolunteerProfile } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { Sparkles, Users, Award, Clock, Send, CheckCircle2, Trophy, Star, Shield, Filter, ArrowRight, Zap, Check, MessageSquare, AlertCircle, X } from 'lucide-react';
 
 interface AiScheduleModalProps {
   shift: PositionShift;
   volunteers: VolunteerProfile[];
-  branches: Branch[];
   onClose: () => void;
   onSendLineToast: (msg: string) => void;
   onAssignVolunteer?: (shiftId: string, volunteer: VolunteerProfile) => void;
@@ -15,7 +14,6 @@ interface AiScheduleModalProps {
 export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({
   shift,
   volunteers,
-  branches,
   onClose,
   onSendLineToast,
   onAssignVolunteer
@@ -25,7 +23,6 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({
   const [sortBy, setSortBy] = useState<'ai_score' | 'hours_desc' | 'shifts_desc'>('ai_score');
 
   const zoneConf = ZONE_CONFIGS[shift.zone];
-  const branch = branches.find(b => b.id === shift.branchId);
 
   // AI Matching Algorithm calculating match score for each volunteer
   const rankedVolunteers = volunteers.map(vol => {
@@ -158,7 +155,7 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({
               <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${zoneConf?.badgeBg}`}>
                 {zoneConf?.icon} {zoneConf?.name}
               </span>
-              <span className="text-xs font-bold text-slate-700">{branch?.name}</span>
+              <span className="text-xs font-bold text-slate-700">{shift.locationDetails}</span>
             </div>
             <h4 className="font-bold text-slate-900 text-base">{shift.title}</h4>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">

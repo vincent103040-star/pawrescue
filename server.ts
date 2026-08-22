@@ -5,7 +5,7 @@ import { writeFileSync, mkdirSync } from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
-import { getAllVolunteers, getVolunteerByEmail, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate } from './db';
+import { getAllVolunteers, getVolunteerByEmail, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation } from './db';
 import { PDFParse } from 'pdf-parse';
 import type { SopContent, SopDocument, SopVideo } from './src/types';
 
@@ -196,65 +196,34 @@ async function startServer() {
     }
   });
 
-  // API endpoint: AI Resource & Shortage Warning Prediction using Gemini API
+  // API endpoint: AI Resource & Shortage Warning Prediction using Gemini API.
+  // Used to compare 3 hardcoded branches -- now a single shelter, so the
+  // request/response shape is one stats object in, one prediction object out.
   app.post('/api/ai/predict-resource-gaps', async (req, res) => {
     try {
-      const { branchData } = req.body;
+      const { shelterData } = req.body;
 
       const apiKey = process.env.GEMINI_API_KEY;
 
-      if (!apiKey) {
-        // High quality fallback predictions
-        const fallbackPredictions = [
-          {
-            branchId: 'halfway',
-            branchName: '草山狗園中途之家 (陽明山)',
-            riskLevel: 'critical',
-            severityScore: 88,
-            animalCount: 107,
-            shortageRate: 62,
-            predictedManpowerGap: '預測下週缺 18 人次（大狗運動場放風 10 人、醫療區復健 8 人），週末最為告急',
-            predictedMaterialGap: '大犬成犬飼料急缺 60 kg、止血與傷口紗布短缺 30 包、大號胸背牽繩短缺 10 條',
-            urgentActions: [
-              '即刻向 LINE 志工群組發布陽明山狗園『假日大狗放風急召』推播',
-              '建議由新店總部緊急調撥 30 kg 成犬飼料與醫療防護器材至草山據點'
-            ]
-          },
-          {
-            branchId: 'cat_island',
-            branchName: '貓島中途分院 (淡水館)',
-            riskLevel: 'warning',
-            severityScore: 65,
-            animalCount: 80,
-            shortageRate: 45,
-            predictedManpowerGap: '預測下週缺 8 人次（幼貓育幼與親人陪伴 5 人、貓房清潔 3 人）',
-            predictedMaterialGap: '主食貓罐頭短缺 80 罐、豆腐貓砂急缺 15 包、幼貓專用泡奶粉 5 罐',
-            urgentActions: [
-              '啟動淡水分院假日參訪志工現場彈性招募機制',
-              '請物資整理組優先將民眾捐贈貓砂轉運至淡水館'
-            ]
-          },
-          {
-            branchId: 'main',
-            branchName: '浪浪總部園區 (新店本館)',
-            riskLevel: 'normal',
-            severityScore: 25,
-            animalCount: 247,
-            shortageRate: 28,
-            predictedManpowerGap: '預測下週僅缺 5 人次（主要為醫療觀察區資深志工與幼犬溫室班）',
-            predictedMaterialGap: '物資儲備充足，僅需補充幼犬尿墊 20 包與洗狗藥用泡泡露 5 瓶',
-            urgentActions: [
-              '維持常態運作，可作為物資調撥中繼樞紐支援陽明山與淡水據點',
-              '加強資深志工二階段醫療照護技能培訓認證'
-            ]
-          }
-        ];
+      const fallbackPrediction = {
+        riskLevel: 'warning',
+        severityScore: 58,
+        animalCount: 434,
+        shortageRate: 42,
+        predictedManpowerGap: '預測下週缺 22 人次（大狗運動場放風 10 人、幼貓育幼陪伴 5 人、醫療區復健 7 人），週末最為告急',
+        predictedMaterialGap: '大犬成犬飼料急缺 60 kg、主食貓罐頭短缺 80 罐、止血與傷口紗布短缺 30 包',
+        urgentActions: [
+          '即刻向 LINE 志工群組發布假日班次急召推播',
+          '請物資整理組優先分類最新一批捐贈物資，補上飼料與紗布缺口'
+        ]
+      };
 
+      if (!apiKey) {
         return res.json({
           success: true,
           isFallback: true,
-          globalSummary: '根據目前 3 個據點共 434 隻浪浪與下週志工班次缺工率分析，草山狗園（陽明山）面臨最高物資與人力雙重短缺風險，建議優先開啟跨據點資源調撥機制。',
-          predictions: fallbackPredictions
+          globalSummary: '根據目前園區共 434 隻浪浪與下週志工班次缺工率分析，人力與物資皆面臨中度短缺風險，建議優先開啟急召推播與物資整理排程。',
+          prediction: fallbackPrediction
         });
       }
 
@@ -264,27 +233,23 @@ async function startServer() {
       });
 
       const prompt = `你是一位專業的流浪動物之家營運總監與 AI 物資人力預警專家。
-請根據以下各據點的當前動物數量、班次缺工率與場域狀況，以 JSON 格式預測下一週（7天）的「人力缺口」與「物資缺口」，並給出緊急處置建議。
+請根據以下園區的當前動物數量、班次缺工率與場域狀況，以 JSON 格式預測下一週（7天）的「人力缺口」與「物資缺口」，並給出緊急處置建議。
 
-各據點實時數據：
-${JSON.stringify(branchData, null, 2)}
+園區實時數據：
+${JSON.stringify(shelterData, null, 2)}
 
 請務必以【純 JSON 格式】回覆（不要包含 markdown \`\`\`json 或額外開頭結尾文字），格式如下：
 {
   "globalSummary": "簡短 80 字內的全園區營運風險總評與建議重點",
-  "predictions": [
-    {
-      "branchId": "據點ID",
-      "branchName": "據點名稱",
-      "riskLevel": "critical 或 warning 或 normal",
-      "severityScore": 0到100的數值,
-      "animalCount": 動物數量,
-      "shortageRate": 缺工率百分比數值,
-      "predictedManpowerGap": "預測人力缺口說明",
-      "predictedMaterialGap": "預測物資缺口說明（含具體數量如幾公斤飼料、幾罐罐頭）",
-      "urgentActions": ["具體建議1", "具體建議2"]
-    }
-  ]
+  "prediction": {
+    "riskLevel": "critical 或 warning 或 normal",
+    "severityScore": 0到100的數值,
+    "animalCount": 動物數量,
+    "shortageRate": 缺工率百分比數值,
+    "predictedManpowerGap": "預測人力缺口說明",
+    "predictedMaterialGap": "預測物資缺口說明（含具體數量如幾公斤飼料、幾罐罐頭）",
+    "urgentActions": ["具體建議1", "具體建議2"]
+  }
 }`;
 
       const response = await ai.models.generateContent({
@@ -301,54 +266,20 @@ ${JSON.stringify(branchData, null, 2)}
         console.warn('Failed to parse Gemini JSON output, using clean fallback');
       }
 
-      if (parsed && parsed.predictions) {
+      if (parsed && parsed.prediction) {
         return res.json({
           success: true,
           isFallback: false,
           globalSummary: parsed.globalSummary,
-          predictions: parsed.predictions
+          prediction: parsed.prediction
         });
       }
 
       return res.json({
         success: true,
         isFallback: true,
-        globalSummary: 'Gemini AI 完成分析：草山狗園（陽明山）與淡水貓島分院下週面臨人力與物資吃緊預警，需立即發布 LINE 急召與物資調撥。',
-        predictions: [
-          {
-            branchId: 'halfway',
-            branchName: '草山狗園中途之家 (陽明山)',
-            riskLevel: 'critical',
-            severityScore: 88,
-            animalCount: 107,
-            shortageRate: 62,
-            predictedManpowerGap: '預測下週缺 18 人次大狗運動場放風與醫療復健志工',
-            predictedMaterialGap: '大犬成犬飼料急缺 60 kg、止血紗布短缺 30 包',
-            urgentActions: ['發布陽明山假日動員 LINE 廣播', '調撥新店總部備用飼料']
-          },
-          {
-            branchId: 'cat_island',
-            branchName: '貓島中途分院 (淡水館)',
-            riskLevel: 'warning',
-            severityScore: 65,
-            animalCount: 80,
-            shortageRate: 45,
-            predictedManpowerGap: '預測下週缺 8 人次幼貓育幼與陪伴志工',
-            predictedMaterialGap: '主食罐頭短缺 80 罐、豆腐貓砂急缺 15 包',
-            urgentActions: ['開啟淡水館現場遊客彈性體驗', '撥補貓砂與幼貓奶粉']
-          },
-          {
-            branchId: 'main',
-            branchName: '浪浪總部園區 (新店本館)',
-            riskLevel: 'normal',
-            severityScore: 25,
-            animalCount: 247,
-            shortageRate: 28,
-            predictedManpowerGap: '預測下週僅缺 5 人次醫療觀察班',
-            predictedMaterialGap: '物資充裕，僅需補幼犬尿墊 20 包',
-            urgentActions: ['作為資材調撥中繼站', '開辦志工二階段進修']
-          }
-        ]
+        globalSummary: 'Gemini AI 完成分析：園區下週面臨人力與物資吃緊預警，需立即發布 LINE 急召與物資整理排程。',
+        prediction: fallbackPrediction
       });
 
     } catch (error: any) {
@@ -356,42 +287,16 @@ ${JSON.stringify(branchData, null, 2)}
       return res.json({
         success: true,
         isFallback: true,
-        globalSummary: '草山狗園（陽明山）與淡水貓島分院下週面臨人力與物資吃緊預警，建議儘速啟動 LINE 志工動員令與物資調撥支援。',
-        predictions: [
-          {
-            branchId: 'halfway',
-            branchName: '草山狗園中途之家 (陽明山)',
-            riskLevel: 'critical',
-            severityScore: 88,
-            animalCount: 107,
-            shortageRate: 62,
-            predictedManpowerGap: '預測下週缺 18 人次（大狗運動場放風 10 人、醫療區復健 8 人）',
-            predictedMaterialGap: '大犬成犬飼料急缺 60 kg、止血紗布短缺 30 包',
-            urgentActions: ['發布陽明山假日動員 LINE 廣播', '調撥新店總部備用飼料']
-          },
-          {
-            branchId: 'cat_island',
-            branchName: '貓島中途分院 (淡水館)',
-            riskLevel: 'warning',
-            severityScore: 65,
-            animalCount: 80,
-            shortageRate: 45,
-            predictedManpowerGap: '預測下週缺 8 人次幼貓育幼與陪伴志工',
-            predictedMaterialGap: '主食罐頭短缺 80 罐、豆腐貓砂急缺 15 包',
-            urgentActions: ['開啟淡水館現場遊客彈性體驗', '撥補貓砂與幼貓奶粉']
-          },
-          {
-            branchId: 'main',
-            branchName: '浪浪總部園區 (新店本館)',
-            riskLevel: 'normal',
-            severityScore: 25,
-            animalCount: 247,
-            shortageRate: 28,
-            predictedManpowerGap: '預測下週僅缺 5 人次醫療觀察班',
-            predictedMaterialGap: '物資充裕，僅需補幼犬尿墊 20 包',
-            urgentActions: ['作為資材調撥中繼站', '開辦志工二階段進修']
-          }
-        ]
+        globalSummary: '園區下週面臨人力與物資吃緊預警，建議儘速啟動 LINE 志工動員令與物資整理排程。',
+        prediction: {
+          riskLevel: 'warning',
+          severityScore: 58,
+          animalCount: 434,
+          shortageRate: 42,
+          predictedManpowerGap: '預測下週缺 22 人次（大狗運動場放風 10 人、幼貓育幼陪伴 5 人、醫療區復健 7 人）',
+          predictedMaterialGap: '大犬成犬飼料急缺 60 kg、主食貓罐頭短缺 80 罐、止血紗布短缺 30 包',
+          urgentActions: ['發布假日動員 LINE 廣播', '整理最新一批捐贈物資補上缺口']
+        }
       });
     }
   });
@@ -1159,12 +1064,12 @@ ${contextText}
 
   app.post('/api/shift-templates/sync', (req, res) => {
     try {
-      const { title, branchId, zone, timeRange, requiredCount, skillRequired, description, tasks, locationDetails, attachmentUrl } = req.body;
-      if (!title || !branchId || !zone || !timeRange || !requiredCount || !skillRequired) {
+      const { title, zone, timeRange, requiredCount, skillRequired, description, tasks, locationDetails, attachmentUrl } = req.body;
+      if (!title || !zone || !timeRange || !requiredCount || !skillRequired) {
         return res.status(400).json({ success: false, error: '缺少班次範本所需欄位' });
       }
       const template = upsertShiftTemplate({
-        title, branchId, zone, timeRange,
+        title, zone, timeRange,
         requiredCount: Number(requiredCount),
         skillRequired, description: description || '',
         tasks: Array.isArray(tasks) ? tasks : [],
@@ -1473,6 +1378,72 @@ ${contextText}
       return res.json({ success: true, linked: !!linked, lineDisplayName: linked?.lineDisplayName || null });
     } catch (error: any) {
       return res.status(500).json({ success: false, error: error.message || '查詢失敗' });
+    }
+  });
+
+  // The shelter's single physical location (previously 3 fixed hardcoded
+  // "branches" -- that whole architecture was removed since the org only
+  // ever operates from one place). GET is public (volunteers need the
+  // address/hours/map link); PUT is admin-only and re-geocodes the address
+  // via Google Maps whenever GOOGLE_MAPS_API_KEY is configured, matching
+  // this app's established real-API-with-graceful-fallback pattern (see
+  // GEMINI_API_KEY / LINE_CHANNEL_ACCESS_TOKEN elsewhere in this file).
+  app.get('/api/shelter-location', (req, res) => {
+    try {
+      return res.json({ success: true, location: getShelterLocation() });
+    } catch (error: any) {
+      console.error('Fetch Shelter Location Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '讀取地點失敗' });
+    }
+  });
+
+  app.put('/api/admin/shelter-location', async (req, res) => {
+    try {
+      const { name, address, openHours } = req.body;
+      if (!name || !address || !openHours) {
+        return res.status(400).json({ success: false, error: '缺少名稱、地址或開放時間' });
+      }
+
+      const mapsKey = process.env.GOOGLE_MAPS_API_KEY;
+      let geocodeResult: { lat: number; lng: number; googleMapsUrl: string; geocoded: boolean } | null = null;
+
+      if (mapsKey) {
+        try {
+          const geoRes = await fetch(
+            `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${mapsKey}`
+          );
+          const geoData: any = await geoRes.json();
+          const loc = geoData?.results?.[0]?.geometry?.location;
+          if (geoData.status === 'OK' && loc) {
+            geocodeResult = {
+              lat: loc.lat,
+              lng: loc.lng,
+              googleMapsUrl: `https://maps.google.com/?q=${loc.lat},${loc.lng}`,
+              geocoded: true
+            };
+          } else {
+            console.warn('Geocode API returned no result:', geoData.status);
+          }
+        } catch (geoErr) {
+          console.warn('Geocode API call failed:', geoErr);
+        }
+      }
+
+      const updated = updateShelterLocation({
+        name, address, openHours,
+        ...(geocodeResult ? { lat: geocodeResult.lat, lng: geocodeResult.lng, googleMapsUrl: geocodeResult.googleMapsUrl, geocoded: true } : { geocoded: false })
+      });
+
+      return res.json({
+        success: true,
+        location: updated,
+        note: mapsKey
+          ? (geocodeResult ? undefined : '地址定位失敗，地圖座標維持原樣，請確認地址是否正確')
+          : 'GOOGLE_MAPS_API_KEY 尚未設定，地圖座標維持原樣未重新定位'
+      });
+    } catch (error: any) {
+      console.error('Update Shelter Location Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '更新地點失敗' });
     }
   });
 

@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { PositionShift, Branch } from '../types';
+import { PositionShift, ShelterLocation } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { Sparkles, AlertTriangle, Send, CheckCircle2, Copy, RefreshCw, X, MessageSquare, ArrowRight, ShieldAlert, Zap, MapPin, Calendar, Clock, Check } from 'lucide-react';
 import { sendLineBroadcast } from '../utils/linePush';
 
 interface UrgentShortageModalProps {
   shifts: PositionShift[];
-  branches: Branch[];
+  shelterLocation: ShelterLocation;
   onClose: () => void;
   onSendLineToast: (msg: string) => void;
   onApplyForShift: (shiftId: string) => void;
@@ -14,7 +14,7 @@ interface UrgentShortageModalProps {
 
 export const UrgentShortageModal: React.FC<UrgentShortageModalProps> = ({
   shifts,
-  branches,
+  shelterLocation,
   onClose,
   onSendLineToast,
   onApplyForShift
@@ -39,7 +39,6 @@ export const UrgentShortageModal: React.FC<UrgentShortageModalProps> = ({
 
   const activeShift = shifts.find(s => s.id === selectedShiftId) || urgentShifts[0] || shifts[0];
   const zoneConf = activeShift ? ZONE_CONFIGS[activeShift.zone] : null;
-  const branch = activeShift ? branches.find(b => b.id === activeShift.branchId) : null;
 
   const gap = activeShift ? activeShift.requiredCount - activeShift.currentCount : 0;
   const shortageRate = activeShift && activeShift.requiredCount > 0
@@ -52,7 +51,6 @@ export const UrgentShortageModal: React.FC<UrgentShortageModalProps> = ({
     setCopied(false);
     setSentCount(null);
 
-    const shiftBranch = branches.find(b => b.id === shiftObj.branchId);
     const shiftZone = ZONE_CONFIGS[shiftObj.zone];
     const shiftGap = shiftObj.requiredCount - shiftObj.currentCount;
     const shiftRate = Math.round((shiftGap / shiftObj.requiredCount) * 100);
@@ -64,7 +62,7 @@ export const UrgentShortageModal: React.FC<UrgentShortageModalProps> = ({
         body: JSON.stringify({
           title: shiftObj.title,
           zoneName: shiftZone?.name || '園區場域',
-          branchName: shiftBranch?.name || '浪浪家園',
+          branchName: shelterLocation.name || '浪浪家園',
           date: shiftObj.date,
           timeRange: shiftObj.timeRange,
           requiredCount: shiftObj.requiredCount,
@@ -85,7 +83,7 @@ export const UrgentShortageModal: React.FC<UrgentShortageModalProps> = ({
       // Fallback
       setPushText(
         `🚨【緊急缺工動員令｜急需支援志工】🐾\n\n` +
-        `各位浪浪後援會志工好！【${shiftBranch?.name || '浪浪家園'}】的【${shiftObj.title}】目前人力缺額已高達 ${shiftRate}%（僅 ${shiftObj.currentCount}/${shiftObj.requiredCount} 人到位）！\n\n` +
+        `各位浪浪後援會志工好！【${shelterLocation.name || '浪浪家園'}】的【${shiftObj.title}】目前人力缺額已高達 ${shiftRate}%（僅 ${shiftObj.currentCount}/${shiftObj.requiredCount} 人到位）！\n\n` +
         `毛孩們急需補齊救援神隊友！誠摯邀請能出勤的志工前來支援安撫與照顧！\n\n` +
         `📍 服務區域：${shiftZone?.name || '園區場域'}\n` +
         `📅 服務時間：${shiftObj.date} ${shiftObj.timeRange}\n` +
@@ -225,7 +223,7 @@ export const UrgentShortageModal: React.FC<UrgentShortageModalProps> = ({
                   <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${zoneConf?.badgeBg}`}>
                     {zoneConf?.icon} {zoneConf?.name}
                   </span>
-                  <span className="text-xs font-bold text-slate-700">{branch?.name}</span>
+                  <span className="text-xs font-bold text-slate-700">{activeShift.locationDetails}</span>
                 </div>
                 <h4 className="font-bold text-slate-900 text-base">{activeShift.title}</h4>
                 <div className="flex items-center gap-4 text-xs text-slate-600">
@@ -386,7 +384,7 @@ export const UrgentShortageModal: React.FC<UrgentShortageModalProps> = ({
                       <div className="font-bold text-slate-900">{activeShift.title}</div>
                       <div className="text-slate-600 flex items-center gap-1">
                         <MapPin className="w-3 h-3 text-[#5A5A40]" />
-                        <span>{branch?.name} ({zoneConf?.name})</span>
+                        <span>{activeShift.locationDetails} ({zoneConf?.name})</span>
                       </div>
                       <div className="text-slate-600 flex items-center gap-1">
                         <Calendar className="w-3 h-3 text-[#5A5A40]" />

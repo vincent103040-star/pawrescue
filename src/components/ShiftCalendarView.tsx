@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { PositionShift, Branch, BranchId, ZoneCategory } from '../types';
+import React, { useState, useEffect } from 'react';
+import { PositionShift, ShelterLocation, ZoneCategory } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { buildGoogleCalendarLink } from '../utils/googleCalendar';
 import { 
@@ -33,8 +33,6 @@ function getTaiwanTodayStr(): string {
 
 interface ShiftCalendarViewProps {
   shifts: PositionShift[];
-  branches: Branch[];
-  selectedBranch: BranchId | 'all';
   onUpdateShift?: (shift: PositionShift) => void;
   onDeleteShift?: (id: string) => void;
   onOpenAiGenerator?: (shift: PositionShift) => void;
@@ -46,8 +44,6 @@ interface ShiftCalendarViewProps {
 
 export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
   shifts,
-  branches,
-  selectedBranch,
   onUpdateShift,
   onDeleteShift,
   onOpenAiGenerator,
@@ -64,6 +60,50 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
   const [activeShiftDetail, setActiveShiftDetail] = useState<PositionShift | null>(null);
   const [isSyncingGCal, setIsSyncingGCal] = useState<boolean>(false);
   const [gcalLastSyncedTime, setGcalLastSyncedTime] = useState<string>('11:45:00');
+
+  // The shelter's single physical location (see /api/shelter-location) --
+  // replaced the old fixed 3-branch selector. Admin-editable inline here;
+  // volunteers just see the read-only address/hours.
+  const [shelterLocation, setShelterLocation] = useState<ShelterLocation | null>(null);
+  const [isEditingLocation, setIsEditingLocation] = useState(false);
+  const [locationDraft, setLocationDraft] = useState({ name: '', address: '', openHours: '' });
+  const [isSavingLocation, setIsSavingLocation] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/shelter-location')
+      .then(res => res.json())
+      .then(data => { if (data.success) setShelterLocation(data.location); })
+      .catch(() => { /* best-effort */ });
+  }, []);
+
+  const handleStartEditLocation = () => {
+    if (!shelterLocation) return;
+    setLocationDraft({ name: shelterLocation.name, address: shelterLocation.address, openHours: shelterLocation.openHours });
+    setIsEditingLocation(true);
+  };
+
+  const handleSaveLocation = async () => {
+    setIsSavingLocation(true);
+    try {
+      const res = await fetch('/api/admin/shelter-location', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(locationDraft)
+      });
+      const data = await res.json();
+      if (data.success) {
+        setShelterLocation(data.location);
+        setIsEditingLocation(false);
+        onSendLineToast(data.note ? `📍 地點已更新（${data.note}）` : '📍 地點已更新，並重新定位地圖座標！');
+      } else {
+        onSendLineToast(`⚠️ 更新地點失敗：${data.error || '未知錯誤'}`);
+      }
+    } catch (err: any) {
+      onSendLineToast(`⚠️ 更新地點失敗：${err.message || '網路連線異常'}`);
+    } finally {
+      setIsSavingLocation(false);
+    }
+  };
 
   // Edit modal state
   const [editingShift, setEditingShift] = useState<PositionShift | null>(null);
@@ -153,7 +193,6 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
 
   // Filter Shifts
   const filteredShifts = shifts.filter(s => {
-    if (selectedBranch !== 'all' && s.branchId !== selectedBranch) return false;
     if (selectedZoneFilter !== 'all' && s.zone !== selectedZoneFilter) return false;
     return true;
   });
@@ -337,6 +376,71 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
             </h2>
           </div>
         </div>
+
+        {/* Shelter Location -- admin-editable, replaces the old fixed 3-branch
+            selector. Volunteers see it read-only. */}
+        {shelterLocation && (
+          !isEditingLocation ? (
+            <div className="flex items-center gap-2 bg-[#f5f5f0] px-3 py-2 rounded-2xl border border-[#5A5A40]/15 text-xs">
+              <MapPin className="w-4 h-4 text-rose-600 shrink-0" />
+              <div className="min-w-0">
+                <span className="font-bold text-slate-800">{shelterLocation.name}</span>
+                <span className="text-slate-500 ml-1.5 truncate">{shelterLocation.address}</span>
+                {!shelterLocation.geocoded && (
+                  <span className="ml-1.5 text-amber-600 text-[10px] font-bold">（尚未定位）</span>
+                )}
+              </div>
+              {!isVolunteerMode && (
+                <button
+                  onClick={handleStartEditLocation}
+                  className="text-[#5A5A40] hover:bg-white p-1 rounded-lg transition cursor-pointer shrink-0"
+                  title="編輯園區地點"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="bg-white border border-amber-300 rounded-2xl p-3 space-y-2 text-xs w-full lg:w-auto lg:min-w-[320px]">
+              <input
+                type="text"
+                value={locationDraft.name}
+                onChange={e => setLocationDraft({ ...locationDraft, name: e.target.value })}
+                placeholder="園區名稱"
+                className="w-full p-2 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-xl font-bold focus:ring-2 focus:ring-amber-400 focus:outline-none"
+              />
+              <input
+                type="text"
+                value={locationDraft.address}
+                onChange={e => setLocationDraft({ ...locationDraft, address: e.target.value })}
+                placeholder="完整地址（將用於 Google 地圖定位與導航）"
+                className="w-full p-2 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-xl focus:ring-2 focus:ring-amber-400 focus:outline-none"
+              />
+              <input
+                type="text"
+                value={locationDraft.openHours}
+                onChange={e => setLocationDraft({ ...locationDraft, openHours: e.target.value })}
+                placeholder="開放時間"
+                className="w-full p-2 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-xl focus:ring-2 focus:ring-amber-400 focus:outline-none"
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setIsEditingLocation(false)}
+                  className="px-3 py-1.5 rounded-xl font-bold text-slate-500 hover:bg-slate-100 cursor-pointer"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleSaveLocation}
+                  disabled={isSavingLocation || !locationDraft.name.trim() || !locationDraft.address.trim()}
+                  className="px-4 py-1.5 rounded-xl font-bold bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 cursor-pointer"
+                >
+                  {isSavingLocation ? '定位中...' : '儲存並重新定位'}
+                </button>
+              </div>
+            </div>
+          )
+        )}
 
         {/* Zone Filters */}
         <div className="flex flex-wrap items-center gap-1.5 text-xs">
@@ -785,7 +889,7 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
                           title: `🐾 志工班次：${activeShiftDetail.title}`,
                           date: activeShiftDetail.date,
                           timeRange: activeShiftDetail.timeRange,
-                          location: activeShiftDetail.locationDetails || branches.find(b => b.id === activeShiftDetail.branchId)?.name || '浪浪家園',
+                          location: activeShiftDetail.locationDetails || '浪浪家園',
                           details: `浪浪家園志工服務班次\n任務：${(activeShiftDetail.tasks || []).join('、')}`
                         })}
                         target="_blank"

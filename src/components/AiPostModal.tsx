@@ -1,18 +1,18 @@
 import React, { useState } from 'react';
-import { PositionShift, Branch } from '../types';
+import { PositionShift } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { Sparkles, Copy, Check, X, RefreshCw, Share2, MessageSquare } from 'lucide-react';
 
 interface AiPostModalProps {
   shift: PositionShift;
-  branch: Branch | undefined;
+  locationName: string;
   onClose: () => void;
   onShareToLine: (content: string) => void;
 }
 
 export const AiPostModal: React.FC<AiPostModalProps> = ({
   shift,
-  branch,
+  locationName,
   onClose,
   onShareToLine
 }) => {
@@ -33,7 +33,7 @@ export const AiPostModal: React.FC<AiPostModalProps> = ({
         body: JSON.stringify({
           title: shift.title,
           zoneName: zoneConfig?.name || shift.zone,
-          branchName: branch?.name || '浪浪家園園區',
+          branchName: locationName || '浪浪家園園區',
           date: shift.date,
           timeRange: shift.timeRange,
           requiredCount: shift.requiredCount - shift.currentCount,
@@ -49,7 +49,7 @@ export const AiPostModal: React.FC<AiPostModalProps> = ({
       }
     } catch (err: any) {
       console.warn('Using client fallback for AI post generation', err);
-      const fallbackPost = `🐾【志工急召！${branch?.name || '浪浪家園'} - ${shift.title}】🐶🐱\n\n` +
+      const fallbackPost = `🐾【志工急召！${locationName || '浪浪家園'} - ${shift.title}】🐶🐱\n\n` +
         `毛孩們需要你的神隊友救援！我們正在尋找溫暖有愛心的你～\n\n` +
         `📍 服務區域：${zoneConfig?.name || shift.zone}\n` +
         `📅 服務日期：${shift.date} (${shift.timeRange})\n` +

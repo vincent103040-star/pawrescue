@@ -1,40 +1,18 @@
-import { Branch, ZoneConfig, PositionShift, VolunteerApplication, VolunteerProfile, AttendanceRecord } from '../types';
+import { ShelterLocation, ZoneConfig, PositionShift, VolunteerApplication, VolunteerProfile, AttendanceRecord } from '../types';
 
-export const BRANCHES: Branch[] = [
-  {
-    id: 'main',
-    name: '浪浪總部園區 (新店本館)',
-    address: '新北市新店區安興路88號 (浪浪之丘)',
-    googleMapsUrl: 'https://maps.google.com/?q=24.9620,121.5300',
-    openHours: '10:00 - 17:00 (每週一休館)',
-    image: 'https://images.unsplash.com/photo-1548767797-d8c844163c4c?auto=format&fit=crop&w=800&q=80',
-    zones: ['貓舍區', '大狗運動場', '幼犬照護室', '醫療診察室', '物資整理區'],
-    lat: 24.9620,
-    lng: 121.5300
-  },
-  {
-    id: 'cat_island',
-    name: '貓島中途分院 (淡水館)',
-    address: '新北市淡水區中正路102號',
-    googleMapsUrl: 'https://maps.google.com/?q=25.1700,121.4400',
-    openHours: '11:00 - 18:00',
-    image: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&w=800&q=80',
-    zones: ['親人貓房', '隔離貓舍', '送養諮詢處'],
-    lat: 25.1700,
-    lng: 121.4400
-  },
-  {
-    id: 'halfway',
-    name: '草山狗園中途之家 (陽明山)',
-    address: '台北市士林區格致路200號',
-    googleMapsUrl: 'https://maps.google.com/?q=25.1300,121.5400',
-    openHours: '09:30 - 16:30',
-    image: 'https://images.unsplash.com/photo-1534361960057-19889db9875e?auto=format&fit=crop&w=800&q=80',
-    zones: ['大狗跑跑場', '醫療復健區', '物資倉儲館'],
-    lat: 25.1300,
-    lng: 121.5400
-  }
-];
+// Seed value only -- db.ts writes this into the shelter_location table on
+// first run. After that, the admin-edited + server-geocoded row in the
+// database is the source of truth (see /api/shelter-location).
+export const DEFAULT_SHELTER_LOCATION: ShelterLocation = {
+  name: '浪浪家園 PawRescue',
+  address: '新北市新店區安興路88號 (浪浪之丘)',
+  googleMapsUrl: 'https://maps.google.com/?q=24.9620,121.5300',
+  openHours: '10:00 - 17:00 (每週一休館)',
+  image: 'https://images.unsplash.com/photo-1548767797-d8c844163c4c?auto=format&fit=crop&w=800&q=80',
+  lat: 24.9620,
+  lng: 121.5300,
+  geocoded: false
+};
 
 export const ZONE_CONFIGS: Record<string, ZoneConfig> = {
   cat: {
@@ -111,7 +89,6 @@ export const INITIAL_SHIFTS: PositionShift[] = [
   {
     id: 'shift-01',
     title: '早班大狗運動場牽繩放風與洗澡',
-    branchId: 'main',
     zone: 'dog',
     date: formatDate(0),
     timeRange: '10:00 - 13:00',
@@ -129,7 +106,6 @@ export const INITIAL_SHIFTS: PositionShift[] = [
   {
     id: 'shift-02',
     title: '貓舍區午班鏟砂與親人撫摸訓練',
-    branchId: 'main',
     zone: 'cat',
     date: formatDate(0),
     timeRange: '13:30 - 16:30',
@@ -147,7 +123,6 @@ export const INITIAL_SHIFTS: PositionShift[] = [
   {
     id: 'shift-03',
     title: '幼犬育幼區餵奶與環境保暖小組',
-    branchId: 'main',
     zone: 'puppy',
     date: formatDate(1),
     timeRange: '10:00 - 13:00',
@@ -164,7 +139,6 @@ export const INITIAL_SHIFTS: PositionShift[] = [
   {
     id: 'shift-04',
     title: '醫療隔離區資深志工餵藥與復健紀錄',
-    branchId: 'main',
     zone: 'medical',
     date: formatDate(1),
     timeRange: '14:00 - 17:00',
@@ -181,7 +155,6 @@ export const INITIAL_SHIFTS: PositionShift[] = [
   {
     id: 'shift-05',
     title: '淡水貓島分院 - 親人貓陪伴與環境清潔',
-    branchId: 'cat_island',
     zone: 'cat',
     date: formatDate(2),
     timeRange: '11:00 - 15:00',
@@ -198,7 +171,6 @@ export const INITIAL_SHIFTS: PositionShift[] = [
   {
     id: 'shift-06',
     title: '物資倉儲箱整理與罐頭分類整理',
-    branchId: 'main',
     zone: 'logistics',
     date: formatDate(2),
     timeRange: '10:00 - 13:00',
@@ -215,7 +187,6 @@ export const INITIAL_SHIFTS: PositionShift[] = [
   {
     id: 'shift-07',
     title: '愛心物資緊急卸貨與飼料箱分裝',
-    branchId: 'main',
     zone: 'logistics',
     date: formatDate(0),
     timeRange: '11:00 - 14:00',
@@ -384,7 +355,6 @@ export const INITIAL_ATTENDANCE_RECORDS: AttendanceRecord[] = [
     lineId: 'xiuling_h',
     shiftId: 'shift-01',
     shiftTitle: '早班大狗運動場牽繩放風與洗澡',
-    branchId: 'main',
     zone: 'dog',
     date: formatDate(0),
     checkInTime: `${formatDate(0)} 09:55:12`,
@@ -400,7 +370,6 @@ export const INITIAL_ATTENDANCE_RECORDS: AttendanceRecord[] = [
     lineId: 'wang_cw',
     shiftId: 'shift-02',
     shiftTitle: '貓舍區午班鏟砂與親人撫摸訓練',
-    branchId: 'main',
     zone: 'cat',
     date: formatDate(-1),
     checkInTime: `${formatDate(-1)} 13:25:00`,
@@ -422,7 +391,6 @@ export const INITIAL_ATTENDANCE_RECORDS: AttendanceRecord[] = [
     lineId: 'hao_volunteer',
     shiftId: 'shift-04',
     shiftTitle: '醫療隔離區資深志工餵藥與復健紀錄',
-    branchId: 'main',
     zone: 'medical',
     date: formatDate(-2),
     checkInTime: `${formatDate(-2)} 13:50:00`,
@@ -444,7 +412,6 @@ export const INITIAL_ATTENDANCE_RECORDS: AttendanceRecord[] = [
     lineId: 'meiling_c',
     shiftId: 'shift-05',
     shiftTitle: '淡水貓島分院 - 親人貓陪伴與環境清潔',
-    branchId: 'cat_island',
     zone: 'cat',
     date: formatDate(-3),
     checkInTime: `${formatDate(-3)} 10:55:00`,
@@ -466,7 +433,6 @@ export const INITIAL_ATTENDANCE_RECORDS: AttendanceRecord[] = [
     lineId: 'zheming_l',
     shiftId: 'shift-03',
     shiftTitle: '幼犬溫室照顧與奶粉泡製',
-    branchId: 'main',
     zone: 'puppy',
     date: formatDate(-4),
     checkInTime: `${formatDate(-4)} 09:58:00`,

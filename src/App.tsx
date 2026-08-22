@@ -19,18 +19,18 @@ import { AiPostModal } from './components/AiPostModal';
 import { VolunteerCheckInModal } from './components/VolunteerCheckInModal';
 import { RulebookManualModal } from './components/RulebookManualModal';
 
-import { 
-  UserRole, 
-  AdminUserSession, 
-  VolunteerUserSession, 
-  BranchId, 
-  PositionShift, 
-  VolunteerApplication, 
-  VolunteerProfile, 
-  ApplicationStatus, 
-  AttendanceRecord 
+import {
+  UserRole,
+  AdminUserSession,
+  VolunteerUserSession,
+  ShelterLocation,
+  PositionShift,
+  VolunteerApplication,
+  VolunteerProfile,
+  ApplicationStatus,
+  AttendanceRecord
 } from './types';
-import { BRANCHES, INITIAL_SHIFTS, INITIAL_APPLICATIONS, VOLUNTEER_PROFILES, INITIAL_ATTENDANCE_RECORDS, ZONE_CONFIGS } from './data/mockData';
+import { INITIAL_SHIFTS, INITIAL_APPLICATIONS, VOLUNTEER_PROFILES, INITIAL_ATTENDANCE_RECORDS, ZONE_CONFIGS, DEFAULT_SHELTER_LOCATION } from './data/mockData';
 import { MessageSquare, X, Bell, Clock, MapPin, QrCode, ArrowUpRight } from 'lucide-react';
 import { sendLinePush } from './utils/linePush';
 
@@ -74,7 +74,20 @@ export default function App() {
   // Tab states for separate roles
   const [adminActiveTab, setAdminActiveTab] = useState<'dashboard' | 'positions' | 'applications' | 'roster' | 'sopManager'>('dashboard');
   const [volunteerActiveTab, setVolunteerActiveTab] = useState<VolunteerActiveTab>('shifts');
-  const [selectedBranch, setSelectedBranch] = useState<BranchId | 'all'>('all');
+
+  // The shelter's single physical location (previously 3 fixed hardcoded
+  // "branches" -- see /api/shelter-location). Fetched once and kept live in
+  // state so an admin's edit (ShiftCalendarView's inline editor) is
+  // immediately reflected everywhere it's read (check-in geofence, maps
+  // links, dashboard).
+  const [shelterLocation, setShelterLocation] = useState<ShelterLocation>(DEFAULT_SHELTER_LOCATION);
+
+  useEffect(() => {
+    fetch('/api/shelter-location')
+      .then(res => res.json())
+      .then(data => { if (data.success) setShelterLocation(data.location); })
+      .catch(() => { /* keep the default seed if the backend is unreachable */ });
+  }, []);
 
   // Core Data Persistence
   const [shifts, setShifts] = useState<PositionShift[]>(() => {
@@ -387,7 +400,6 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         title: newShift.title,
-        branchId: newShift.branchId,
         zone: newShift.zone,
         timeRange: newShift.timeRange,
         requiredCount: newShift.requiredCount,
@@ -601,6 +613,7 @@ export default function App() {
         openShiftsCount={shifts.filter(s => s.status === 'active').length}
         totalVolunteersCount={volunteers.length}
         totalServiceHours={volunteers.reduce((sum, v) => sum + v.totalHours, 0)}
+        shelterLocationName={shelterLocation.name}
       />
     );
   }
@@ -631,9 +644,6 @@ export default function App() {
           <AdminNavbar
             activeTab={adminActiveTab}
             setActiveTab={setAdminActiveTab}
-            selectedBranch={selectedBranch}
-            setSelectedBranch={setSelectedBranch}
-            branches={BRANCHES}
             pendingCount={pendingCount}
             openCreateModal={() => setAdminActiveTab('positions')}
             openCheckInModal={() => setIsCheckInModalOpen(true)}
@@ -647,8 +657,7 @@ export default function App() {
               <Dashboard
                 shifts={shifts}
                 applications={applications}
-                branches={BRANCHES}
-                selectedBranch={selectedBranch}
+                shelterLocation={shelterLocation}
                 attendanceRecords={attendanceRecords}
                 onNavigateToTab={(tab) => {
                   if (tab === 'portal') {
@@ -667,8 +676,6 @@ export default function App() {
             {adminActiveTab === 'positions' && (
               <PositionManager
                 shifts={shifts}
-                branches={BRANCHES}
-                selectedBranch={selectedBranch}
                 volunteers={volunteers}
                 applications={applications}
                 onCreateShift={handleCreateShift}
@@ -685,7 +692,6 @@ export default function App() {
               <ApplicantReview
                 applications={applications}
                 shifts={shifts}
-                branches={BRANCHES}
                 onUpdateStatus={handleUpdateAppStatus}
                 onSendLineToast={showToast}
               />
@@ -712,9 +718,6 @@ export default function App() {
           <VolunteerNavbar
             activeTab={volunteerActiveTab}
             setActiveTab={setVolunteerActiveTab}
-            selectedBranch={selectedBranch}
-            setSelectedBranch={setSelectedBranch}
-            branches={BRANCHES}
             openCheckInModal={() => setIsCheckInModalOpen(true)}
             openRulebookModal={() => setIsRulebookModalOpen(true)}
             currentUser={volunteerSession}
@@ -726,8 +729,7 @@ export default function App() {
             {volunteerActiveTab === 'shifts' && (
               <VolunteerPortal
                 shifts={shifts}
-                branches={BRANCHES}
-                selectedBranch={selectedBranch}
+                shelterLocation={shelterLocation}
                 onApplySubmit={handleVolunteerApply}
                 onSendLineToast={showToast}
                 onOpenCheckInModal={() => setIsCheckInModalOpen(true)}
@@ -745,7 +747,7 @@ export default function App() {
               <VolunteerMyShifts
                 shifts={shifts}
                 applications={applications}
-                branches={BRANCHES}
+                shelterLocation={shelterLocation}
                 attendanceRecords={attendanceRecords}
                 currentUser={volunteerSession}
                 onOpenCheckInModal={() => setIsCheckInModalOpen(true)}
@@ -757,8 +759,7 @@ export default function App() {
             {volunteerActiveTab === 'growth' && (
               <VolunteerPortal
                 shifts={shifts}
-                branches={BRANCHES}
-                selectedBranch={selectedBranch}
+                shelterLocation={shelterLocation}
                 onApplySubmit={handleVolunteerApply}
                 onSendLineToast={showToast}
                 onOpenCheckInModal={() => setIsCheckInModalOpen(true)}
@@ -774,8 +775,7 @@ export default function App() {
             {volunteerActiveTab === 'settings' && (
               <VolunteerPortal
                 shifts={shifts}
-                branches={BRANCHES}
-                selectedBranch={selectedBranch}
+                shelterLocation={shelterLocation}
                 onApplySubmit={handleVolunteerApply}
                 onSendLineToast={showToast}
                 onOpenCheckInModal={() => setIsCheckInModalOpen(true)}
@@ -803,7 +803,7 @@ export default function App() {
           shifts={shifts}
           applications={applications}
           volunteers={volunteers}
-          branches={BRANCHES}
+          shelterLocation={shelterLocation}
           attendanceRecords={attendanceRecords}
           onClose={() => setIsCheckInModalOpen(false)}
           onCheckInSubmit={handleCheckInSubmit}
@@ -816,7 +816,7 @@ export default function App() {
       {aiModalShift && (
         <AiPostModal
           shift={aiModalShift}
-          branch={BRANCHES.find(b => b.id === aiModalShift.branchId)}
+          locationName={shelterLocation.name}
           onClose={() => setAiModalShift(null)}
           onShareToLine={() => {
             showToast('已成功推播廣播文案至 LINE 志工群組！');
@@ -898,7 +898,7 @@ export default function App() {
                 <div>
                   <span className="font-bold text-slate-900">報到地點：</span>
                   <span className="text-slate-800 font-medium">
-                    {BRANCHES.find(b => b.id === upcomingApprovedShiftReminder.shift.branchId)?.name || '總部園區'}
+                    {shelterLocation.name}
                     {upcomingApprovedShiftReminder.shift.locationDetails ? ` • ${upcomingApprovedShiftReminder.shift.locationDetails}` : ''}
                   </span>
                 </div>
@@ -915,9 +915,9 @@ export default function App() {
                 <span>出勤簽到</span>
               </button>
 
-              {BRANCHES.find(b => b.id === upcomingApprovedShiftReminder.shift.branchId)?.googleMapsUrl && (
+              {shelterLocation.googleMapsUrl && (
                 <a
-                  href={BRANCHES.find(b => b.id === upcomingApprovedShiftReminder.shift.branchId)?.googleMapsUrl}
+                  href={shelterLocation.googleMapsUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold border border-slate-300 transition flex items-center justify-center gap-1"

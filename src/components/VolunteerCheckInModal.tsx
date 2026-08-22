@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AttendanceRecord, PositionShift, VolunteerApplication, VolunteerProfile, Branch } from '../types';
+import { AttendanceRecord, PositionShift, VolunteerApplication, VolunteerProfile, ShelterLocation } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { QrCode, Camera, CheckCircle2, Clock, MapPin, AlertCircle, LogOut, LogIn, UserCheck, ShieldCheck, Sparkles, RefreshCw, X, Compass, Navigation, Radio, AlertTriangle, Star, Send, MessageSquare, ThumbsUp, Heart } from 'lucide-react';
 
@@ -7,7 +7,7 @@ interface VolunteerCheckInModalProps {
   shifts: PositionShift[];
   applications: VolunteerApplication[];
   volunteers: VolunteerProfile[];
-  branches: Branch[];
+  shelterLocation: ShelterLocation;
   attendanceRecords: AttendanceRecord[];
   onClose: () => void;
   onCheckInSubmit: (record: Omit<AttendanceRecord, 'id'>) => void;
@@ -48,7 +48,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
   shifts,
   applications,
   volunteers,
-  branches,
+  shelterLocation,
   attendanceRecords,
   onClose,
   onCheckInSubmit,
@@ -148,33 +148,30 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
   }, [shifts, applications, volunteers]);
 
   const currentShift = shifts.find(s => s.id === selectedShiftId) || shifts[0];
-  const currentBranch = branches.find(b => b.id === currentShift?.branchId) || branches[0];
 
-  // Sync userCoords based on current branch and preset location mode
+  // Sync userCoords based on the shelter's single location and preset location mode
   useEffect(() => {
-    if (!currentBranch) return;
-    
     if (presetLocationMode === 'on_site') {
       setUserCoords({
-        lat: currentBranch.lat + 0.0006,
-        lng: currentBranch.lng + 0.0005
+        lat: shelterLocation.lat + 0.0006,
+        lng: shelterLocation.lng + 0.0005
       });
     } else if (presetLocationMode === 'nearby') {
       setUserCoords({
-        lat: currentBranch.lat + 0.0028,
-        lng: currentBranch.lng + 0.0022
+        lat: shelterLocation.lat + 0.0028,
+        lng: shelterLocation.lng + 0.0022
       });
     } else if (presetLocationMode === 'far') {
       setUserCoords({
-        lat: currentBranch.lat + 0.0145,
-        lng: currentBranch.lng + 0.0115
+        lat: shelterLocation.lat + 0.0145,
+        lng: shelterLocation.lng + 0.0115
       });
     }
-  }, [currentBranch, presetLocationMode]);
+  }, [shelterLocation, presetLocationMode]);
 
   // Calculated distance in meters
-  const currentDistanceMeters = (userCoords && currentBranch)
-    ? calculateDistanceMeters(userCoords.lat, userCoords.lng, currentBranch.lat, currentBranch.lng)
+  const currentDistanceMeters = userCoords
+    ? calculateDistanceMeters(userCoords.lat, userCoords.lng, shelterLocation.lat, shelterLocation.lng)
     : 85;
 
   const isWithinGeofence = currentDistanceMeters <= GEOFENCE_RADIUS_METERS;
@@ -196,10 +193,10 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
         const dist = calculateDistanceMeters(
           pos.coords.latitude,
           pos.coords.longitude,
-          currentBranch.lat,
-          currentBranch.lng
+          shelterLocation.lat,
+          shelterLocation.lng
         );
-        onSendLineToast(`📡 已取得您真實 GPS 定位！距離【${currentBranch.name}】相距 ${dist} 公尺 (${dist <= GEOFENCE_RADIUS_METERS ? '🟢 圍欄內' : '🔴 超出圍欄'})`);
+        onSendLineToast(`📡 已取得您真實 GPS 定位！距離【${shelterLocation.name}】相距 ${dist} 公尺 (${dist <= GEOFENCE_RADIUS_METERS ? '🟢 圍欄內' : '🔴 超出圍欄'})`);
       },
       (err) => {
         setIsLocatingGPS(false);
@@ -270,7 +267,6 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
       lineId: selectedLineId || `line_${selectedVolunteerName}`,
       shiftId: currentShift.id,
       shiftTitle: currentShift.title,
-      branchId: currentShift.branchId,
       zone: currentShift.zone,
       date: currentShift.date,
       checkInTime: checkInTimeStr,
@@ -446,7 +442,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                         )}
                       </div>
                       <p className="text-[11px] text-slate-500">
-                        目標據點：<strong className="text-slate-800">{currentBranch?.name}</strong> (座標: {currentBranch?.lat.toFixed(4)}, {currentBranch?.lng.toFixed(4)})
+                        目標據點：<strong className="text-slate-800">{shelterLocation.name}</strong> (座標: {shelterLocation.lat.toFixed(4)}, {shelterLocation.lng.toFixed(4)})
                       </p>
                     </div>
                   </div>
@@ -531,7 +527,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                     <div>
                       <strong className="font-bold">⚠️ 無法打卡：地理圍欄驗證未通過</strong>
                       <p className="mt-0.5 text-rose-700">
-                        目前測得距離【{currentBranch?.name}】相距 <strong>{currentDistanceMeters}m</strong>，超過 500 公尺打卡範圍限制。請至現場園區後再進行 LINE 掃碼打卡。
+                        目前測得距離【{shelterLocation.name}】相距 <strong>{currentDistanceMeters}m</strong>，超過 500 公尺打卡範圍限制。請至現場園區後再進行 LINE 掃碼打卡。
                       </p>
                     </div>
                   </div>
@@ -567,7 +563,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                     } ${isScanning ? 'scale-110 animate-pulse' : ''}`} />
                     
                     <span className="text-[11px] text-slate-300 font-mono mt-2 bg-slate-900/80 px-2 py-0.5 rounded">
-                      [{currentBranch?.name || '浪浪家園'}]
+                      [{shelterLocation.name || '浪浪家園'}]
                     </span>
                   </div>
 
@@ -576,7 +572,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                       {isWithinGeofence ? (
                         <div className="flex items-center space-x-1.5 text-emerald-300">
                           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                          <span>📍 圍欄驗證成功：距 {currentBranch?.name} {currentDistanceMeters}m (≤ 500m)</span>
+                          <span>📍 圍欄驗證成功：距 {shelterLocation.name} {currentDistanceMeters}m (≤ 500m)</span>
                         </div>
                       ) : (
                         <div className="flex items-center space-x-1.5 text-rose-400">

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PositionShift, VolunteerApplication, Branch, AttendanceRecord, VolunteerUserSession } from '../types';
+import { PositionShift, VolunteerApplication, ShelterLocation, AttendanceRecord, VolunteerUserSession } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { Calendar, Clock, MapPin, CheckCircle2, AlertCircle, QrCode, Star, ArrowUpRight, Award, ExternalLink, ShieldCheck, Heart, FileText, Check, ChevronRight } from 'lucide-react';
 import { CertificateModal } from './CertificateModal';
@@ -8,7 +8,7 @@ import { buildGoogleCalendarLink } from '../utils/googleCalendar';
 interface VolunteerMyShiftsProps {
   shifts: PositionShift[];
   applications: VolunteerApplication[];
-  branches: Branch[];
+  shelterLocation: ShelterLocation;
   attendanceRecords: AttendanceRecord[];
   currentUser: VolunteerUserSession | null;
   onOpenCheckInModal: () => void;
@@ -19,7 +19,7 @@ interface VolunteerMyShiftsProps {
 export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
   shifts,
   applications,
-  branches,
+  shelterLocation,
   attendanceRecords,
   currentUser,
   onOpenCheckInModal,
@@ -218,7 +218,6 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {filteredApps.map(app => {
             const shift = shifts.find(s => s.id === app.shiftId);
-            const branch = branches.find(b => b.id === shift?.branchId);
             const zoneConf = shift ? ZONE_CONFIGS[shift.zone] : null;
 
             return (
@@ -272,7 +271,7 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
                   <div className="space-y-2 text-xs text-slate-600 bg-[#f5f5f0] p-4 rounded-2xl border border-[#5A5A40]/10 font-sans">
                     <div className="flex items-center gap-2">
                       <MapPin className="w-4 h-4 text-[#5A5A40] shrink-0" />
-                      <span className="font-bold text-slate-900">{branch?.name}</span>
+                      <span className="font-bold text-slate-900">{shift?.locationDetails}</span>
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -298,9 +297,9 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
                 {/* Bottom Actions */}
                 <div className="pt-3 border-t border-[#5A5A40]/10 flex flex-wrap items-center justify-between gap-3">
                   <div className="flex flex-wrap items-center gap-3">
-                    {branch?.googleMapsUrl && (
+                    {shelterLocation.googleMapsUrl && (
                       <a
-                        href={branch.googleMapsUrl}
+                        href={shelterLocation.googleMapsUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-xs text-[#5A5A40] font-bold hover:underline flex items-center gap-1"
@@ -317,8 +316,8 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
                           title: `🐾 志工班次：${shift.title}`,
                           date: shift.date,
                           timeRange: shift.timeRange,
-                          location: shift.locationDetails || branch?.name || '浪浪家園',
-                          details: `浪浪家園志工服務班次\n地點：${branch?.name || ''}\n任務：${(shift.tasks || []).join('、')}`
+                          location: shift.locationDetails || '浪浪家園',
+                          details: `浪浪家園志工服務班次\n地點：${shift.locationDetails || ''}\n任務：${(shift.tasks || []).join('、')}`
                         })}
                         target="_blank"
                         rel="noopener noreferrer"

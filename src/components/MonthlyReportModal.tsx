@@ -1,22 +1,19 @@
 import React, { useRef, useState } from 'react';
-import { Branch, PositionShift, VolunteerApplication } from '../types';
+import { ShelterLocation, PositionShift, VolunteerApplication } from '../types';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Download, X, FileSpreadsheet, FileText, Printer, CheckCircle2, ShieldCheck, Sparkles, Building2, Users, Clock, AlertTriangle, Loader2 } from 'lucide-react';
 
 interface MonthlyReportModalProps {
   month: string; // e.g., '2026-08'
-  branches: Branch[];
+  shelterLocation: ShelterLocation;
   shifts: PositionShift[];
   applications: VolunteerApplication[];
   onClose: () => void;
   onSendLineToast?: (msg: string) => void;
 }
 
-export interface BranchMonthlyStat {
-  branchId: string;
-  branchName: string;
-  address: string;
+export interface MonthlyStat {
   totalShifts: number;
   totalVolunteers: number;
   totalCompletedHours: number;
@@ -52,7 +49,7 @@ export const calculateShiftDurationHours = (timeRange: string): number => {
 
 export const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({
   month,
-  branches,
+  shelterLocation,
   shifts,
   applications,
   onClose,
@@ -65,24 +62,23 @@ export const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({
   // Filter shifts for the specified month (e.g., '2026-08')
   const monthShifts = shifts.filter(s => s.date.startsWith(month));
 
-  // Compute statistics per branch
-  const branchStats: BranchMonthlyStat[] = branches.map(branch => {
-    const bShifts = monthShifts.filter(s => s.branchId === branch.id);
-    const totalShifts = bShifts.length;
-    
-    const requiredCount = bShifts.reduce((acc, s) => acc + s.requiredCount, 0);
-    const filledCount = bShifts.reduce((acc, s) => acc + s.currentCount, 0);
+  // Compute overall monthly statistics (single shelter, no more per-branch breakdown)
+  const stat: MonthlyStat = (() => {
+    const totalShifts = monthShifts.length;
+
+    const requiredCount = monthShifts.reduce((acc, s) => acc + s.requiredCount, 0);
+    const filledCount = monthShifts.reduce((acc, s) => acc + s.currentCount, 0);
     const shortageCount = Math.max(0, requiredCount - filledCount);
     const shortageRate = requiredCount > 0 ? Math.round((shortageCount / requiredCount) * 100) : 0;
 
     // Calculate unique volunteers
-    const bShiftIds = new Set(bShifts.map(s => s.id));
-    const bApps = applications.filter(a => bShiftIds.has(a.shiftId));
-    const uniqueVols = new Set(bApps.map(a => a.volunteerName || a.lineId)).size;
+    const monthShiftIds = new Set(monthShifts.map(s => s.id));
+    const monthApps = applications.filter(a => monthShiftIds.has(a.shiftId));
+    const uniqueVols = new Set(monthApps.map(a => a.volunteerName || a.lineId)).size;
     const totalVolunteers = Math.max(uniqueVols, filledCount);
 
     // Calculate total completed hours
-    const totalCompletedHours = bShifts.reduce((acc, s) => {
+    const totalCompletedHours = monthShifts.reduce((acc, s) => {
       const shiftHours = calculateShiftDurationHours(s.timeRange);
       return acc + (s.currentCount * shiftHours);
     }, 0);
@@ -98,9 +94,6 @@ export const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({
     }
 
     return {
-      branchId: branch.id,
-      branchName: branch.name,
-      address: branch.address,
       totalShifts,
       totalVolunteers,
       totalCompletedHours: Math.round(totalCompletedHours),
@@ -111,16 +104,17 @@ export const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({
       statusLabel,
       statusBadgeBg
     };
-  });
+  })();
 
-  // Overall totals
-  const overallShifts = monthShifts.length;
-  const overallVolunteers = branchStats.reduce((acc, b) => acc + b.totalVolunteers, 0);
-  const overallCompletedHours = branchStats.reduce((acc, b) => acc + b.totalCompletedHours, 0);
-  const overallRequired = branchStats.reduce((acc, b) => acc + b.requiredCount, 0);
-  const overallFilled = branchStats.reduce((acc, b) => acc + b.filledCount, 0);
-  const overallShortage = Math.max(0, overallRequired - overallFilled);
-  const overallShortageRate = overallRequired > 0 ? Math.round((overallShortage / overallRequired) * 100) : 0;
+  // Overall totals (kept as separate names for the report layout below, but
+  // now just aliases of `stat` since there's only one shelter to report on)
+  const overallShifts = stat.totalShifts;
+  const overallVolunteers = stat.totalVolunteers;
+  const overallCompletedHours = stat.totalCompletedHours;
+  const overallRequired = stat.requiredCount;
+  const overallFilled = stat.filledCount;
+  const overallShortage = stat.shortageCount;
+  const overallShortageRate = stat.shortageRate;
 
   // Format month title
   const [yearStr, monthNumStr] = month.split('-');
@@ -131,21 +125,15 @@ export const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({
     const csvRows: string[] = [];
     
     // Title & Metadata
-    csvRows.push(`"流浪動物之家人力排班 - ${formattedMonthTitle}月度據點績效與缺工率統計總結"`);
+    csvRows.push(`"流浪動物之家人力排班 - ${formattedMonthTitle}月度績效與缺工率統計總結"`);
     csvRows.push(`"報名產出時間: ${new Date().toLocaleString('zh-TW')}"`);
-    csvRows.push(`"機構全區平均缺工率: ${overallShortageRate}%", "當月總服務人數: ${overallVolunteers}人", "當月總服務時數: ${overallCompletedHours}小時"`);
+    csvRows.push(`"當月平均缺工率: ${overallShortageRate}%", "當月總服務人數: ${overallVolunteers}人", "當月總服務時數: ${overallCompletedHours}小時"`);
     csvRows.push('');
 
     // Headers
-    csvRows.push('"據點名稱","統計月份","當月總班次數","需求志工人數","已報名人數","缺工人數","缺工率(%)","總完成服務時數(小時)","據點運作狀態"');
+    csvRows.push('"園區名稱","統計月份","當月總班次數","需求志工人數","已報名人數","缺工人數","缺工率(%)","總完成服務時數(小時)","運作狀態"');
 
-    // Data rows
-    branchStats.forEach(stat => {
-      csvRows.push(`"${stat.branchName}","${month}","${stat.totalShifts}","${stat.requiredCount}","${stat.filledCount}","${stat.shortageCount}","${stat.shortageRate}%","${stat.totalCompletedHours}","${stat.statusLabel}"`);
-    });
-
-    // Total summary row
-    csvRows.push(`"全機構總計","${month}","${overallShifts}","${overallRequired}","${overallFilled}","${overallShortage}","${overallShortageRate}%","${overallCompletedHours}","機構營運結算"`);
+    csvRows.push(`"${shelterLocation.name}","${month}","${stat.totalShifts}","${stat.requiredCount}","${stat.filledCount}","${stat.shortageCount}","${stat.shortageRate}%","${stat.totalCompletedHours}","${stat.statusLabel}"`);
 
     const csvContent = '\uFEFF' + csvRows.join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -158,7 +146,7 @@ export const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({
     document.body.removeChild(link);
 
     setDownloadSuccess('CSV');
-    onSendLineToast(`📊 已匯出「${formattedMonthTitle}」月度各據點績效總結 CSV 報表！`);
+    onSendLineToast(`📊 已匯出「${formattedMonthTitle}」月度績效總結 CSV 報表！`);
     setTimeout(() => setDownloadSuccess(null), 3000);
   };
 
@@ -222,7 +210,7 @@ export const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({
                 </span>
               </h3>
               <p className="text-xs text-[#E6E2D3] mt-0.5">
-                自動整合全區與分院據點之志工總數、服務總時數與缺工率分析
+                自動整合園區志工總數、服務總時數與缺工率分析
               </p>
             </div>
           </div>
@@ -346,22 +334,19 @@ export const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({
                 </div>
               </div>
 
-              {/* Per-Branch Statistics Table */}
+              {/* Monthly Statistics Table (single shelter, replaced the old per-branch comparison table) */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <h3 className="font-bold font-serif text-slate-900 text-sm flex items-center gap-1.5">
                     <Building2 className="w-4 h-4 text-[#5A5A40]" />
-                    <span>各分院據點（Branch）數據明細對照表</span>
+                    <span>園區數據明細</span>
                   </h3>
-                  <span className="text-[11px] text-slate-500 font-mono">
-                    共 {branchStats.length} 個營運據點
-                  </span>
                 </div>
 
                 <table className="w-full text-xs text-left border-collapse border border-[#5A5A40]/20 rounded-xl overflow-hidden bg-white">
                   <thead>
                     <tr className="bg-[#5A5A40] text-white font-bold text-[11px]">
-                      <th className="p-3 border-b border-[#5A5A40]/20">據點名稱</th>
+                      <th className="p-3 border-b border-[#5A5A40]/20">園區名稱</th>
                       <th className="p-3 border-b border-[#5A5A40]/20 text-center">總班次</th>
                       <th className="p-3 border-b border-[#5A5A40]/20 text-center">總志工數</th>
                       <th className="p-3 border-b border-[#5A5A40]/20 text-center">服務總時數</th>
@@ -372,31 +357,29 @@ export const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
-                    {branchStats.map(stat => (
-                      <tr key={stat.branchId} className="hover:bg-[#f5f5f0]/50">
-                        <td className="p-3 font-bold text-slate-900 flex flex-col">
-                          <span>{stat.branchName}</span>
-                          <span className="text-[10px] text-slate-400 font-normal">{stat.address}</span>
-                        </td>
-                        <td className="p-3 text-center font-mono">{stat.totalShifts} 班</td>
-                        <td className="p-3 text-center font-bold text-slate-800 font-mono">{stat.totalVolunteers} 人</td>
-                        <td className="p-3 text-center font-bold text-[#5A5A40] font-mono">{stat.totalCompletedHours} hr</td>
-                        <td className="p-3 text-center font-mono">{stat.requiredCount} / {stat.filledCount}</td>
-                        <td className={`p-3 text-center font-bold font-mono ${stat.shortageCount > 0 ? 'text-rose-600' : 'text-slate-600'}`}>
-                          {stat.shortageCount} 人
-                        </td>
-                        <td className="p-3 text-center font-extrabold font-mono text-sm">
-                          <span className={stat.shortageRate > 25 ? 'text-rose-600' : stat.shortageRate > 10 ? 'text-amber-700' : 'text-emerald-700'}>
-                            {stat.shortageRate}%
-                          </span>
-                        </td>
-                        <td className="p-3 text-center">
-                          <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full border ${stat.statusBadgeBg}`}>
-                            {stat.statusLabel}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                    <tr className="hover:bg-[#f5f5f0]/50">
+                      <td className="p-3 font-bold text-slate-900 flex flex-col">
+                        <span>{shelterLocation.name}</span>
+                        <span className="text-[10px] text-slate-400 font-normal">{shelterLocation.address}</span>
+                      </td>
+                      <td className="p-3 text-center font-mono">{stat.totalShifts} 班</td>
+                      <td className="p-3 text-center font-bold text-slate-800 font-mono">{stat.totalVolunteers} 人</td>
+                      <td className="p-3 text-center font-bold text-[#5A5A40] font-mono">{stat.totalCompletedHours} hr</td>
+                      <td className="p-3 text-center font-mono">{stat.requiredCount} / {stat.filledCount}</td>
+                      <td className={`p-3 text-center font-bold font-mono ${stat.shortageCount > 0 ? 'text-rose-600' : 'text-slate-600'}`}>
+                        {stat.shortageCount} 人
+                      </td>
+                      <td className="p-3 text-center font-extrabold font-mono text-sm">
+                        <span className={stat.shortageRate > 25 ? 'text-rose-600' : stat.shortageRate > 10 ? 'text-amber-700' : 'text-emerald-700'}>
+                          {stat.shortageRate}%
+                        </span>
+                      </td>
+                      <td className="p-3 text-center">
+                        <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full border ${stat.statusBadgeBg}`}>
+                          {stat.statusLabel}
+                        </span>
+                      </td>
+                    </tr>
                   </tbody>
                   <tfoot>
                     <tr className="bg-[#E6E2D3]/40 font-bold border-t-2 border-[#5A5A40]">

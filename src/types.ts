@@ -1,17 +1,18 @@
-export type BranchId = 'main' | 'cat_island' | 'halfway';
-
 export type ZoneCategory = 'cat' | 'dog' | 'puppy' | 'medical' | 'logistics';
 
-export interface Branch {
-  id: BranchId;
+// The shelter has a single physical location (previously modeled as 3 fixed
+// "branches" -- collapsed to this after that multi-branch architecture was
+// removed). Admin-editable; the address is what the admin types, lat/lng/
+// googleMapsUrl are server-geocoded from it (see PUT /api/admin/shelter-location).
+export interface ShelterLocation {
   name: string;
   address: string;
   googleMapsUrl: string;
   openHours: string;
   image: string;
-  zones: string[];
   lat: number;
   lng: number;
+  geocoded: boolean; // false if GOOGLE_MAPS_API_KEY isn't set / geocoding hasn't succeeded yet
 }
 
 export interface ZoneConfig {
@@ -32,7 +33,6 @@ export type SkillLevel = 'beginner' | 'intermediate' | 'experienced';
 export interface PositionShift {
   id: string;
   title: string;
-  branchId: BranchId;
   zone: ZoneCategory;
   date: string; // YYYY-MM-DD
   timeRange: string; // e.g., "10:00 - 13:00"
@@ -110,7 +110,6 @@ export interface ServiceFeedback {
   lineId?: string;
   shiftId: string;
   shiftTitle: string;
-  branchId: BranchId;
   zone: ZoneCategory;
   rating: number; // 1 - 5 stars
   comment: string;
@@ -128,7 +127,6 @@ export interface AttendanceRecord {
   lineId?: string;
   shiftId: string;
   shiftTitle: string;
-  branchId: BranchId;
   zone: ZoneCategory;
   date: string; // YYYY-MM-DD
   checkInTime: string; // e.g., "2026-08-05 09:58:20"
@@ -167,7 +165,6 @@ export interface AdminUserSession {
   name: string;
   roleTitle: string;
   email: string;
-  branchId: BranchId | 'all';
 }
 
 export interface VolunteerUserSession {
@@ -247,7 +244,6 @@ export interface PromotionRequest {
 export interface ShiftTemplate {
   id: string;
   title: string;
-  branchId: BranchId;
   zone: ZoneCategory;
   timeRange: string;
   requiredCount: number;

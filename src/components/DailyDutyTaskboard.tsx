@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PositionShift, Branch, BranchId, ZoneCategory } from '../types';
+import { PositionShift, ZoneCategory } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { 
   ClipboardCheck, 
@@ -39,8 +39,6 @@ interface SopItem {
 
 interface DailyDutyTaskboardProps {
   shifts: PositionShift[];
-  branches: Branch[];
-  selectedBranch: BranchId | 'all';
   onSendLineToast: (msg: string) => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -49,8 +47,6 @@ interface DailyDutyTaskboardProps {
 
 export const DailyDutyTaskboard: React.FC<DailyDutyTaskboardProps> = ({
   shifts,
-  branches,
-  selectedBranch,
   onSendLineToast,
   isCollapsed = false,
   onToggleCollapse,
@@ -62,7 +58,6 @@ export const DailyDutyTaskboard: React.FC<DailyDutyTaskboardProps> = ({
 
   // Filter today's shifts or active shifts
   const todayShifts = shifts.filter(s => {
-    if (selectedBranch !== 'all' && s.branchId !== selectedBranch) return false;
     return s.date === todayStr || true; // Show today's shifts or standard daily template
   });
 

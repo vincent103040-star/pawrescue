@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { VolunteerApplication, PositionShift, Branch } from '../types';
+import { VolunteerApplication, PositionShift } from '../types';
 import { detectApplicationConflicts, ApplicationConflict } from '../utils/conflictChecker';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { ShieldAlert, AlertTriangle, CheckCircle2, Trash2, X, Sparkles, ArrowRight, UserCheck, Clock, RefreshCw, Send, Check } from 'lucide-react';
@@ -7,7 +7,6 @@ import { ShieldAlert, AlertTriangle, CheckCircle2, Trash2, X, Sparkles, ArrowRig
 interface ConflictCheckModalProps {
   applications: VolunteerApplication[];
   shifts: PositionShift[];
-  branches: Branch[];
   onClose: () => void;
   onRejectApplication: (appId: string, reviewNotes?: string) => void;
   onSendLineToast: (msg: string) => void;
@@ -16,7 +15,6 @@ interface ConflictCheckModalProps {
 export const ConflictCheckModal: React.FC<ConflictCheckModalProps> = ({
   applications,
   shifts,
-  branches,
   onClose,
   onRejectApplication,
   onSendLineToast
@@ -133,8 +131,6 @@ export const ConflictCheckModal: React.FC<ConflictCheckModalProps> = ({
             activeConflicts.map(conflict => {
               const zone1 = ZONE_CONFIGS[conflict.shift1.zone];
               const zone2 = ZONE_CONFIGS[conflict.shift2.zone];
-              const branch1 = branches.find(b => b.id === conflict.shift1.branchId);
-              const branch2 = branches.find(b => b.id === conflict.shift2.branchId);
 
               const isSuggestedDelete1 = conflict.suggestedDeleteAppId === conflict.app1.id;
 
@@ -190,7 +186,7 @@ export const ConflictCheckModal: React.FC<ConflictCheckModalProps> = ({
 
                       <h5 className="font-bold text-slate-900 text-xs">{conflict.shift1.title}</h5>
                       <div className="text-[11px] text-slate-600 space-y-0.5">
-                        <div>📍 {branch1?.name}</div>
+                        <div>📍 {conflict.shift1.locationDetails}</div>
                         <div>📅 {conflict.shift1.date} ({conflict.shift1.timeRange})</div>
                         <div>👥 人力：{conflict.shift1.currentCount} / {conflict.shift1.requiredCount} 人</div>
                       </div>
@@ -221,7 +217,7 @@ export const ConflictCheckModal: React.FC<ConflictCheckModalProps> = ({
 
                       <h5 className="font-bold text-slate-900 text-xs">{conflict.shift2.title}</h5>
                       <div className="text-[11px] text-slate-600 space-y-0.5">
-                        <div>📍 {branch2?.name}</div>
+                        <div>📍 {conflict.shift2.locationDetails}</div>
                         <div>📅 {conflict.shift2.date} ({conflict.shift2.timeRange})</div>
                         <div>👥 人力：{conflict.shift2.currentCount} / {conflict.shift2.requiredCount} 人</div>
                       </div>

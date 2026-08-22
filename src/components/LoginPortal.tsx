@@ -10,6 +10,7 @@ interface LoginPortalProps {
   openShiftsCount: number;
   totalVolunteersCount: number;
   totalServiceHours: number;
+  shelterLocationName: string;
 }
 
 // Real quotes pulled from the volunteer service-feedback records (see mockData.ts
@@ -74,7 +75,8 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
   pendingApplicationsCount,
   openShiftsCount,
   totalVolunteersCount,
-  totalServiceHours
+  totalServiceHours,
+  shelterLocationName
 }) => {
   // Admin username/password login state. This is a demo credential check, not real
   // backend authentication -- the password defaults to a visible "0000" specifically
@@ -123,8 +125,7 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
     onLoginAsAdmin({
       name: 'Admin',
       roleTitle: '系統管理員',
-      email: 'admin@pawrescue.org.tw',
-      branchId: 'all'
+      email: 'admin@pawrescue.org.tw'
     });
   };
 
@@ -220,8 +221,8 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
             <div className="text-[11px] text-slate-500 font-medium">人才庫註冊志工夥伴</div>
           </div>
           <div className="bg-white p-3.5 rounded-2xl border border-[#5A5A40]/12 text-center shadow-2xs">
-            <div className="text-lg font-extrabold text-sky-700">3 據點</div>
-            <div className="text-[11px] text-slate-500 font-medium">新店本館 / 淡水 / 陽明山</div>
+            <div className="text-lg font-extrabold text-sky-700 truncate">{shelterLocationName}</div>
+            <div className="text-[11px] text-slate-500 font-medium">園區地點</div>
           </div>
         </div>
 

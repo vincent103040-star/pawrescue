@@ -2,9 +2,9 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
-import { VOLUNTEER_PROFILES, INITIAL_ATTENDANCE_RECORDS } from './src/data/mockData';
+import { VOLUNTEER_PROFILES, INITIAL_ATTENDANCE_RECORDS, DEFAULT_SHELTER_LOCATION } from './src/data/mockData';
 import { RULEBOOK_CORPUS } from './src/data/rulebookCorpus';
-import type { VolunteerProfile, AttendanceRecord, SopContent, SopSection, SopDocument, SopVideo, PromotionRequest, ShiftTemplate } from './src/types';
+import type { VolunteerProfile, AttendanceRecord, SopContent, SopSection, SopDocument, SopVideo, PromotionRequest, ShiftTemplate, ShelterLocation } from './src/types';
 
 const dataDir = path.join(process.cwd(), 'data');
 fs.mkdirSync(dataDir, { recursive: true });
@@ -306,7 +306,7 @@ if (attendanceSeedCount.c === 0) {
   for (const r of INITIAL_ATTENDANCE_RECORDS) {
     insertSeed.run(
       r.id, r.applicationId || null, r.volunteerName, r.volunteerPhone || null, r.lineId || null,
-      r.shiftId, r.shiftTitle, r.branchId, r.zone, r.date, r.checkInTime, r.checkOutTime || null,
+      r.shiftId, r.shiftTitle, 'shelter', r.zone, r.date, r.checkInTime, r.checkOutTime || null,
       r.status, r.hoursLogged ?? null, r.locationVerified ? 1 : 0, r.distanceMeters ?? null,
       r.qrCodeToken, r.rating ?? null, r.feedbackComment || null, r.feedbackSubmittedAt || null,
       r.lineReminderSent ? 1 : 0, r.photoUrl || null
@@ -323,7 +323,6 @@ function rowToAttendanceRecord(row: any): AttendanceRecord {
     lineId: row.lineId || undefined,
     shiftId: row.shiftId,
     shiftTitle: row.shiftTitle,
-    branchId: row.branchId,
     zone: row.zone,
     date: row.date,
     checkInTime: row.checkInTime,
@@ -353,7 +352,7 @@ export function insertAttendanceRecord(r: AttendanceRecord): AttendanceRecord {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     r.id, r.applicationId || null, r.volunteerName, r.volunteerPhone || null, r.lineId || null,
-    r.shiftId, r.shiftTitle, r.branchId, r.zone, r.date, r.checkInTime, r.checkOutTime || null,
+    r.shiftId, r.shiftTitle, 'shelter', r.zone, r.date, r.checkInTime, r.checkOutTime || null,
     r.status, r.hoursLogged ?? null, r.locationVerified ? 1 : 0, r.distanceMeters ?? null,
     r.qrCodeToken, r.rating ?? null, r.feedbackComment || null, r.feedbackSubmittedAt || null,
     r.lineReminderSent ? 1 : 0, r.photoUrl || null
@@ -703,7 +702,6 @@ function rowToShiftTemplate(row: any): ShiftTemplate {
   return {
     id: row.id,
     title: row.title,
-    branchId: row.branchId,
     zone: row.zone,
     timeRange: row.timeRange,
     requiredCount: row.requiredCount,
@@ -726,7 +724,6 @@ export function getAllShiftTemplates(): ShiftTemplate[] {
 // instead of piling up near-duplicate cards in the dropdown.
 export function upsertShiftTemplate(params: {
   title: string;
-  branchId: string;
   zone: string;
   timeRange: string;
   requiredCount: number;
@@ -743,10 +740,10 @@ export function upsertShiftTemplate(params: {
   if (existing) {
     db.prepare(`
       UPDATE shift_templates
-      SET branchId = ?, zone = ?, timeRange = ?, requiredCount = ?, skillRequired = ?, description = ?, tasks = ?, locationDetails = ?, attachmentUrl = ?, updatedAt = ?
+      SET zone = ?, timeRange = ?, requiredCount = ?, skillRequired = ?, description = ?, tasks = ?, locationDetails = ?, attachmentUrl = ?, updatedAt = ?
       WHERE id = ?
     `).run(
-      params.branchId, params.zone, params.timeRange, params.requiredCount, params.skillRequired,
+      params.zone, params.timeRange, params.requiredCount, params.skillRequired,
       params.description, JSON.stringify(params.tasks), params.locationDetails, params.attachmentUrl || null, nowIso,
       existing.id
     );
@@ -756,9 +753,9 @@ export function upsertShiftTemplate(params: {
   const id = randomUUID();
   db.prepare(`
     INSERT INTO shift_templates (id, title, branchId, zone, timeRange, requiredCount, skillRequired, description, tasks, locationDetails, attachmentUrl, updatedAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, 'shelter', ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    id, normalizedTitle, params.branchId, params.zone, params.timeRange, params.requiredCount, params.skillRequired,
+    id, normalizedTitle, params.zone, params.timeRange, params.requiredCount, params.skillRequired,
     params.description, JSON.stringify(params.tasks), params.locationDetails, params.attachmentUrl || null, nowIso
   );
   return rowToShiftTemplate(db.prepare('SELECT * FROM shift_templates WHERE id = ?').get(id));
@@ -766,4 +763,82 @@ export function upsertShiftTemplate(params: {
 
 export function deleteShiftTemplate(id: string): void {
   db.prepare('DELETE FROM shift_templates WHERE id = ?').run(id);
+}
+
+// ============================================================================
+// Shelter location -- the shelter's single physical location (previously a
+// hardcoded array of 3 fixed "branches" -- that architecture was removed
+// since the org only ever operates from one place). Single-row table, same
+// pattern as sop_content. The admin edits name/address/openHours; lat/lng/
+// googleMapsUrl are refreshed by server-side geocoding (see server.ts).
+// ============================================================================
+db.exec(`
+  CREATE TABLE IF NOT EXISTS shelter_location (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    name TEXT NOT NULL,
+    address TEXT NOT NULL,
+    googleMapsUrl TEXT NOT NULL,
+    openHours TEXT NOT NULL,
+    image TEXT NOT NULL,
+    lat REAL NOT NULL,
+    lng REAL NOT NULL,
+    geocoded INTEGER NOT NULL DEFAULT 0
+  )
+`);
+
+const shelterLocationSeedCount = db.prepare('SELECT COUNT(*) AS c FROM shelter_location').get() as { c: number };
+if (shelterLocationSeedCount.c === 0) {
+  db.prepare(`
+    INSERT INTO shelter_location (id, name, address, googleMapsUrl, openHours, image, lat, lng, geocoded)
+    VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    DEFAULT_SHELTER_LOCATION.name, DEFAULT_SHELTER_LOCATION.address, DEFAULT_SHELTER_LOCATION.googleMapsUrl,
+    DEFAULT_SHELTER_LOCATION.openHours, DEFAULT_SHELTER_LOCATION.image,
+    DEFAULT_SHELTER_LOCATION.lat, DEFAULT_SHELTER_LOCATION.lng, DEFAULT_SHELTER_LOCATION.geocoded ? 1 : 0
+  );
+}
+
+function rowToShelterLocation(row: any): ShelterLocation {
+  return {
+    name: row.name,
+    address: row.address,
+    googleMapsUrl: row.googleMapsUrl,
+    openHours: row.openHours,
+    image: row.image,
+    lat: row.lat,
+    lng: row.lng,
+    geocoded: !!row.geocoded
+  };
+}
+
+export function getShelterLocation(): ShelterLocation {
+  const row = db.prepare('SELECT * FROM shelter_location WHERE id = 1').get();
+  return rowToShelterLocation(row);
+}
+
+export function updateShelterLocation(updates: {
+  name: string;
+  address: string;
+  openHours: string;
+  googleMapsUrl?: string;
+  lat?: number;
+  lng?: number;
+  geocoded?: boolean;
+}): ShelterLocation {
+  const current = getShelterLocation();
+  const next = {
+    name: updates.name,
+    address: updates.address,
+    openHours: updates.openHours,
+    googleMapsUrl: updates.googleMapsUrl ?? current.googleMapsUrl,
+    lat: updates.lat ?? current.lat,
+    lng: updates.lng ?? current.lng,
+    geocoded: updates.geocoded ?? current.geocoded
+  };
+  db.prepare(`
+    UPDATE shelter_location
+    SET name = ?, address = ?, openHours = ?, googleMapsUrl = ?, lat = ?, lng = ?, geocoded = ?
+    WHERE id = 1
+  `).run(next.name, next.address, next.openHours, next.googleMapsUrl, next.lat, next.lng, next.geocoded ? 1 : 0);
+  return getShelterLocation();
 }

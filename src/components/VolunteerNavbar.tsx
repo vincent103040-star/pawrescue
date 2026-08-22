@@ -1,15 +1,12 @@
 import React from 'react';
-import { PawPrint, Calendar, Heart, MessageSquare, QrCode, BookOpen, LogOut, User, TrendingUp, Settings, Star, Building2, CheckCircle2, HeartHandshake } from 'lucide-react';
-import { BranchId, Branch, VolunteerUserSession } from '../types';
+import { PawPrint, Calendar, Heart, MessageSquare, QrCode, BookOpen, LogOut, User, TrendingUp, Settings, Star, CheckCircle2, HeartHandshake } from 'lucide-react';
+import { VolunteerUserSession } from '../types';
 
 export type VolunteerActiveTab = 'shifts' | 'myshifts' | 'growth' | 'settings' | 'sop';
 
 interface VolunteerNavbarProps {
   activeTab: VolunteerActiveTab;
   setActiveTab: (tab: VolunteerActiveTab) => void;
-  selectedBranch: BranchId | 'all';
-  setSelectedBranch: (branch: BranchId | 'all') => void;
-  branches: Branch[];
   openCheckInModal?: () => void;
   openRulebookModal?: () => void;
   currentUser: VolunteerUserSession | null;
@@ -20,9 +17,6 @@ interface VolunteerNavbarProps {
 export const VolunteerNavbar: React.FC<VolunteerNavbarProps> = ({
   activeTab,
   setActiveTab,
-  selectedBranch,
-  setSelectedBranch,
-  branches,
   openCheckInModal,
   openRulebookModal,
   currentUser,
@@ -85,36 +79,6 @@ export const VolunteerNavbar: React.FC<VolunteerNavbarProps> = ({
               </div>
               <p className="hidden sm:block text-xs text-slate-500 font-sans">線上搶班 &bull; 我的排班日曆 &bull; 出勤簽到 &bull; 晉升成長</p>
             </div>
-          </div>
-
-          {/* Branch Filter */}
-          <div className="hidden md:flex items-center bg-[#f5f5f0] p-1.5 rounded-2xl border border-[#5A5A40]/10 text-xs font-medium">
-            <span className="px-2.5 text-[#5A5A40] font-bold flex items-center gap-1">
-              <Building2 className="w-3.5 h-3.5" /> 志工園區：
-            </span>
-            <button
-              onClick={() => setSelectedBranch('all')}
-              className={`px-3 py-1.5 rounded-xl transition cursor-pointer ${
-                selectedBranch === 'all'
-                  ? 'bg-[#5A5A40] text-white shadow-xs font-bold'
-                  : 'text-slate-600 hover:text-[#5A5A40]'
-              }`}
-            >
-              全部據點 (3)
-            </button>
-            {branches.map((b) => (
-              <button
-                key={b.id}
-                onClick={() => setSelectedBranch(b.id)}
-                className={`px-3 py-1.5 rounded-xl transition cursor-pointer ${
-                  selectedBranch === b.id
-                    ? 'bg-[#5A5A40] text-white shadow-xs font-bold'
-                    : 'text-slate-600 hover:text-[#5A5A40]'
-                }`}
-              >
-                {b.name.split(' ')[0]}
-              </button>
-            ))}
           </div>
 
           {/* Quick Action Button for Volunteer */}

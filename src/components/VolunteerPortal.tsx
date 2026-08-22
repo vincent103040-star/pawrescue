@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { PositionShift, Branch, BranchId, SkillLevel, ZoneCategory, LineNotificationPreferences, VolunteerUserSession, AttendanceRecord, VolunteerApplication, PromotionRequest } from '../types';
+import { PositionShift, ShelterLocation, SkillLevel, ZoneCategory, LineNotificationPreferences, VolunteerUserSession, AttendanceRecord, VolunteerApplication, PromotionRequest } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { VolunteerWelcomeCard } from './VolunteerWelcomeCard';
 import { ShiftCalendarView } from './ShiftCalendarView';
@@ -62,8 +62,7 @@ const INITIAL_GROWTH_ITEMS: GrowthChecklistItem[] = [
 
 interface VolunteerPortalProps {
   shifts: PositionShift[];
-  branches: Branch[];
-  selectedBranch: BranchId | 'all';
+  shelterLocation: ShelterLocation;
   onApplySubmit: (
     shiftId: string,
     name: string,
@@ -90,8 +89,7 @@ interface VolunteerPortalProps {
 
 export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
   shifts,
-  branches,
-  selectedBranch,
+  shelterLocation,
   onApplySubmit,
   onSendLineToast,
   onOpenCheckInModal,
@@ -431,7 +429,6 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
   };
 
   const filteredShifts = shifts.filter(s => {
-    if (selectedBranch !== 'all' && s.branchId !== selectedBranch) return false;
     if (selectedZoneFilter !== 'all' && s.zone !== selectedZoneFilter) return false;
     return true;
   });
@@ -715,8 +712,6 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
           {viewMode === 'calendar' ? (
             <ShiftCalendarView
               shifts={shifts}
-              branches={branches}
-              selectedBranch={selectedBranch}
               isVolunteerMode={true}
               onApplyClick={handleOpenApply}
               myAppliedShiftIds={myAppliedShiftIds}
@@ -767,7 +762,6 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredShifts.map(shift => {
                   const zoneConf = ZONE_CONFIGS[shift.zone];
-                  const branch = branches.find(b => b.id === shift.branchId);
                   const remaining = shift.requiredCount - shift.currentCount;
                   const isFull = remaining <= 0;
                   const isApplied = myAppliedShiftIds.includes(shift.id);
@@ -817,7 +811,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                         <div className="space-y-2 text-xs text-slate-600 font-sans">
                           <div className="flex items-center gap-2">
                             <MapPin className="w-4 h-4 text-[#5A5A40] shrink-0" />
-                            <span className="font-bold text-slate-800">{branch?.name}</span>
+                            <span className="font-bold text-slate-800">{shift.locationDetails}</span>
                           </div>
 
                           <div className="flex items-center gap-2">
@@ -858,7 +852,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                               <MapPin className="w-3.5 h-3.5 text-[#5A5A40]" /> Google 地圖導航
                             </span>
                             <a
-                              href={branch?.googleMapsUrl}
+                              href={shelterLocation.googleMapsUrl}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-[10px] text-[#5A5A40] hover:underline flex items-center gap-0.5"
@@ -868,7 +862,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                             </a>
                           </div>
                           <p className="text-[11px] text-slate-600">
-                            集合點：{shift.locationDetails} ({branch?.address})
+                            集合點：{shift.locationDetails} ({shelterLocation.address})
                           </p>
                         </div>
 
@@ -1564,7 +1558,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                     title: `🐾 志工班次：${activeShiftForApply.title}`,
                     date: activeShiftForApply.date,
                     timeRange: activeShiftForApply.timeRange,
-                    location: activeShiftForApply.locationDetails || branches.find(b => b.id === activeShiftForApply.branchId)?.name || '浪浪家園',
+                    location: activeShiftForApply.locationDetails || '浪浪家園',
                     details: `浪浪家園志工服務班次\n任務：${(activeShiftForApply.tasks || []).join('、')}`
                   })}
                   target="_blank"

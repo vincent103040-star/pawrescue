@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PositionShift, Branch, BranchId, SkillLevel, ZoneCategory, VolunteerProfile, VolunteerApplication, ApplicationStatus, ShiftTemplate } from '../types';
+import { PositionShift, SkillLevel, ZoneCategory, VolunteerProfile, VolunteerApplication, ApplicationStatus, ShiftTemplate } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { detectApplicationConflicts } from '../utils/conflictChecker';
 import { ConflictCheckModal } from './ConflictCheckModal';
@@ -9,8 +9,6 @@ import { ShiftCalendarView } from './ShiftCalendarView';
 
 interface PositionManagerProps {
   shifts: PositionShift[];
-  branches: Branch[];
-  selectedBranch: BranchId | 'all';
   volunteers: VolunteerProfile[];
   applications?: VolunteerApplication[];
   onCreateShift: (newShift: Omit<PositionShift, 'id' | 'createdAt'>) => void;
@@ -24,8 +22,6 @@ interface PositionManagerProps {
 
 export const PositionManager: React.FC<PositionManagerProps> = ({
   shifts,
-  branches,
-  selectedBranch,
   volunteers,
   applications = [],
   onCreateShift,
@@ -57,10 +53,7 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
 
   const conflicts = detectApplicationConflicts(applications, shifts);
 
-  // Form state for creating a shift. branchId is deliberately not part of this
-  // form -- it's derived from the admin's active branch filter (selectedBranch)
-  // at submit time, since duplicating that choice inside the modal was
-  // redundant with the top-level branch filter the admin already sets.
+  // Form state for creating a shift.
   const [formData, setFormData] = useState({
     title: '',
     zone: 'dog' as ZoneCategory,
@@ -76,7 +69,6 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
   });
 
   const filteredShifts = shifts.filter(s => {
-    if (selectedBranch !== 'all' && s.branchId !== selectedBranch) return false;
     if (filterZone !== 'all' && s.zone !== filterZone) return false;
     return true;
   });
@@ -87,7 +79,6 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
 
     onCreateShift({
       title: formData.title || `${ZONE_CONFIGS[formData.zone]?.name || '園區'}志工班次`,
-      branchId: (selectedBranch !== 'all' ? selectedBranch : 'main') as BranchId,
       zone: formData.zone,
       date: formData.date,
       timeRange: formData.timeRange,
@@ -277,8 +268,6 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
       {viewMode === 'calendar' ? (
         <ShiftCalendarView
           shifts={shifts}
-          branches={branches}
-          selectedBranch={selectedBranch}
           onUpdateShift={onUpdateShift}
           onDeleteShift={onDeleteShift}
           onOpenAiGenerator={onOpenAiGenerator}
@@ -289,7 +278,6 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredShifts.map(shift => {
             const zoneConf = ZONE_CONFIGS[shift.zone];
-            const branch = branches.find(b => b.id === shift.branchId);
             const isFull = shift.currentCount >= shift.requiredCount;
 
             return (
@@ -324,7 +312,7 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
                   <div className="space-y-2 text-xs text-slate-600 font-sans">
                     <div className="flex items-center gap-2">
                       <MapPin className="w-3.5 h-3.5 text-[#5A5A40] shrink-0" />
-                      <span className="font-bold text-slate-800">{branch?.name}</span>
+                      <span className="font-bold text-slate-800">{shift.locationDetails}</span>
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -415,7 +403,6 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
         <AiScheduleModal
           shift={aiScheduleModalShift}
           volunteers={volunteers}
-          branches={branches}
           onClose={() => setAiScheduleModalShift(null)}
           onSendLineToast={onSendLineToast}
           onAssignVolunteer={onAssignVolunteer}
@@ -599,7 +586,6 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
         <ConflictCheckModal
           applications={applications}
           shifts={shifts}
-          branches={branches}
           onClose={() => setShowConflictModal(false)}
           onRejectApplication={(appId, notes) => {
             if (onUpdateApplicationStatus) {

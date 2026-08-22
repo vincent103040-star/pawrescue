@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PositionShift, VolunteerApplication, BranchId, Branch, AttendanceRecord } from '../types';
+import { PositionShift, VolunteerApplication, ShelterLocation, AttendanceRecord } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { AlertCircle, CheckCircle2, Users, Calendar, MapPin, ArrowRight, ShieldAlert, Sparkles, Filter, Eye, ChevronRight, QrCode, LogOut, Send, Zap, FileSpreadsheet, FileText, Download, Building2, Clock, BarChart3, Star, Smartphone, MessageSquare, ThumbsUp, Search, RefreshCw, SlidersHorizontal, LayoutGrid, EyeOff, Megaphone } from 'lucide-react';
 import { UrgentShortageModal } from './UrgentShortageModal';
@@ -19,8 +19,7 @@ import {
 interface DashboardProps {
   shifts: PositionShift[];
   applications: VolunteerApplication[];
-  branches: Branch[];
-  selectedBranch: BranchId | 'all';
+  shelterLocation: ShelterLocation;
   attendanceRecords?: AttendanceRecord[];
   onNavigateToTab: (tab: 'dashboard' | 'positions' | 'applications' | 'portal' | 'roster') => void;
   onApplyForShift: (shiftId: string) => void;
@@ -32,8 +31,7 @@ interface DashboardProps {
 export const Dashboard: React.FC<DashboardProps> = ({
   shifts,
   applications,
-  branches,
-  selectedBranch,
+  shelterLocation,
   attendanceRecords = [],
   onNavigateToTab,
   onApplyForShift,
@@ -206,65 +204,37 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const [yStr, mStr] = monthToExport.split('-');
     const formattedMonth = `${yStr} 年 ${mStr} 月`;
 
-    // Calculate per-branch stats for CSV
-    const branchStats = branches.map(branch => {
-      const bShifts = monthShifts.filter(s => s.branchId === branch.id);
-      const totalShifts = bShifts.length;
-      const requiredCount = bShifts.reduce((acc, s) => acc + s.requiredCount, 0);
-      const filledCount = bShifts.reduce((acc, s) => acc + s.currentCount, 0);
-      const shortageCount = Math.max(0, requiredCount - filledCount);
-      const shortageRate = requiredCount > 0 ? Math.round((shortageCount / requiredCount) * 100) : 0;
+    // Overall monthly stats (single shelter, no more per-branch breakdown)
+    const totalShiftsCount = monthShifts.length;
+    const requiredCount = monthShifts.reduce((acc, s) => acc + s.requiredCount, 0);
+    const filledCount = monthShifts.reduce((acc, s) => acc + s.currentCount, 0);
+    const shortageCount = Math.max(0, requiredCount - filledCount);
+    const shortageRate = requiredCount > 0 ? Math.round((shortageCount / requiredCount) * 100) : 0;
 
-      const bShiftIds = new Set(bShifts.map(s => s.id));
-      const bApps = applications.filter(a => bShiftIds.has(a.shiftId));
-      const uniqueVols = new Set(bApps.map(a => a.volunteerName || a.lineId)).size;
-      const totalVolunteers = Math.max(uniqueVols, filledCount);
+    const monthShiftIds = new Set(monthShifts.map(s => s.id));
+    const monthApps = applications.filter(a => monthShiftIds.has(a.shiftId));
+    const uniqueVols = new Set(monthApps.map(a => a.volunteerName || a.lineId)).size;
+    const totalVolunteers = Math.max(uniqueVols, filledCount);
 
-      const totalCompletedHours = Math.round(bShifts.reduce((acc, s) => {
-        const shiftHours = calculateShiftDurationHours(s.timeRange);
-        return acc + (s.currentCount * shiftHours);
-      }, 0));
+    const totalCompletedHours = Math.round(monthShifts.reduce((acc, s) => {
+      const shiftHours = calculateShiftDurationHours(s.timeRange);
+      return acc + (s.currentCount * shiftHours);
+    }, 0));
 
-      let statusLabel = '排班優良';
-      if (shortageRate > 30) statusLabel = '嚴重缺工';
-      else if (shortageRate > 10) statusLabel = '人力微緊';
-
-      return {
-        branchName: branch.name,
-        totalShifts,
-        requiredCount,
-        filledCount,
-        shortageCount,
-        shortageRate,
-        totalVolunteers,
-        totalCompletedHours,
-        statusLabel
-      };
-    });
-
-    const overallRequired = branchStats.reduce((acc, b) => acc + b.requiredCount, 0);
-    const overallFilled = branchStats.reduce((acc, b) => acc + b.filledCount, 0);
-    const overallShortage = Math.max(0, overallRequired - overallFilled);
-    const overallShortageRate = overallRequired > 0 ? Math.round((overallShortage / overallRequired) * 100) : 0;
-    const overallVolunteers = branchStats.reduce((acc, b) => acc + b.totalVolunteers, 0);
-    const overallHours = branchStats.reduce((acc, b) => acc + b.totalCompletedHours, 0);
+    let statusLabel = '排班優良';
+    if (shortageRate > 30) statusLabel = '嚴重缺工';
+    else if (shortageRate > 10) statusLabel = '人力微緊';
 
     // Title rows
-    csvRows.push(`"流浪動物之家人力排班 - ${formattedMonth}月度據點績效與缺工率統計總結"`);
+    csvRows.push(`"流浪動物之家人力排班 - ${formattedMonth}月度績效與缺工率統計總結"`);
     csvRows.push(`"匯出時間: ${new Date().toLocaleString('zh-TW')}"`);
-    csvRows.push(`"全機構平均缺工率: ${overallShortageRate}%", "當月總志工數: ${overallVolunteers}人", "當月完成總時數: ${overallHours}小時"`);
+    csvRows.push(`"當月缺工率: ${shortageRate}%", "當月總志工數: ${totalVolunteers}人", "當月完成總時數: ${totalCompletedHours}小時"`);
     csvRows.push('');
 
     // Headers
-    csvRows.push('"據點名稱","統計月份","當月總班次數","需求志工人數","已報名人數","缺工人數","缺工率(%)","總完成服務時數(小時)","據點運作評估"');
+    csvRows.push('"園區名稱","統計月份","當月總班次數","需求志工人數","已報名人數","缺工人數","缺工率(%)","總完成服務時數(小時)","運作評估"');
 
-    // Branch data rows
-    branchStats.forEach(stat => {
-      csvRows.push(`"${stat.branchName}","${monthToExport}","${stat.totalShifts}","${stat.requiredCount}","${stat.filledCount}","${stat.shortageCount}","${stat.shortageRate}%","${stat.totalCompletedHours}","${stat.statusLabel}"`);
-    });
-
-    // Total row
-    csvRows.push(`"全機構總計","${monthToExport}","${monthShifts.length}","${overallRequired}","${overallFilled}","${overallShortage}","${overallShortageRate}%","${overallHours}","營運總結"`);
+    csvRows.push(`"${shelterLocation.name}","${monthToExport}","${totalShiftsCount}","${requiredCount}","${filledCount}","${shortageCount}","${shortageRate}%","${totalCompletedHours}","${statusLabel}"`);
 
     const csvContent = '\uFEFF' + csvRows.join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -279,9 +249,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
     onSendLineToast(`📊 已匯出「${formattedMonth}」月度各據點績效總結 CSV 報表！`);
   };
 
-  // Filter shifts based on branch and date
+  // Filter shifts based on date
   const filteredShifts = shifts.filter(shift => {
-    if (selectedBranch !== 'all' && shift.branchId !== selectedBranch) return false;
     if (selectedDateFilter === 'today' && shift.date !== todayStr) return false;
     if (selectedDateFilter === 'upcoming' && shift.date < todayStr) return false;
     return true;
@@ -442,7 +411,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           onHide={() => handleHideModule('overview_stats')}
           collapsedSummary={
             <span>
-              當前缺工：<strong className={totalGap > 0 ? 'text-rose-600' : 'text-emerald-600'}>{totalGap > 0 ? `缺 ${totalGap} 人` : '全數補滿'}</strong> | 達成率：<strong>{fillRate}%</strong> ({totalFilled} / {totalRequired} 人) | 待審核：<strong>{pendingApps.length} 筆</strong> | 園區：<strong>{branches.length} 處</strong>
+              當前缺工：<strong className={totalGap > 0 ? 'text-rose-600' : 'text-emerald-600'}>{totalGap > 0 ? `缺 ${totalGap} 人` : '全數補滿'}</strong> | 達成率：<strong>{fillRate}%</strong> ({totalFilled} / {totalRequired} 人) | 待審核：<strong>{pendingApps.length} 筆</strong>
             </span>
           }
         >
@@ -513,17 +482,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </div>
             </div>
 
-            {/* Active Branches Card */}
+            {/* Shelter Location Card */}
             <div className="bg-[#fafaf7] border border-[#5A5A40]/12 p-5 rounded-[24px] shadow-2xs flex items-center space-x-4">
               <div className="p-3.5 rounded-2xl bg-purple-50 text-purple-700">
                 <MapPin className="w-7 h-7" />
               </div>
               <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">涵蓋動物之家據點</p>
-                <span className="text-2xl font-bold font-serif text-purple-900">
-                  {branches.length} 個分院
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">園區地點</p>
+                <span className="text-lg font-bold font-serif text-purple-900">
+                  {shelterLocation.name}
                 </span>
-                <p className="text-[11px] text-slate-500 mt-0.5">內建 Google Maps 據點導航</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">{shelterLocation.openHours}</p>
               </div>
             </div>
 
@@ -581,7 +550,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
       const mod2 = visibleModules.heatmap && (
         <HeatmapChart
           shifts={shifts}
-          branches={branches}
           onOpenUrgentModal={() => setShowUrgentModal(true)}
           onSendLineToast={onSendLineToast}
           isCollapsed={collapsedModules.heatmap}
@@ -593,7 +561,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
       // 3. 🔮 Gemini 3.6 Flash AI 資源需求預警與雙週物資人力缺口地圖
       const mod3 = visibleModules.ai_warning_map && (
         <ResourceWarningMap
-          branches={branches}
           shifts={shifts}
           onSendLineToast={onSendLineToast}
           isCollapsed={collapsedModules.ai_warning_map}
@@ -606,8 +573,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
       const mod4 = visibleModules.daily_duty && (
         <DailyDutyTaskboard
           shifts={shifts}
-          branches={branches}
-          selectedBranch={selectedBranch}
           onSendLineToast={onSendLineToast}
           isCollapsed={collapsedModules.daily_duty}
           onToggleCollapse={() => handleToggleModuleCollapse('daily_duty')}
@@ -675,71 +640,69 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </span>
             }
           >
-            {/* Per Branch Monthly Performance Summary Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {branches.map(branch => {
-                const mShifts = shifts.filter(s => s.date.startsWith(selectedExportMonth) && s.branchId === branch.id);
-                const req = mShifts.reduce((acc, s) => acc + s.requiredCount, 0);
-                const filled = mShifts.reduce((acc, s) => acc + s.currentCount, 0);
-                const shortage = Math.max(0, req - filled);
-                const shortageRate = req > 0 ? Math.round((shortage / req) * 100) : 0;
-                
-                const bShiftIds = new Set(mShifts.map(s => s.id));
-                const bApps = applications.filter(a => bShiftIds.has(a.shiftId));
-                const uniqueVols = new Set(bApps.map(a => a.volunteerName || a.lineId)).size;
-                const totalVols = Math.max(uniqueVols, filled);
+            {/* Monthly Performance Summary (single shelter, replaced the old per-branch comparison grid) */}
+            {(() => {
+              const mShifts = shifts.filter(s => s.date.startsWith(selectedExportMonth));
+              const req = mShifts.reduce((acc, s) => acc + s.requiredCount, 0);
+              const filled = mShifts.reduce((acc, s) => acc + s.currentCount, 0);
+              const shortage = Math.max(0, req - filled);
+              const shortageRate = req > 0 ? Math.round((shortage / req) * 100) : 0;
 
-                const totalHours = Math.round(mShifts.reduce((acc, s) => {
-                  return acc + (s.currentCount * calculateShiftDurationHours(s.timeRange));
-                }, 0));
+              const mShiftIds = new Set(mShifts.map(s => s.id));
+              const mApps = applications.filter(a => mShiftIds.has(a.shiftId));
+              const uniqueVols = new Set(mApps.map(a => a.volunteerName || a.lineId)).size;
+              const totalVols = Math.max(uniqueVols, filled);
 
-                return (
-                  <div key={branch.id} className="bg-[#fdfdfb] p-5 rounded-2xl border border-[#5A5A40]/15 space-y-3 hover:shadow-xs transition">
-                    <div className="flex items-center justify-between border-b border-[#5A5A40]/10 pb-2">
-                      <div className="flex items-center gap-2">
-                        <Building2 className="w-4 h-4 text-[#5A5A40]" />
-                        <span className="font-bold font-serif text-slate-900 text-sm">{branch.name}</span>
-                      </div>
-                      <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${
-                        shortageRate > 30 ? 'bg-rose-100 text-rose-800 border-rose-300' :
-                        shortageRate > 10 ? 'bg-amber-100 text-amber-800 border-amber-300' :
-                        'bg-emerald-100 text-emerald-800 border-emerald-300'
-                      }`}>
-                        缺工率 {shortageRate}%
-                      </span>
+              const totalHours = Math.round(mShifts.reduce((acc, s) => {
+                return acc + (s.currentCount * calculateShiftDurationHours(s.timeRange));
+              }, 0));
+
+              return (
+                <div className="bg-[#fdfdfb] p-5 rounded-2xl border border-[#5A5A40]/15 space-y-3">
+                  <div className="flex items-center justify-between border-b border-[#5A5A40]/10 pb-2">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-[#5A5A40]" />
+                      <span className="font-bold font-serif text-slate-900 text-sm">{shelterLocation.name}</span>
+                    </div>
+                    <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${
+                      shortageRate > 30 ? 'bg-rose-100 text-rose-800 border-rose-300' :
+                      shortageRate > 10 ? 'bg-amber-100 text-amber-800 border-amber-300' :
+                      'bg-emerald-100 text-emerald-800 border-emerald-300'
+                    }`}>
+                      缺工率 {shortageRate}%
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 text-center text-xs pt-1">
+                    <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+                      <span className="text-[10px] text-slate-400 block font-medium">總志工數</span>
+                      <span className="font-extrabold text-slate-900 font-mono text-base">{totalVols} <span className="text-[10px] font-sans font-normal">位</span></span>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2 text-center text-xs pt-1">
-                      <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-                        <span className="text-[10px] text-slate-400 block font-medium">總志工數</span>
-                        <span className="font-extrabold text-slate-900 font-mono text-base">{totalVols} <span className="text-[10px] font-sans font-normal">位</span></span>
-                      </div>
-
-                      <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-                        <span className="text-[10px] text-slate-400 block font-medium">完成總時數</span>
-                        <span className="font-extrabold text-[#5A5A40] font-mono text-base">{totalHours} <span className="text-[10px] font-sans font-normal">hr</span></span>
-                      </div>
-
-                      <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-                        <span className="text-[10px] text-slate-400 block font-medium">缺工人數</span>
-                        <span className={`font-extrabold font-mono text-base ${shortage > 0 ? 'text-rose-600' : 'text-slate-700'}`}>{shortage} <span className="text-[10px] font-sans font-normal">人</span></span>
-                      </div>
+                    <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+                      <span className="text-[10px] text-slate-400 block font-medium">完成總時數</span>
+                      <span className="font-extrabold text-[#5A5A40] font-mono text-base">{totalHours} <span className="text-[10px] font-sans font-normal">hr</span></span>
                     </div>
 
-                    <div className="text-[11px] text-slate-500 flex justify-between items-center pt-1">
-                      <span>共 {mShifts.length} 個班次 (需求 {req} 人)</span>
-                      <button
-                        onClick={() => setShowReportModal(true)}
-                        className="text-[#5A5A40] font-bold hover:underline flex items-center gap-0.5 cursor-pointer"
-                      >
-                        <span>開啟詳細報表</span>
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
+                    <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+                      <span className="text-[10px] text-slate-400 block font-medium">缺工人數</span>
+                      <span className={`font-extrabold font-mono text-base ${shortage > 0 ? 'text-rose-600' : 'text-slate-700'}`}>{shortage} <span className="text-[10px] font-sans font-normal">人</span></span>
                     </div>
                   </div>
-                );
-              })}
-            </div>
+
+                  <div className="text-[11px] text-slate-500 flex justify-between items-center pt-1">
+                    <span>共 {mShifts.length} 個班次 (需求 {req} 人)</span>
+                    <button
+                      onClick={() => setShowReportModal(true)}
+                      className="text-[#5A5A40] font-bold hover:underline flex items-center gap-0.5 cursor-pointer"
+                    >
+                      <span>開啟詳細報表</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
           </DashboardModuleCard>
         );
       })();
@@ -848,34 +811,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </div>
               </div>
 
-              {/* Per-Branch Breakdown Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {branches.map(branch => {
-                  const bFeedbacks = feedbackRecords.filter(r => r.branchId === branch.id);
-                  const bSum = bFeedbacks.reduce((acc, r) => acc + (r.rating || 5), 0);
-                  const bAvg = bFeedbacks.length > 0 ? (bSum / bFeedbacks.length).toFixed(1) : '5.0';
-
-                  return (
-                    <div key={branch.id} className="bg-[#f5f5f0]/60 p-3.5 rounded-2xl border border-[#5A5A40]/12 flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2">
-                        <Building2 className="w-4 h-4 text-[#5A5A40]" />
-                        <div>
-                          <span className="font-bold text-slate-900 block">{branch.name}</span>
-                          <span className="text-[10px] text-slate-500">已收集 {bFeedbacks.length} 筆回饋</span>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-extrabold text-amber-600 text-sm font-mono flex items-center gap-1">
-                          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                          <span>{bAvg}</span>
-                        </div>
-                        <span className="text-[10px] text-slate-400 font-normal">據點均分</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
               {/* Filter and Search Toolbar */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#f5f5f0]/80 p-3 rounded-2xl border border-[#5A5A40]/12">
                 {/* Search Input */}
@@ -940,7 +875,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {(() => {
                   const filtered = feedbackRecords.filter(r => {
-                    if (selectedBranch !== 'all' && r.branchId !== selectedBranch) return false;
                     const rating = r.rating || 5;
                     if (feedbackRatingFilter === '5' && rating !== 5) return false;
                     if (feedbackRatingFilter === '4' && rating !== 4) return false;
@@ -965,7 +899,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   }
 
                   return filtered.map(item => {
-                    const branchName = branches.find(b => b.id === item.branchId)?.name || '總部園區';
                     const ratingVal = item.rating || 5;
                     const isAcknowledged = acknowledgedFeedbackIds.includes(item.id);
 
@@ -985,7 +918,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                 </span>
                               </div>
                               <span className="text-[11px] text-[#5A5A40] font-medium block mt-0.5">
-                                📍 {branchName} ｜ {item.shiftTitle}
+                                📍 {item.shiftTitle}
                               </span>
                             </div>
 
@@ -1259,7 +1192,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
             .filter(s => s.requiredCount > s.currentCount)
             .map(shift => {
               const zoneConf = ZONE_CONFIGS[shift.zone];
-              const branch = branches.find(b => b.id === shift.branchId);
               const remaining = shift.requiredCount - shift.currentCount;
 
               return (
@@ -1272,10 +1204,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       <div className="flex items-center space-x-2">
                         <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${zoneConf?.badgeBg}`}>
                           {zoneConf?.name}
-                        </span>
-                        <span className="text-xs text-slate-500 flex items-center gap-1 font-medium">
-                          <MapPin className="w-3 h-3 text-[#5A5A40]" />
-                          {branch?.name}
                         </span>
                       </div>
                       <h4 className="font-bold text-slate-800 text-base mt-1">
@@ -1331,7 +1259,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {showUrgentModal && (
         <UrgentShortageModal
           shifts={shifts}
-          branches={branches}
+          shelterLocation={shelterLocation}
           onClose={() => setShowUrgentModal(false)}
           onSendLineToast={onSendLineToast}
           onApplyForShift={onApplyForShift}
@@ -1342,7 +1270,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {showReportModal && (
         <MonthlyReportModal
           month={selectedExportMonth}
-          branches={branches}
+          shelterLocation={shelterLocation}
           shifts={shifts}
           applications={applications}
           onClose={() => setShowReportModal(false)}
