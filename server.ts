@@ -79,6 +79,45 @@ async function startServer() {
   app.use('/sop-videos', express.static(sopVideosDir));
 
   // API endpoint: AI Recruitment Post Generator using Gemini API
+  // Gemini writes in Markdown by habit ("**實習志工**", "* 條列"), but nothing
+  // here renders Markdown: the app prints these strings as plain text and LINE
+  // messages don't support formatting at all. Left alone, volunteers literally
+  // see the asterisks. Telling the model not to use Markdown isn't reliable, so
+  // every AI-authored string is cleaned here instead -- one place, deterministic.
+  function stripMarkdown(text: string): string {
+    if (!text) return '';
+    return text
+      // Bullet markers at the start of a line become a real bullet character
+      // rather than vanishing, so lists stay readable.
+      .replace(/^[ \t]*[*+-][ \t]+/gm, '• ')
+      // Headings: drop the leading #s but keep the words.
+      .replace(/^[ \t]*#{1,6}[ \t]*/gm, '')
+      // Bold/italic wrappers, longest first so ** isn't left half-stripped.
+      .replace(/\*\*\*(.+?)\*\*\*/g, '$1')
+      .replace(/\*\*(.+?)\*\*/g, '$1')
+      .replace(/\*(.+?)\*/g, '$1')
+      .replace(/___(.+?)___/g, '$1')
+      .replace(/__(.+?)__/g, '$1')
+      // Inline code / code fences.
+      .replace(/```[a-zA-Z]*\n?/g, '')
+      .replace(/`([^`]+)`/g, '$1')
+      // Any asterisk that survived the pairs above (e.g. an unmatched one).
+      .replace(/\*/g, '')
+      .trim();
+  }
+
+  /** Applies stripMarkdown to every string in an object, recursively. */
+  function stripMarkdownDeep<T>(value: T): T {
+    if (typeof value === 'string') return stripMarkdown(value) as unknown as T;
+    if (Array.isArray(value)) return value.map(stripMarkdownDeep) as unknown as T;
+    if (value && typeof value === 'object') {
+      const out: any = {};
+      for (const [k, v] of Object.entries(value as any)) out[k] = stripMarkdownDeep(v);
+      return out;
+    }
+    return value;
+  }
+
   app.post('/api/ai/generate-post', async (req, res) => {
     const { title, zoneName, branchName, date, timeRange, requiredCount, tasks } = req.body;
 
@@ -123,7 +162,7 @@ async function startServer() {
         contents: prompt
       });
 
-      const generatedText = response.text || '';
+      const generatedText = stripMarkdown(response.text || '');
       return res.json({ success: true, postContent: generatedText });
     } catch (error: any) {
       console.warn('Gemini API Error (fallback activated):', error?.message || error);
@@ -183,7 +222,7 @@ async function startServer() {
         contents: prompt
       });
 
-      const generatedText = response.text || '';
+      const generatedText = stripMarkdown(response.text || '');
       return res.json({ success: true, pushContent: generatedText });
     } catch (error: any) {
       console.warn('Gemini Urgent Push API Error (fallback activated):', error?.message || error);
@@ -270,8 +309,8 @@ ${JSON.stringify(shelterData, null, 2)}
         return res.json({
           success: true,
           isFallback: false,
-          globalSummary: parsed.globalSummary,
-          prediction: parsed.prediction
+          globalSummary: stripMarkdown(parsed.globalSummary),
+          prediction: stripMarkdownDeep(parsed.prediction)
         });
       }
 
@@ -352,7 +391,7 @@ ${JSON.stringify(shelterData, null, 2)}
         contents: prompt
       });
 
-      const question = (response.text || '').trim().replace(/^["「]|["」]$/g, '');
+      const question = stripMarkdown(response.text || '').replace(/^["「]|["」]$/g, '');
       if (!question) {
         return res.json({ success: true, question: fallbackQuestion, isFallback: true });
       }
@@ -417,8 +456,8 @@ ${JSON.stringify(shelterData, null, 2)}
           success: true,
           isFallback: false,
           score: parsed.score,
-          feedback: parsed.feedback,
-          flags: Array.isArray(parsed.flags) ? parsed.flags : []
+          feedback: stripMarkdown(parsed.feedback),
+          flags: Array.isArray(parsed.flags) ? parsed.flags.map(stripMarkdown) : []
         });
       }
 
@@ -499,7 +538,7 @@ ${contextText}
         contents: prompt
       });
 
-      const answer = (response.text || '').trim();
+      const answer = stripMarkdown(response.text || '');
       if (!answer) throw new Error('Empty answer from Gemini');
 
       return {
@@ -848,7 +887,7 @@ ${contextText}
         ]
       });
 
-      const caption = (response.text || '').trim();
+      const caption = stripMarkdown(response.text || '');
       if (!caption) throw new Error('Empty caption from Gemini');
 
       return res.json({ success: true, caption, isFallback: false });
