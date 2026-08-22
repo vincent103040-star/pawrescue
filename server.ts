@@ -846,57 +846,6 @@ ${contextText}
     }
   });
 
-  // API endpoint: detect a pet's two ears in an uploaded photo, for the
-  // papercraft feature's ear texture -- the fixed heuristic guide regions
-  // (see faceRegions.ts on the client) are a rough guess and often miss the
-  // actual ear, especially on photos where the ears aren't symmetric or the
-  // face isn't perfectly centered. Returns normalized (0..1) bounding boxes
-  // so the client can convert them into its own guide-space coordinates.
-  app.post('/api/ai/detect-pet-ears', async (req, res) => {
-    const { imageBase64, mimeType } = req.body;
-
-    if (!imageBase64 || !mimeType) {
-      return res.status(400).json({ success: false, error: '缺少照片資料' });
-    }
-
-    try {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        return res.json({ success: true, earLeft: null, earRight: null, isFallback: true });
-      }
-
-      const ai = new GoogleGenAI({
-        apiKey,
-        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
-      });
-
-      const prompt = `這張照片裡有一隻貓或狗。請找出牠的左耳與右耳（以照片中「觀看者視角」的左右為準，不是動物自己的左右）各自的邊界框。
-
-請務必以【純 JSON 格式】回覆（不要包含 markdown \`\`\`json 或額外文字），格式如下，所有數值是 0 到 1 之間的比例座標（0,0 是照片左上角，1,1 是右下角）：
-{
-  "earLeft": { "x": 左耳邊界框左上角X比例, "y": 左耳邊界框左上角Y比例, "width": 寬度比例, "height": 高度比例 } 或 null(看不到左耳時),
-  "earRight": { "x": ..., "y": ..., "width": ..., "height": ... } 或 null(看不到右耳時)
-}`;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.6-flash',
-        contents: [
-          { text: prompt },
-          { inlineData: { mimeType, data: imageBase64 } }
-        ]
-      });
-
-      const raw = (response.text || '').trim();
-      const cleanJson = raw.replace(/```json/g, '').replace(/```/g, '').trim();
-      const parsed = JSON.parse(cleanJson);
-
-      return res.json({ success: true, earLeft: parsed.earLeft ?? null, earRight: parsed.earRight ?? null, isFallback: false });
-    } catch (error: any) {
-      console.warn('Ear Detection Error (fallback activated):', error?.message || error);
-      return res.json({ success: true, earLeft: null, earRight: null, isFallback: true });
-    }
-  });
-
   // API endpoint: Google login / self profile-edit upsert into the persistent SQLite volunteer DB
   app.post('/api/auth/google-phone-login', async (req, res) => {
     try {
