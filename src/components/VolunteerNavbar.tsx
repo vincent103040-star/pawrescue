@@ -27,7 +27,7 @@ export const VolunteerNavbar: React.FC<VolunteerNavbarProps> = ({
     <header className="bg-white border-b border-amber-200/80 sticky top-0 z-40 shadow-xs">
       
       {/* Top Volunteer Notice & Status Bar */}
-      <div className="bg-[#5A5A40] text-white text-xs py-1.5 px-4 flex flex-wrap gap-y-1 justify-between items-center font-medium">
+      <div className="bg-[#716053] text-white text-xs py-1.5 px-4 flex flex-wrap gap-y-1 justify-between items-center font-medium">
         <div className="flex items-center space-x-2 min-w-0">
           <span className="bg-amber-100 text-amber-900 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold tracking-wider uppercase flex items-center gap-1 shrink-0">
             <HeartHandshake className="w-3 h-3 text-amber-700" />
@@ -65,12 +65,12 @@ export const VolunteerNavbar: React.FC<VolunteerNavbarProps> = ({
 
           {/* Logo & Volunteer Portal Name */}
           <div className="flex items-center space-x-3 cursor-pointer group min-w-0" onClick={() => setActiveTab('shifts')}>
-            <div className="w-11 h-11 rounded-2xl bg-[#5A5A40] text-white flex items-center justify-center shadow-xs transform transition group-hover:scale-105 shrink-0">
+            <div className="w-11 h-11 rounded-2xl bg-[#716053] text-white flex items-center justify-center shadow-xs transform transition group-hover:scale-105 shrink-0">
               <PawPrint className="w-6 h-6 text-white" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center space-x-2 flex-wrap">
-                <h1 className="text-xl font-bold font-serif italic text-[#5A5A40] tracking-tight whitespace-nowrap">
+                <h1 className="text-xl font-bold font-serif italic text-[#716053] tracking-tight whitespace-nowrap">
                   浪浪家園 PawRescue
                 </h1>
                 <span className="text-[10px] bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-0.5 rounded-full font-bold whitespace-nowrap">
@@ -108,13 +108,13 @@ export const VolunteerNavbar: React.FC<VolunteerNavbarProps> = ({
         </div>
 
         {/* Volunteer Navigation Tabs */}
-        <div className="flex space-x-1 overflow-x-auto pb-2.5 pt-1 border-t border-[#5A5A40]/10 no-scrollbar">
+        <div className="flex space-x-1 overflow-x-auto pb-2.5 pt-1 border-t border-[#716053] no-scrollbar">
           <button
             onClick={() => setActiveTab('shifts')}
             className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap flex items-center space-x-1.5 transition cursor-pointer ${
               activeTab === 'shifts'
-                ? 'bg-[#5A5A40] text-white shadow-xs'
-                : 'text-slate-600 hover:bg-[#E6E2D3]/40 hover:text-[#5A5A40]'
+                ? 'bg-[#716053] text-white shadow-xs'
+                : 'text-slate-600 hover:bg-[#F5E6D0]/40 hover:text-[#716053]'
             }`}
           >
             <Calendar className="w-4 h-4 text-amber-300" />
@@ -125,14 +125,14 @@ export const VolunteerNavbar: React.FC<VolunteerNavbarProps> = ({
             onClick={() => setActiveTab('myshifts')}
             className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap flex items-center space-x-1.5 transition relative cursor-pointer ${
               activeTab === 'myshifts'
-                ? 'bg-[#5A5A40] text-white shadow-xs'
-                : 'text-slate-600 hover:bg-[#E6E2D3]/40 hover:text-[#5A5A40]'
+                ? 'bg-[#716053] text-white shadow-xs'
+                : 'text-slate-600 hover:bg-[#F5E6D0]/40 hover:text-[#716053]'
             }`}
           >
             <Calendar className="w-4 h-4 text-sky-300" />
             <span>2. 我的排班與出勤紀錄</span>
             {myApplicationsCount > 0 && (
-              <span className="ml-1 px-2 py-0.5 text-[10px] bg-[#5A5A40] text-white rounded-full font-bold">
+              <span className="ml-1 px-2 py-0.5 text-[10px] bg-[#716053] text-white rounded-full font-bold">
                 {myApplicationsCount}
               </span>
             )}
@@ -142,8 +142,8 @@ export const VolunteerNavbar: React.FC<VolunteerNavbarProps> = ({
             onClick={() => setActiveTab('growth')}
             className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap flex items-center space-x-1.5 transition cursor-pointer ${
               activeTab === 'growth'
-                ? 'bg-[#5A5A40] text-white shadow-xs'
-                : 'text-slate-600 hover:bg-[#E6E2D3]/40 hover:text-[#5A5A40]'
+                ? 'bg-[#716053] text-white shadow-xs'
+                : 'text-slate-600 hover:bg-[#F5E6D0]/40 hover:text-[#716053]'
             }`}
           >
             <TrendingUp className="w-4 h-4 text-amber-300" />
@@ -154,8 +154,8 @@ export const VolunteerNavbar: React.FC<VolunteerNavbarProps> = ({
             onClick={() => setActiveTab('settings')}
             className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap flex items-center space-x-1.5 transition cursor-pointer ${
               activeTab === 'settings'
-                ? 'bg-[#5A5A40] text-white shadow-xs'
-                : 'text-slate-600 hover:bg-[#E6E2D3]/40 hover:text-[#5A5A40]'
+                ? 'bg-[#716053] text-white shadow-xs'
+                : 'text-slate-600 hover:bg-[#F5E6D0]/40 hover:text-[#716053]'
             }`}
           >
             <Settings className="w-4 h-4 text-purple-300" />
@@ -166,8 +166,8 @@ export const VolunteerNavbar: React.FC<VolunteerNavbarProps> = ({
             onClick={() => setActiveTab('sop')}
             className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap flex items-center space-x-1.5 transition cursor-pointer ${
               activeTab === 'sop'
-                ? 'bg-[#5A5A40] text-white shadow-xs'
-                : 'text-slate-600 hover:bg-[#E6E2D3]/40 hover:text-[#5A5A40]'
+                ? 'bg-[#716053] text-white shadow-xs'
+                : 'text-slate-600 hover:bg-[#F5E6D0]/40 hover:text-[#716053]'
             }`}
           >
             <BookOpen className="w-4 h-4 text-emerald-300" />

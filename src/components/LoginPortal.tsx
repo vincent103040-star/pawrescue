@@ -135,21 +135,21 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f5f0] text-[#333333] flex flex-col justify-between selection:bg-[#E6E2D3] selection:text-[#5A5A40]">
+    <div className="min-h-screen bg-[#FAF6EE] text-[#716053] flex flex-col justify-between selection:bg-[#F5E6D0] selection:text-[#716053]">
       
       {/* Top Header Bar */}
-      <header className="bg-white border-b border-[#5A5A40]/15 py-4 px-6 sm:px-10 sticky top-0 z-30 shadow-2xs">
+      <header className="bg-white border-b border-[#716053] py-4 px-6 sm:px-10 sticky top-0 z-30 shadow-2xs">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-11 h-11 rounded-2xl bg-[#5A5A40] text-white flex items-center justify-center shadow-xs">
+            <div className="w-11 h-11 rounded-2xl bg-[#716053] text-white flex items-center justify-center shadow-xs">
               <PawPrint className="w-6 h-6 text-white" />
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <h1 className="text-xl font-bold font-serif italic text-[#5A5A40] tracking-tight">
+                <h1 className="text-xl font-bold font-serif italic text-[#716053] tracking-tight">
                   浪浪家園 PawRescue
                 </h1>
-                <span className="text-[10px] bg-[#E6E2D3] text-[#5A5A40] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                <span className="text-[10px] bg-[#F5E6D0] text-[#716053] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
                   身分登入門戶
                 </span>
               </div>
@@ -208,19 +208,19 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
 
         {/* Live System Stats Ticker */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5 max-w-4xl mx-auto">
-          <div className="bg-white p-3.5 rounded-2xl border border-[#5A5A40]/12 text-center shadow-2xs">
-            <div className="text-lg font-extrabold text-[#5A5A40]">{openShiftsCount}</div>
+          <div className="bg-white p-3.5 rounded-2xl border border-[#716053] text-center shadow-2xs">
+            <div className="text-lg font-extrabold text-[#716053]">{openShiftsCount}</div>
             <div className="text-[11px] text-slate-500 font-medium">全院區開放預約班次</div>
           </div>
-          <div className="bg-white p-3.5 rounded-2xl border border-[#5A5A40]/12 text-center shadow-2xs">
+          <div className="bg-white p-3.5 rounded-2xl border border-[#716053] text-center shadow-2xs">
             <div className="text-lg font-extrabold text-rose-600">{pendingApplicationsCount}</div>
             <div className="text-[11px] text-slate-500 font-medium">待審核志工報名名單</div>
           </div>
-          <div className="bg-white p-3.5 rounded-2xl border border-[#5A5A40]/12 text-center shadow-2xs">
+          <div className="bg-white p-3.5 rounded-2xl border border-[#716053] text-center shadow-2xs">
             <div className="text-lg font-extrabold text-emerald-700">{totalVolunteersCount}</div>
             <div className="text-[11px] text-slate-500 font-medium">人才庫註冊志工夥伴</div>
           </div>
-          <div className="bg-white p-3.5 rounded-2xl border border-[#5A5A40]/12 text-center shadow-2xs">
+          <div className="bg-white p-3.5 rounded-2xl border border-[#716053] text-center shadow-2xs">
             <div className="text-lg font-extrabold text-sky-700 truncate">{shelterLocationName}</div>
             <div className="text-[11px] text-slate-500 font-medium">園區地點</div>
           </div>
@@ -234,10 +234,10 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {VOLUNTEER_TESTIMONIALS.map((t, idx) => (
-              <div key={idx} className="bg-white rounded-[24px] border border-[#5A5A40]/12 p-5 shadow-2xs space-y-3">
+              <div key={idx} className="bg-white rounded-[24px] border border-[#716053] p-5 shadow-2xs space-y-3">
                 <Quote className="w-5 h-5 text-amber-400 fill-amber-200" />
                 <p className="text-xs text-slate-700 leading-relaxed">{t.quote}</p>
-                <div className="flex items-center gap-2.5 pt-1 border-t border-[#5A5A40]/10">
+                <div className="flex items-center gap-2.5 pt-1 border-t border-[#716053]">
                   <img
                     src={t.avatar}
                     alt=""
@@ -281,7 +281,7 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
             {ADOPTION_SUCCESS_STORIES.map((s, idx) => (
               <div
                 key={idx}
-                className="group relative rounded-[20px] overflow-hidden aspect-[4/5] shadow-2xs border border-[#5A5A40]/10"
+                className="group relative rounded-[20px] overflow-hidden aspect-[4/5] shadow-2xs border border-[#716053]"
               >
                 <img
                   src={s.photo}
@@ -326,20 +326,20 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-5xl mx-auto items-stretch">
           
           {/* Card 1: 管理者 / 社工人員 (Manager / Admin Guide) */}
-          <div className="bg-white rounded-[32px] border-2 border-[#5A5A40]/25 p-7 sm:p-9 shadow-md flex flex-col justify-between space-y-6 relative overflow-hidden transition duration-300 hover:border-[#5A5A40] hover:shadow-xl group">
+          <div className="bg-white rounded-[32px] border-2 border-[#716053] p-7 sm:p-9 shadow-md flex flex-col justify-between space-y-6 relative overflow-hidden transition duration-300 hover:border-[#716053] hover:shadow-xl group">
             
             {/* Top Tag & Header */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <span className="bg-[#5A5A40] text-white text-xs font-extrabold px-3.5 py-1.5 rounded-full flex items-center gap-1.5 shadow-xs">
-                  <ShieldCheck className="w-4 h-4 text-[#E6E2D3]" />
+                <span className="bg-[#716053] text-white text-xs font-extrabold px-3.5 py-1.5 rounded-full flex items-center gap-1.5 shadow-xs">
+                  <ShieldCheck className="w-4 h-4 text-[#F5E6D0]" />
                   <span>第一種身分 &bull; 管理端</span>
                 </span>
                 <span className="text-xs text-slate-400 font-medium">Admin & Staff</span>
               </div>
 
               <div>
-                <h3 className="text-2xl font-bold font-serif italic text-slate-900 group-hover:text-[#5A5A40] transition">
+                <h3 className="text-2xl font-bold font-serif italic text-slate-900 group-hover:text-[#716053] transition">
                   管理者 / 社工督導人員
                 </h3>
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed">
@@ -348,32 +348,32 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
               </div>
 
               {/* Function Features List */}
-              <div className="bg-[#f5f5f0] p-4.5 rounded-2xl border border-[#5A5A40]/10 space-y-2.5 text-xs text-slate-700 font-sans">
-                <div className="font-bold text-[#5A5A40] mb-1 flex items-center gap-1.5">
+              <div className="bg-[#FAF6EE] p-4.5 rounded-2xl border border-[#716053] space-y-2.5 text-xs text-slate-700 font-sans">
+                <div className="font-bold text-[#716053] mb-1 flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                   <span>後台專有功能清單：</span>
                 </div>
                 <div className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#5A5A40] mt-1.5 shrink-0"></span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#716053] mt-1.5 shrink-0"></span>
                   <span><strong>缺工統計預警看板</strong>：各場域即時人力、缺工熱點地圖、當日值日生任務板</span>
                 </div>
                 <div className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#5A5A40] mt-1.5 shrink-0"></span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#716053] mt-1.5 shrink-0"></span>
                   <span><strong>職位與班次發布</strong>：AI 一鍵生成招募貼文、AI 智慧自動配對排班</span>
                 </div>
                 <div className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#5A5A40] mt-1.5 shrink-0"></span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#716053] mt-1.5 shrink-0"></span>
                   <span><strong>報名與審核流程</strong>：時段衝突即時預警、錄取推播 LINE 與日曆</span>
                 </div>
                 <div className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#5A5A40] mt-1.5 shrink-0"></span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#716053] mt-1.5 shrink-0"></span>
                   <span><strong>志工人才庫名冊</strong>：志工等級維護、服務時數紀錄、月度排班報表匯出</span>
                 </div>
               </div>
             </div>
 
             {/* Admin Username / Password Login */}
-            <form onSubmit={handleAdminLoginSubmit} className="space-y-3 pt-2 border-t border-[#5A5A40]/10">
+            <form onSubmit={handleAdminLoginSubmit} className="space-y-3 pt-2 border-t border-[#716053]">
               <div>
                 <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">帳號</label>
                 <div className="relative">
@@ -383,7 +383,7 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
                     value={adminUsername}
                     onChange={e => setAdminUsername(e.target.value)}
                     placeholder="Admin"
-                    className="w-full pl-9 pr-3 py-2.5 bg-[#f5f5f0] border border-[#5A5A40]/20 rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                    className="w-full pl-9 pr-3 py-2.5 bg-[#FAF6EE] border border-[#716053] rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#716053] focus:outline-none"
                   />
                 </div>
               </div>
@@ -397,7 +397,7 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
                     value={adminPassword}
                     onChange={e => setAdminPassword(e.target.value)}
                     placeholder="0000"
-                    className="w-full pl-9 pr-9 py-2.5 bg-[#f5f5f0] border border-[#5A5A40]/20 rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                    className="w-full pl-9 pr-9 py-2.5 bg-[#FAF6EE] border border-[#716053] rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#716053] focus:outline-none"
                   />
                   <button
                     type="button"
@@ -421,11 +421,11 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
               {/* Main Enter Button */}
               <button
                 type="submit"
-                className="w-full py-3.5 bg-[#5A5A40] hover:bg-[#484833] text-white font-extrabold rounded-2xl text-xs shadow-md transition flex items-center justify-center gap-2 cursor-pointer transform group-hover:scale-[1.01]"
+                className="w-full py-3.5 bg-[#716053] hover:bg-[#5A4A3F] text-white font-extrabold rounded-2xl text-xs shadow-md transition flex items-center justify-center gap-2 cursor-pointer transform group-hover:scale-[1.01]"
               >
-                <Shield className="w-4 h-4 text-[#E6E2D3]" />
+                <Shield className="w-4 h-4 text-[#F5E6D0]" />
                 <span>進入管理者 / 社工督導控制台</span>
-                <ArrowRight className="w-4 h-4 text-[#E6E2D3]" />
+                <ArrowRight className="w-4 h-4 text-[#F5E6D0]" />
               </button>
             </form>
 
@@ -533,8 +533,8 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
         </div>
 
         {/* System Architecture Feature Overview */}
-        <div className="bg-white rounded-[28px] p-6 sm:p-8 border border-[#5A5A40]/12 shadow-xs max-w-5xl mx-auto space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#5A5A40]/10 pb-3">
+        <div className="bg-white rounded-[28px] p-6 sm:p-8 border border-[#716053] shadow-xs max-w-5xl mx-auto space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#716053] pb-3">
             <h4 className="font-bold font-serif text-slate-900 text-base flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-amber-600" />
               <span>雙軌介面獨立設計 &bull; 資料與通知全自動即時同步</span>
@@ -545,9 +545,9 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs font-sans">
-            <div className="bg-[#f5f5f0] p-3.5 rounded-2xl border border-[#5A5A40]/10 space-y-1.5">
-              <div className="font-bold text-[#5A5A40] flex items-center gap-1.5">
-                <span className="w-5 h-5 rounded-full bg-[#5A5A40] text-white flex items-center justify-center text-[10px]">1</span>
+            <div className="bg-[#FAF6EE] p-3.5 rounded-2xl border border-[#716053] space-y-1.5">
+              <div className="font-bold text-[#716053] flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-[#716053] text-white flex items-center justify-center text-[10px]">1</span>
                 <span>志工端一鍵搶班</span>
               </div>
               <p className="text-slate-600 text-[11px] leading-relaxed">
@@ -555,9 +555,9 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
               </p>
             </div>
 
-            <div className="bg-[#f5f5f0] p-3.5 rounded-2xl border border-[#5A5A40]/10 space-y-1.5">
-              <div className="font-bold text-[#5A5A40] flex items-center gap-1.5">
-                <span className="w-5 h-5 rounded-full bg-[#5A5A40] text-white flex items-center justify-center text-[10px]">2</span>
+            <div className="bg-[#FAF6EE] p-3.5 rounded-2xl border border-[#716053] space-y-1.5">
+              <div className="font-bold text-[#716053] flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-[#716053] text-white flex items-center justify-center text-[10px]">2</span>
                 <span>管理者即時審核</span>
               </div>
               <p className="text-slate-600 text-[11px] leading-relaxed">
@@ -565,9 +565,9 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
               </p>
             </div>
 
-            <div className="bg-[#f5f5f0] p-3.5 rounded-2xl border border-[#5A5A40]/10 space-y-1.5">
-              <div className="font-bold text-[#5A5A40] flex items-center gap-1.5">
-                <span className="w-5 h-5 rounded-full bg-[#5A5A40] text-white flex items-center justify-center text-[10px]">3</span>
+            <div className="bg-[#FAF6EE] p-3.5 rounded-2xl border border-[#716053] space-y-1.5">
+              <div className="font-bold text-[#716053] flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-[#716053] text-white flex items-center justify-center text-[10px]">3</span>
                 <span>日曆與地圖串聯</span>
               </div>
               <p className="text-slate-600 text-[11px] leading-relaxed">
@@ -575,9 +575,9 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
               </p>
             </div>
 
-            <div className="bg-[#f5f5f0] p-3.5 rounded-2xl border border-[#5A5A40]/10 space-y-1.5">
-              <div className="font-bold text-[#5A5A40] flex items-center gap-1.5">
-                <span className="w-5 h-5 rounded-full bg-[#5A5A40] text-white flex items-center justify-center text-[10px]">4</span>
+            <div className="bg-[#FAF6EE] p-3.5 rounded-2xl border border-[#716053] space-y-1.5">
+              <div className="font-bold text-[#716053] flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-[#716053] text-white flex items-center justify-center text-[10px]">4</span>
                 <span>出勤簽到與成長</span>
               </div>
               <p className="text-slate-600 text-[11px] leading-relaxed">
@@ -604,7 +604,7 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
       )}
 
       {/* Footer */}
-      <footer className="bg-[#5A5A40] text-white/80 py-6 text-center text-xs border-t border-[#5A5A40]/20 space-y-2">
+      <footer className="bg-[#716053] text-white/80 py-6 text-center text-xs border-t border-[#716053] space-y-2">
         <p className="text-amber-200/90 italic font-serif text-xs">
           「謝謝你，讓我們相信，每一隻浪浪都值得被溫柔對待。」 —— 來自浪浪家園全體毛孩
         </p>

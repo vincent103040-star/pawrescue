@@ -203,13 +203,13 @@ export const GooglePhoneAuthModal: React.FC<GooglePhoneAuthModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#5A5A40]/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-[#716053]/60 backdrop-blur-xs flex items-center justify-center p-4">
 
       {/* Modal Container */}
       <div className="bg-white rounded-[32px] max-w-xl w-full shadow-2xl overflow-hidden border-2 border-amber-400/80 animate-in fade-in zoom-in-95 duration-200">
 
         {/* Modal Header */}
-        <div className="bg-gradient-to-r from-amber-600 via-amber-700 to-[#5A5A40] p-6 text-white flex justify-between items-center">
+        <div className="bg-gradient-to-r from-amber-600 via-amber-700 to-[#716053] p-6 text-white flex justify-between items-center">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-xs flex items-center justify-center shadow-inner">
               <ShieldCheck className="w-6 h-6 text-amber-100" />

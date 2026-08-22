@@ -221,23 +221,23 @@ export const DailyDutyTaskboard: React.FC<DailyDutyTaskboardProps> = ({
   return (
     <div
       id="module-daily_duty"
-      className="bg-white rounded-[32px] border border-[#5A5A40]/15 p-6 sm:p-8 shadow-xs space-y-6 transition-all duration-300 overflow-hidden"
+      className="bg-white rounded-[32px] border border-[#716053] p-6 sm:p-8 shadow-xs space-y-6 transition-all duration-300 overflow-hidden"
     >
       {/* Header Bar */}
-      <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 ${isCollapsed ? '' : 'border-b border-[#5A5A40]/10 pb-4'}`}>
+      <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 ${isCollapsed ? '' : 'border-b border-[#716053] pb-4'}`}>
         <div
           onClick={onToggleCollapse}
           className="flex items-start gap-3 cursor-pointer select-none group"
         >
-          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-[#5A5A40] text-amber-300 flex items-center justify-center shrink-0 shadow-xs font-bold group-hover:scale-105 transition-transform">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-[#716053] text-amber-300 flex items-center justify-center shrink-0 shadow-xs font-bold group-hover:scale-105 transition-transform">
             <ClipboardCheck className="w-6 h-6 text-amber-300" />
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-xl font-bold font-serif italic text-slate-900 group-hover:text-[#5A5A40] transition-colors">
+              <h3 className="text-xl font-bold font-serif italic text-slate-900 group-hover:text-[#716053] transition-colors">
                 4. 每日志工勤務看板 &amp; SOP 執行追蹤
               </h3>
-              <span className="bg-[#E6E2D3] text-[#5A5A40] text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border border-[#5A5A40]/20">
+              <span className="bg-[#F5E6D0] text-[#716053] text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border border-[#716053]">
                 今日日期: {todayStr}
               </span>
               {isCollapsed && (
@@ -280,16 +280,16 @@ export const DailyDutyTaskboard: React.FC<DailyDutyTaskboardProps> = ({
               type="button"
               onClick={onToggleCollapse}
               title={isCollapsed ? '展開此模組' : '折疊收合此模組'}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-[#f5f5f0] hover:bg-[#E6E2D3] text-[#5A5A40] border border-[#5A5A40]/15 transition flex items-center gap-1 cursor-pointer active:scale-95 shadow-2xs"
+              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-[#FAF6EE] hover:bg-[#F5E6D0] text-[#716053] border border-[#716053] transition flex items-center gap-1 cursor-pointer active:scale-95 shadow-2xs"
             >
               {isCollapsed ? (
                 <>
-                  <ChevronDown className="w-4 h-4 text-[#5A5A40]" />
+                  <ChevronDown className="w-4 h-4 text-[#716053]" />
                   <span>展開</span>
                 </>
               ) : (
                 <>
-                  <ChevronUp className="w-4 h-4 text-[#5A5A40]" />
+                  <ChevronUp className="w-4 h-4 text-[#716053]" />
                   <span>折疊</span>
                 </>
               )}
@@ -314,15 +314,15 @@ export const DailyDutyTaskboard: React.FC<DailyDutyTaskboardProps> = ({
       {isCollapsed && (
         <div
           onClick={onToggleCollapse}
-          className="pt-2 border-t border-[#5A5A40]/10 flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-600 cursor-pointer gap-2"
+          className="pt-2 border-t border-[#716053] flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-600 cursor-pointer gap-2"
         >
           <div className="flex items-center gap-2 overflow-hidden text-ellipsis">
-            <span className="font-bold text-[#5A5A40] shrink-0">📌 勤務 SOP 摘要：</span>
+            <span className="font-bold text-[#716053] shrink-0">📌 勤務 SOP 摘要：</span>
             <span className="text-slate-700 truncate">
               今日進度 {completedCount} / {totalCount} 項目（必做 SOP {requiredCompleted} / {requiredTotal} 完成，整體達成率 {progressPct}%）
             </span>
           </div>
-          <span className="text-[11px] font-bold text-[#5A5A40] hover:underline shrink-0 flex items-center gap-0.5">
+          <span className="text-[11px] font-bold text-[#716053] hover:underline shrink-0 flex items-center gap-0.5">
             <span>點擊展開檢核清單</span>
             <ChevronDown className="w-3.5 h-3.5" />
           </span>
@@ -333,13 +333,13 @@ export const DailyDutyTaskboard: React.FC<DailyDutyTaskboardProps> = ({
       {!isCollapsed && (
         <div className="space-y-6 animate-fadeIn">
           {/* Progress & Milestone Bar */}
-          <div className="bg-[#fdfdfb] p-5 rounded-2xl border border-[#5A5A40]/15 shadow-2xs space-y-3">
+          <div className="bg-[#FFFDF7] p-5 rounded-2xl border border-[#716053] shadow-2xs space-y-3">
         <div className="flex items-center justify-between text-xs font-bold">
           <div className="flex items-center gap-2 text-slate-800">
-            <ListChecks className="w-4 h-4 text-[#5A5A40]" />
+            <ListChecks className="w-4 h-4 text-[#716053]" />
             <span>今日 SOP 總達成進度 ({completedCount}/{totalCount} 項)</span>
           </div>
-          <span className="text-base font-extrabold font-mono text-[#5A5A40]">
+          <span className="text-base font-extrabold font-mono text-[#716053]">
             {progressPct}%
           </span>
         </div>
@@ -347,7 +347,7 @@ export const DailyDutyTaskboard: React.FC<DailyDutyTaskboardProps> = ({
         {/* Progress Line */}
         <div className="w-full bg-slate-200 h-3 rounded-full overflow-hidden p-0.5 border border-slate-300/50">
           <div 
-            className="bg-gradient-to-r from-[#5A5A40] to-amber-500 h-full rounded-full transition-all duration-500 shadow-xs"
+            className="bg-gradient-to-r from-[#716053] to-amber-500 h-full rounded-full transition-all duration-500 shadow-xs"
             style={{ width: `${progressPct}%` }}
           ></div>
         </div>
@@ -372,7 +372,7 @@ export const DailyDutyTaskboard: React.FC<DailyDutyTaskboardProps> = ({
           onClick={() => setSelectedZoneFilter('all')}
           className={`px-3 py-1.5 rounded-xl font-bold transition cursor-pointer border ${
             selectedZoneFilter === 'all'
-              ? 'bg-[#5A5A40] text-white border-[#5A5A40]'
+              ? 'bg-[#716053] text-white border-[#716053]'
               : 'bg-white text-slate-700 hover:bg-slate-100 border-slate-200'
           }`}
         >
@@ -387,7 +387,7 @@ export const DailyDutyTaskboard: React.FC<DailyDutyTaskboardProps> = ({
               onClick={() => setSelectedZoneFilter(zKey)}
               className={`px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1 cursor-pointer border ${
                 selectedZoneFilter === zKey
-                  ? 'bg-[#5A5A40] text-white border-[#5A5A40]'
+                  ? 'bg-[#716053] text-white border-[#716053]'
                   : 'bg-white text-slate-700 hover:bg-slate-100 border-slate-200'
               }`}
             >
@@ -410,7 +410,7 @@ export const DailyDutyTaskboard: React.FC<DailyDutyTaskboardProps> = ({
               className={`p-4 rounded-2xl border transition cursor-pointer flex items-start gap-3.5 shadow-2xs hover:shadow-xs ${
                 item.isCompleted
                   ? 'bg-slate-50/80 border-slate-300 opacity-90'
-                  : 'bg-[#fdfdfb] border-[#5A5A40]/20 hover:border-[#5A5A40]'
+                  : 'bg-[#FFFDF7] border-[#716053] hover:border-[#716053]'
               }`}
             >
               {/* Checkbox Icon */}
@@ -418,7 +418,7 @@ export const DailyDutyTaskboard: React.FC<DailyDutyTaskboardProps> = ({
                 {item.isCompleted ? (
                   <CheckSquare className="w-5 h-5 text-emerald-600 fill-emerald-100" />
                 ) : (
-                  <Square className="w-5 h-5 text-slate-400 hover:text-[#5A5A40]" />
+                  <Square className="w-5 h-5 text-slate-400 hover:text-[#716053]" />
                 )}
               </div>
 
@@ -426,7 +426,7 @@ export const DailyDutyTaskboard: React.FC<DailyDutyTaskboardProps> = ({
               <div className="flex-1 space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] font-bold text-[#5A5A40] font-serif">
+                    <span className="text-[11px] font-bold text-[#716053] font-serif">
                       {item.category}
                     </span>
                     {item.isRequired && (

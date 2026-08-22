@@ -610,17 +610,17 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
       />
 
       {/* Sub Navigation Bar for Volunteer Portal */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-2.5 rounded-[24px] border border-[#5A5A40]/15 shadow-xs">
+      <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-2.5 rounded-[24px] border border-[#716053] shadow-xs">
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setActivePortalTab('shifts')}
             className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
               activePortalTab === 'shifts'
-                ? 'bg-[#5A5A40] text-white shadow-xs'
-                : 'bg-transparent text-slate-700 hover:bg-[#f5f5f0]'
+                ? 'bg-[#716053] text-white shadow-xs'
+                : 'bg-transparent text-slate-700 hover:bg-[#FAF6EE]'
             }`}
           >
-            <Heart className="w-4 h-4 text-[#E6E2D3]" />
+            <Heart className="w-4 h-4 text-[#F5E6D0]" />
             <span>線上預約報名班次 ({shifts.length})</span>
           </button>
 
@@ -628,8 +628,8 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
             onClick={() => setActivePortalTab('growth')}
             className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
               activePortalTab === 'growth'
-                ? 'bg-[#5A5A40] text-white shadow-xs'
-                : 'bg-transparent text-slate-700 hover:bg-[#f5f5f0]'
+                ? 'bg-[#716053] text-white shadow-xs'
+                : 'bg-transparent text-slate-700 hover:bg-[#FAF6EE]'
             }`}
           >
             <TrendingUp className="w-4 h-4 text-amber-300" />
@@ -640,8 +640,8 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
             onClick={() => setActivePortalTab('settings')}
             className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-2 cursor-pointer relative ${
               activePortalTab === 'settings'
-                ? 'bg-[#5A5A40] text-white shadow-xs'
-                : 'bg-transparent text-slate-700 hover:bg-[#f5f5f0]'
+                ? 'bg-[#716053] text-white shadow-xs'
+                : 'bg-transparent text-slate-700 hover:bg-[#FAF6EE]'
             }`}
           >
             <Settings className="w-4 h-4 text-amber-300" />
@@ -663,7 +663,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
       {activePortalTab === 'shifts' && (
         <div className="space-y-6">
           {/* Top Bar with Mode Switch and Stats */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-[24px] border border-[#5A5A40]/15 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-[24px] border border-[#716053] shadow-xs">
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-base font-bold font-serif text-slate-900">
@@ -679,13 +679,13 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
             </div>
 
             {/* View Mode Switcher */}
-            <div className="flex items-center bg-[#f5f5f0] p-1.5 rounded-2xl border border-[#5A5A40]/15 shrink-0 self-start sm:self-auto">
+            <div className="flex items-center bg-[#FAF6EE] p-1.5 rounded-2xl border border-[#716053] shrink-0 self-start sm:self-auto">
               <button
                 type="button"
                 onClick={() => setViewMode('calendar')}
                 className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                   viewMode === 'calendar'
-                    ? 'bg-[#5A5A40] text-white shadow-2xs'
+                    ? 'bg-[#716053] text-white shadow-2xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -698,7 +698,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                 onClick={() => setViewMode('grid')}
                 className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                   viewMode === 'grid'
-                    ? 'bg-[#5A5A40] text-white shadow-2xs'
+                    ? 'bg-[#716053] text-white shadow-2xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -720,15 +720,15 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
           ) : (
             <div className="space-y-6">
               {/* Zone Filter Tabs for Grid View */}
-              <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-[24px] border border-[#5A5A40]/12">
+              <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-[24px] border border-[#716053]">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-bold text-[#5A5A40] uppercase tracking-wider mr-1">場域分類：</span>
+                  <span className="text-xs font-bold text-[#716053] uppercase tracking-wider mr-1">場域分類：</span>
                   <button
                     onClick={() => setSelectedZoneFilter('all')}
                     className={`px-4 py-1.5 rounded-full text-xs font-bold transition cursor-pointer ${
                       selectedZoneFilter === 'all'
-                        ? 'bg-[#5A5A40] text-white shadow-xs'
-                        : 'bg-[#f5f5f0] text-slate-600 hover:bg-[#E6E2D3]/40'
+                        ? 'bg-[#716053] text-white shadow-xs'
+                        : 'bg-[#FAF6EE] text-slate-600 hover:bg-[#F5E6D0]/40'
                     }`}
                   >
                     全部場域 (All)
@@ -742,8 +742,8 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                         onClick={() => setSelectedZoneFilter(zKey)}
                         className={`px-4 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                           selectedZoneFilter === zKey
-                            ? 'bg-[#5A5A40] text-white shadow-xs'
-                            : 'bg-[#f5f5f0] text-slate-600 hover:bg-[#E6E2D3]/40'
+                            ? 'bg-[#716053] text-white shadow-xs'
+                            : 'bg-[#FAF6EE] text-slate-600 hover:bg-[#F5E6D0]/40'
                         }`}
                       >
                         <span>{zConf.icon}</span>
@@ -753,7 +753,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                   })}
                 </div>
 
-                <span className="text-xs text-[#5A5A40] font-semibold">
+                <span className="text-xs text-[#716053] font-semibold">
                   共 {filteredShifts.length} 個開放預約班次
                 </span>
               </div>
@@ -774,7 +774,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                           ? 'border-emerald-400 bg-emerald-50/20' 
                           : isFull 
                           ? 'border-slate-200 opacity-80' 
-                          : 'border-[#5A5A40]/15'
+                          : 'border-[#716053]'
                       }`}
                     >
                       <div className="space-y-4">
@@ -796,7 +796,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                               🐱 喵力滿點 (已額滿)
                             </span>
                           ) : (
-                            <span className="text-xs font-bold px-3 py-1 bg-[#5A5A40] text-white rounded-full shadow-2xs">
+                            <span className="text-xs font-bold px-3 py-1 bg-[#716053] text-white rounded-full shadow-2xs">
                               🐶 尚缺 {remaining} 人 (急召中)
                             </span>
                           )}
@@ -810,27 +810,27 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                         {/* Info List */}
                         <div className="space-y-2 text-xs text-slate-600 font-sans">
                           <div className="flex items-center gap-2">
-                            <MapPin className="w-4 h-4 text-[#5A5A40] shrink-0" />
+                            <MapPin className="w-4 h-4 text-[#716053] shrink-0" />
                             <span className="font-bold text-slate-800">{shift.locationDetails}</span>
                           </div>
 
                           <div className="flex items-center gap-2">
-                            <Calendar className="w-4 h-4 text-[#5A5A40] shrink-0" />
-                            <span className="font-semibold text-[#5A5A40]">
+                            <Calendar className="w-4 h-4 text-[#716053] shrink-0" />
+                            <span className="font-semibold text-[#716053]">
                               {shift.date} ({shift.timeRange})
                             </span>
                           </div>
 
                           <div className="flex items-center gap-2">
-                            <Clock className="w-4 h-4 text-[#5A5A40] shrink-0" />
+                            <Clock className="w-4 h-4 text-[#716053] shrink-0" />
                             <span>需求與現有：{shift.currentCount} / {shift.requiredCount} 人</span>
                           </div>
                         </div>
 
                         {/* Tasks list */}
                         {shift.tasks && shift.tasks.length > 0 && (
-                          <div className="bg-[#fdfdfb] p-3 rounded-2xl border border-slate-200 text-xs space-y-1">
-                            <span className="font-bold text-[#5A5A40] text-[11px] block">🐾 服務任務：</span>
+                          <div className="bg-[#FFFDF7] p-3 rounded-2xl border border-slate-200 text-xs space-y-1">
+                            <span className="font-bold text-[#716053] text-[11px] block">🐾 服務任務：</span>
                             {shift.tasks.map((task, idx) => (
                               <div key={idx} className="flex items-center gap-1.5 text-slate-700 text-xs">
                                 <span className="text-amber-500 font-bold">•</span>
@@ -841,21 +841,21 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                         )}
 
                         {/* Description */}
-                        <p className="text-xs text-slate-600 bg-[#f5f5f0] p-3.5 rounded-2xl leading-relaxed border border-[#5A5A40]/10 font-sans">
+                        <p className="text-xs text-slate-600 bg-[#FAF6EE] p-3.5 rounded-2xl leading-relaxed border border-[#716053] font-sans">
                           {shift.description}
                         </p>
 
                         {/* Location trigger simulator */}
-                        <div className="bg-[#fdfdfb] p-3.5 rounded-2xl border border-[#5A5A40]/12 text-xs space-y-1 font-sans">
-                          <div className="flex items-center justify-between font-bold text-[#5A5A40]">
+                        <div className="bg-[#FFFDF7] p-3.5 rounded-2xl border border-[#716053] text-xs space-y-1 font-sans">
+                          <div className="flex items-center justify-between font-bold text-[#716053]">
                             <span className="flex items-center gap-1">
-                              <MapPin className="w-3.5 h-3.5 text-[#5A5A40]" /> Google 地圖導航
+                              <MapPin className="w-3.5 h-3.5 text-[#716053]" /> Google 地圖導航
                             </span>
                             <a
                               href={shelterLocation.googleMapsUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-[10px] text-[#5A5A40] hover:underline flex items-center gap-0.5"
+                              className="text-[10px] text-[#716053] hover:underline flex items-center gap-0.5"
                             >
                               <span>打開 Google Maps</span>
                               <ArrowUpRight className="w-3 h-3" />
@@ -869,7 +869,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                       </div>
 
                       {/* Apply Button */}
-                      <div className="mt-6 pt-4 border-t border-[#5A5A40]/10">
+                      <div className="mt-6 pt-4 border-t border-[#716053]">
                         {isApplied ? (
                           <div className="space-y-2">
                             <div className="w-full py-2.5 rounded-full font-bold text-xs bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center justify-center gap-2">
@@ -880,7 +880,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                               <button
                                 type="button"
                                 onClick={() => onNavigateToTab('myshifts')}
-                                className="w-full text-center text-xs text-[#5A5A40] hover:text-[#3e3e2b] font-bold hover:underline py-1 cursor-pointer flex items-center justify-center gap-1"
+                                className="w-full text-center text-xs text-[#716053] hover:text-[#3e3e2b] font-bold hover:underline py-1 cursor-pointer flex items-center justify-center gap-1"
                               >
                                 <span>前往「我的排班」查看詳情或取消報名</span>
                                 <ArrowUpRight className="w-3 h-3" />
@@ -894,10 +894,10 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                             className={`w-full py-3 rounded-full font-bold text-xs shadow-xs transition flex items-center justify-center gap-2 cursor-pointer ${
                               isFull
                                 ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                                : 'bg-[#5A5A40] hover:bg-[#484833] text-white'
+                                : 'bg-[#716053] hover:bg-[#5A4A3F] text-white'
                             }`}
                           >
-                            <Heart className="w-4 h-4 text-[#E6E2D3]" />
+                            <Heart className="w-4 h-4 text-[#F5E6D0]" />
                             <span>{isFull ? '本班次已滿班' : '一鍵搶班 / 線上登記報名'}</span>
                           </button>
                         )}
@@ -917,9 +917,9 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
         <div className="space-y-6 font-sans">
           
           {/* Header Banner */}
-          <div className="bg-white rounded-[28px] p-6 border border-[#5A5A40]/15 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="bg-white rounded-[28px] p-6 border border-[#716053] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-[#5A5A40] text-white flex items-center justify-center shrink-0 shadow-xs">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-[#716053] text-white flex items-center justify-center shrink-0 shadow-xs">
                 <TrendingUp className="w-6 h-6 text-amber-200" />
               </div>
               <div>
@@ -946,7 +946,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                 <button
                   type="button"
                   onClick={handleManualNotifyAdmin}
-                  className="px-3 py-2 bg-[#5A5A40] hover:bg-[#484833] text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  className="px-3 py-2 bg-[#716053] hover:bg-[#5A4A3F] text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
                 >
                   <Bell className="w-3.5 h-3.5 text-amber-300" />
                   <span>通知管理員審核</span>
@@ -956,15 +956,15 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
           </div>
 
           {/* 志工成長軌跡 (Growth Pathway Card) */}
-          <div className="bg-white rounded-[28px] p-6 border border-[#5A5A40]/15 shadow-xs space-y-6">
+          <div className="bg-white rounded-[28px] p-6 border border-[#716053] shadow-xs space-y-6">
             
             {/* Progress Bar & Stage Milestones */}
-            <div className="bg-[#fdfdfb] p-5 rounded-2xl border border-[#5A5A40]/12 space-y-4">
+            <div className="bg-[#FFFDF7] p-5 rounded-2xl border border-[#716053] space-y-4">
               <div className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2 font-bold text-slate-800">
-                  <Award className="w-4 h-4 text-[#5A5A40]" />
+                  <Award className="w-4 h-4 text-[#716053]" />
                   <span>晉升【資深志工】解鎖門檻進度：</span>
-                  <span className="text-[#5A5A40] text-sm font-extrabold">{growthProgressPercent}%</span>
+                  <span className="text-[#716053] text-sm font-extrabold">{growthProgressPercent}%</span>
                   <span className="text-slate-500 font-normal">({completedGrowthCount} / {totalGrowthCount} 項目達成)</span>
                 </div>
 
@@ -976,7 +976,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
               {/* Dynamic Progress Bar */}
               <div className="w-full bg-slate-200 h-3.5 rounded-full overflow-hidden p-0.5 shadow-inner relative">
                 <div
-                  className="bg-gradient-to-r from-[#5A5A40] via-amber-600 to-amber-500 h-full rounded-full transition-all duration-500 shadow-xs"
+                  className="bg-gradient-to-r from-[#716053] via-amber-600 to-amber-500 h-full rounded-full transition-all duration-500 shadow-xs"
                   style={{ width: `${growthProgressPercent}%` }}
                 />
               </div>
@@ -996,12 +996,12 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
 
                 {/* Stage 2 */}
                 <div className="bg-white p-3 rounded-xl border border-emerald-400 bg-emerald-100/60 flex items-center gap-2.5 shadow-2xs">
-                  <div className="w-8 h-8 rounded-full bg-[#5A5A40] text-white flex items-center justify-center shrink-0 text-xs font-bold">
+                  <div className="w-8 h-8 rounded-full bg-[#716053] text-white flex items-center justify-center shrink-0 text-xs font-bold">
                     ★
                   </div>
                   <div className="text-xs">
                     <div className="font-bold text-slate-900">🌿 正式志工</div>
-                    <div className="text-[10px] text-[#5A5A40] font-bold">目前位階 (24h)</div>
+                    <div className="text-[10px] text-[#716053] font-bold">目前位階 (24h)</div>
                   </div>
                 </div>
 
@@ -1095,10 +1095,10 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h4 className="font-bold font-serif text-slate-900 text-sm flex items-center gap-2">
-                  <BookOpen className="w-4 h-4 text-[#5A5A40]" />
+                  <BookOpen className="w-4 h-4 text-[#716053]" />
                   <span>『資深志工』晉升考核項目清單 (點擊項目切換完成狀態)</span>
                 </h4>
-                <span className="text-xs text-[#5A5A40] font-bold bg-[#f5f5f0] px-3 py-1 rounded-full border border-[#5A5A40]/10">
+                <span className="text-xs text-[#716053] font-bold bg-[#FAF6EE] px-3 py-1 rounded-full border border-[#716053]">
                   達成項目：{completedGrowthCount} / {totalGrowthCount}
                 </span>
               </div>
@@ -1111,7 +1111,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                     className={`p-4 rounded-2xl border transition flex items-start justify-between gap-4 cursor-pointer ${
                       item.completed
                         ? 'bg-emerald-50/70 border-emerald-200 hover:bg-emerald-50'
-                        : 'bg-white border-slate-200 hover:border-[#5A5A40]/30 hover:bg-[#f5f5f0]/50'
+                        : 'bg-white border-slate-200 hover:border-[#716053] hover:bg-[#FAF6EE]/50'
                     }`}
                   >
                     <div className="flex items-start gap-3">
@@ -1174,9 +1174,9 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
         <div className="space-y-6 font-sans">
           
           {/* Header Banner */}
-          <div className="bg-white rounded-[28px] p-6 border border-[#5A5A40]/15 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="bg-white rounded-[28px] p-6 border border-[#716053] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-[#5A5A40] text-white flex items-center justify-center shrink-0 shadow-xs">
+              <div className="w-12 h-12 rounded-2xl bg-[#716053] text-white flex items-center justify-center shrink-0 shadow-xs">
                 <BellRing className="w-6 h-6 text-amber-300" />
               </div>
               <div>
@@ -1198,9 +1198,9 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
           <form onSubmit={handleSaveProfileAndPrefs} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
             {/* Left Column: Personal Profile Form */}
-            <div className="bg-white rounded-[28px] p-6 border border-[#5A5A40]/15 shadow-xs space-y-4">
-              <div className="flex items-center gap-2 font-bold font-serif text-slate-900 border-b border-[#5A5A40]/10 pb-3 text-sm">
-                <User className="w-4 h-4 text-[#5A5A40]" />
+            <div className="bg-white rounded-[28px] p-6 border border-[#716053] shadow-xs space-y-4">
+              <div className="flex items-center gap-2 font-bold font-serif text-slate-900 border-b border-[#716053] pb-3 text-sm">
+                <User className="w-4 h-4 text-[#716053]" />
                 <span>志工預設基本資料</span>
               </div>
 
@@ -1211,10 +1211,10 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                   <img
                     src={pendingAvatar?.previewUrl || profileAvatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(profileName || '志工')}`}
                     alt="大頭照"
-                    className="w-16 h-16 rounded-2xl object-cover border-2 border-[#5A5A40]/20 shadow-xs bg-[#f5f5f0]"
+                    className="w-16 h-16 rounded-2xl object-cover border-2 border-[#716053] shadow-xs bg-[#FAF6EE]"
                   />
                   <label
-                    className="absolute -bottom-1.5 -right-1.5 bg-[#5A5A40] hover:bg-[#484833] text-white rounded-full p-1.5 shadow-xs cursor-pointer transition"
+                    className="absolute -bottom-1.5 -right-1.5 bg-[#716053] hover:bg-[#5A4A3F] text-white rounded-full p-1.5 shadow-xs cursor-pointer transition"
                     title="上傳大頭照"
                   >
                     <Camera className="w-3.5 h-3.5 text-amber-300" />
@@ -1227,48 +1227,48 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                   </label>
                 </div>
                 <div className="text-[11px] text-slate-500">
-                  <p className="font-bold text-[#5A5A40]">大頭照</p>
+                  <p className="font-bold text-[#716053]">大頭照</p>
                   <p>點擊右下角相機圖示更換，會自動壓縮成小檔案上傳。</p>
                   {pendingAvatar && <p className="text-amber-700 font-bold mt-0.5">已選好新照片，按下方「儲存」才會真的上傳。</p>}
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#5A5A40] mb-1">稱謂</label>
+                <label className="block text-xs font-bold text-[#716053] mb-1">稱謂</label>
                 <input
                   type="text"
                   required
                   value={profileName}
                   onChange={e => setProfileName(e.target.value)}
-                  className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs font-medium focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                  className="w-full p-3 bg-[#FAF6EE] border border-[#716053] rounded-2xl text-xs font-medium focus:ring-2 focus:ring-[#716053] focus:outline-none"
                 />
                 <p className="text-[10px] text-slate-400 mt-1">預設帶入您的 LINE 顯示名稱（若尚未連結則帶入 Google 帳號名稱），也可自行修改。</p>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#5A5A40] mb-1">行動電話</label>
+                <label className="block text-xs font-bold text-[#716053] mb-1">行動電話</label>
                 <input
                   type="tel"
                   placeholder="未有資料"
                   value={profilePhone}
                   onChange={e => setProfilePhone(e.target.value)}
-                  className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs font-medium focus:ring-2 focus:ring-[#5A5A40] focus:outline-none placeholder:text-slate-400"
+                  className="w-full p-3 bg-[#FAF6EE] border border-[#716053] rounded-2xl text-xs font-medium focus:ring-2 focus:ring-[#716053] focus:outline-none placeholder:text-slate-400"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#5A5A40] mb-1">電子郵件</label>
+                <label className="block text-xs font-bold text-[#716053] mb-1">電子郵件</label>
                 <input
                   type="email"
                   placeholder="未有資料"
                   value={profileEmail}
                   onChange={e => setProfileEmail(e.target.value)}
-                  className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs font-medium focus:ring-2 focus:ring-[#5A5A40] focus:outline-none placeholder:text-slate-400"
+                  className="w-full p-3 bg-[#FAF6EE] border border-[#716053] rounded-2xl text-xs font-medium focus:ring-2 focus:ring-[#716053] focus:outline-none placeholder:text-slate-400"
                 />
               </div>
 
               <div>
-                <label className="flex items-center gap-1 text-xs font-bold text-[#5A5A40] mb-1">
+                <label className="flex items-center gap-1 text-xs font-bold text-[#716053] mb-1">
                   <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
                   <span>緊急聯絡人</span>
                 </label>
@@ -1277,12 +1277,12 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                   placeholder="例：張太太 (配偶) 0933-221-101"
                   value={profileEmergencyContact}
                   onChange={e => setProfileEmergencyContact(e.target.value)}
-                  className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs font-medium focus:ring-2 focus:ring-[#5A5A40] focus:outline-none placeholder:text-slate-400"
+                  className="w-full p-3 bg-[#FAF6EE] border border-[#716053] rounded-2xl text-xs font-medium focus:ring-2 focus:ring-[#716053] focus:outline-none placeholder:text-slate-400"
                 />
                 <p className="text-[10px] text-slate-400 mt-1">發生意外時，社工督導會依此聯絡資訊通知您的家人。</p>
               </div>
 
-              <div className="bg-[#fdfdfb] p-3 rounded-xl border border-[#5A5A40]/12 text-[11px] text-[#5A5A40] space-y-1">
+              <div className="bg-[#FFFDF7] p-3 rounded-xl border border-[#716053] text-[11px] text-[#716053] space-y-1">
                 <div className="font-bold flex items-center gap-1">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                   <span>LINE @浪浪家園 服務號帳號連線</span>
@@ -1321,8 +1321,8 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
             <div className="lg:col-span-2 space-y-6">
               
               {/* LINE Notification Preferences Box */}
-              <div className="bg-white rounded-[28px] p-6 border border-[#5A5A40]/15 shadow-xs space-y-5">
-                <div className="flex items-center justify-between border-b border-[#5A5A40]/10 pb-3 gap-3 flex-wrap">
+              <div className="bg-white rounded-[28px] p-6 border border-[#716053] shadow-xs space-y-5">
+                <div className="flex items-center justify-between border-b border-[#716053] pb-3 gap-3 flex-wrap">
                   <div className="flex items-center gap-2 font-bold font-serif text-slate-900 text-sm">
                     <Bell className="w-4.5 h-4.5 text-amber-600" />
                     <span>『LINE 通知偏好』切換選項</span>
@@ -1330,7 +1330,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
 
                   <button
                     type="submit"
-                    className="bg-[#5A5A40] hover:bg-[#484833] text-white font-extrabold px-5 py-2 rounded-full text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer shrink-0"
+                    className="bg-[#716053] hover:bg-[#5A4A3F] text-white font-extrabold px-5 py-2 rounded-full text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer shrink-0"
                   >
                     <Save className="w-3.5 h-3.5 text-amber-300" />
                     <span>儲存設定</span>
@@ -1351,7 +1351,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                 <div className="space-y-4">
                   
                   {/* Toggle 1: 班次異動 */}
-                  <div className="bg-[#f5f5f0]/80 hover:bg-[#f5f5f0] p-4 rounded-2xl border border-[#5A5A40]/12 flex items-start justify-between gap-4 transition">
+                  <div className="bg-[#FAF6EE]/80 hover:bg-[#FAF6EE] p-4 rounded-2xl border border-[#716053] flex items-start justify-between gap-4 transition">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <span className="text-base">🔄</span>
@@ -1385,7 +1385,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                   </div>
 
                   {/* Toggle 2: 緊急招募 */}
-                  <div className="bg-[#f5f5f0]/80 hover:bg-[#f5f5f0] p-4 rounded-2xl border border-[#5A5A40]/12 flex items-start justify-between gap-4 transition">
+                  <div className="bg-[#FAF6EE]/80 hover:bg-[#FAF6EE] p-4 rounded-2xl border border-[#716053] flex items-start justify-between gap-4 transition">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <span className="text-base">🚨</span>
@@ -1419,7 +1419,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                   </div>
 
                   {/* Toggle 3: 簽到提醒 */}
-                  <div className="bg-[#f5f5f0]/80 hover:bg-[#f5f5f0] p-4 rounded-2xl border border-[#5A5A40]/12 flex items-start justify-between gap-4 transition">
+                  <div className="bg-[#FAF6EE]/80 hover:bg-[#FAF6EE] p-4 rounded-2xl border border-[#716053] flex items-start justify-between gap-4 transition">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <span className="text-base">⏰</span>
@@ -1451,7 +1451,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                                 return updated;
                               });
                             }}
-                            className="p-1.5 bg-white border border-[#5A5A40]/20 rounded-xl text-xs font-bold text-[#5A5A40]"
+                            className="p-1.5 bg-white border border-[#716053] rounded-xl text-xs font-bold text-[#716053]"
                           >
                             <option value={1}>出班前 1 小時</option>
                             <option value={2}>出班前 2 小時</option>
@@ -1528,19 +1528,19 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
 
       {/* Registration Form Modal */}
       {activeShiftForApply && (
-        <div className="fixed inset-0 z-50 bg-[#5A5A40]/40 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-[32px] max-w-lg w-full shadow-2xl p-6 sm:p-8 border border-[#5A5A40]/20 space-y-5 my-8">
+        <div className="fixed inset-0 z-50 bg-[#716053]/40 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-[32px] max-w-lg w-full shadow-2xl p-6 sm:p-8 border border-[#716053] space-y-5 my-8">
             
-            <div className="flex items-center justify-between border-b border-[#5A5A40]/10 pb-3">
+            <div className="flex items-center justify-between border-b border-[#716053] pb-3">
               <div>
                 <h3 className="font-bold font-serif text-lg text-slate-900">
                   🐾 線上登記報名 - 志工班次
                 </h3>
-                <p className="text-xs text-[#5A5A40] font-sans mt-0.5">{activeShiftForApply.title}</p>
+                <p className="text-xs text-[#716053] font-sans mt-0.5">{activeShiftForApply.title}</p>
               </div>
               <button
                 onClick={() => setActiveShiftForApply(null)}
-                className="text-slate-400 hover:text-[#5A5A40] font-bold text-lg cursor-pointer"
+                className="text-slate-400 hover:text-[#716053] font-bold text-lg cursor-pointer"
               >
                 ✕
               </button>
@@ -1548,8 +1548,8 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
 
             {submittedSuccess ? (
               <div className="py-12 text-center space-y-4 font-sans">
-                <CheckCircle2 className="w-12 h-12 text-[#5A5A40] mx-auto animate-bounce" />
-                <h4 className="font-bold text-lg font-serif italic text-[#5A5A40]">報名資料已成功送出！</h4>
+                <CheckCircle2 className="w-12 h-12 text-[#716053] mx-auto animate-bounce" />
+                <h4 className="font-bold text-lg font-serif italic text-[#716053]">報名資料已成功送出！</h4>
                 <p className="text-xs text-slate-500 max-w-xs mx-auto">
                   社工審核後將透過 LINE 機器人自動發送提醒通知。
                 </p>
@@ -1563,7 +1563,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                   })}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 bg-[#5A5A40] hover:bg-[#484833] text-white font-bold text-xs px-5 py-2.5 rounded-full shadow-xs transition cursor-pointer"
+                  className="inline-flex items-center gap-2 bg-[#716053] hover:bg-[#5A4A3F] text-white font-bold text-xs px-5 py-2.5 rounded-full shadow-xs transition cursor-pointer"
                 >
                   <Calendar className="w-4 h-4 text-amber-300" />
                   <span>加入 Google 日曆</span>
@@ -1574,68 +1574,68 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
               <form onSubmit={handleConfirmApply} className="space-y-4 text-xs font-sans">
                 
                 <div>
-                  <label className="block font-bold text-[#5A5A40] mb-1">您的真實姓名 *</label>
+                  <label className="block font-bold text-[#716053] mb-1">您的真實姓名 *</label>
                   <input
                     type="text"
                     required
                     value={name}
                     onChange={e => setName(e.target.value)}
                     placeholder="例如：林小明"
-                    className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                    className="w-full p-3 bg-[#FAF6EE] border border-[#716053] rounded-2xl focus:ring-2 focus:ring-[#716053] focus:outline-none"
                   />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block font-bold text-[#5A5A40] mb-1">電話號碼 *</label>
+                    <label className="block font-bold text-[#716053] mb-1">電話號碼 *</label>
                     <input
                       type="tel"
                       required
                       value={phone}
                       onChange={e => setPhone(e.target.value)}
                       placeholder="0912-345-678"
-                      className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                      className="w-full p-3 bg-[#FAF6EE] border border-[#716053] rounded-2xl focus:ring-2 focus:ring-[#716053] focus:outline-none"
                     />
                   </div>
 
                   <div>
-                    <label className="block font-bold text-[#5A5A40] mb-1">LINE ID (推播提醒用) *</label>
+                    <label className="block font-bold text-[#716053] mb-1">LINE ID (推播提醒用) *</label>
                     <input
                       type="text"
                       required
                       value={lineId}
                       onChange={e => setLineId(e.target.value)}
                       placeholder="e.g. xiaoming_line"
-                      className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                      className="w-full p-3 bg-[#FAF6EE] border border-[#716053] rounded-2xl focus:ring-2 focus:ring-[#716053] focus:outline-none"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block font-bold text-[#5A5A40] mb-1">電子郵件 Email *</label>
+                  <label className="block font-bold text-[#716053] mb-1">電子郵件 Email *</label>
                   <input
                     type="email"
                     required
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     placeholder="xiaoming@gmail.com"
-                    className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                    className="w-full p-3 bg-[#FAF6EE] border border-[#716053] rounded-2xl focus:ring-2 focus:ring-[#716053] focus:outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block font-bold text-[#5A5A40] mb-1">過去志工經驗或特別說明 (選填)</label>
+                  <label className="block font-bold text-[#716053] mb-1">過去志工經驗或特別說明 (選填)</label>
                   <textarea
                     value={notes}
                     onChange={e => setNotes(e.target.value)}
                     placeholder="家中養貓3年，熟悉貓砂清潔與親人安撫..."
                     rows={3}
-                    className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                    className="w-full p-3 bg-[#FAF6EE] border border-[#716053] rounded-2xl focus:ring-2 focus:ring-[#716053] focus:outline-none"
                   />
                 </div>
 
-                <div className="p-4 bg-white border border-[#5A5A40]/15 rounded-2xl space-y-3">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-[#5A5A40]">
+                <div className="p-4 bg-white border border-[#716053] rounded-2xl space-y-3">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-[#716053]">
                     <Sparkles className="w-3.5 h-3.5" />
                     <span>AI 情境準備度小測驗（選填，僅供社工參考，不影響報名）</span>
                   </div>
@@ -1644,7 +1644,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                     <p className="text-[11px] text-slate-500">Gemini 正在為這個班次出情境題...</p>
                   ) : situationalQuestion ? (
                     <>
-                      <p className="text-xs text-slate-700 bg-[#f5f5f0] p-3 rounded-xl leading-relaxed">
+                      <p className="text-xs text-slate-700 bg-[#FAF6EE] p-3 rounded-xl leading-relaxed">
                         {situationalQuestion}
                       </p>
                       <textarea
@@ -1652,11 +1652,11 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                         onChange={e => { setSituationalAnswer(e.target.value); setAiAssessment(null); }}
                         placeholder="想到什麼就寫什麼，沒有標準答案～"
                         rows={2}
-                        className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl focus:ring-2 focus:ring-[#5A5A40] focus:outline-none text-xs"
+                        className="w-full p-3 bg-[#FAF6EE] border border-[#716053] rounded-2xl focus:ring-2 focus:ring-[#716053] focus:outline-none text-xs"
                       />
 
                       {aiAssessment ? (
-                        <div className="p-3 bg-[#E6E2D3]/40 border border-[#5A5A40]/15 rounded-xl text-[11px] text-[#5A5A40] space-y-1">
+                        <div className="p-3 bg-[#F5E6D0]/40 border border-[#716053] rounded-xl text-[11px] text-[#716053] space-y-1">
                           <p className="font-bold">💬 AI 小回饋：{aiAssessment.feedback}</p>
                         </div>
                       ) : (
@@ -1664,7 +1664,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                           type="button"
                           onClick={() => handleAssessSituationalAnswer(activeShiftForApply)}
                           disabled={!situationalAnswer.trim() || isAssessing}
-                          className="text-[11px] font-bold text-[#5A5A40] hover:underline disabled:opacity-40 disabled:hover:no-underline cursor-pointer"
+                          className="text-[11px] font-bold text-[#716053] hover:underline disabled:opacity-40 disabled:hover:no-underline cursor-pointer"
                         >
                           {isAssessing ? 'AI 思考中...' : '請 AI 幫我看看這個回答 →'}
                         </button>
@@ -1675,24 +1675,24 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                   )}
                 </div>
 
-                <div className="p-3.5 bg-[#f5f5f0] border border-[#5A5A40]/12 rounded-2xl text-[11px] text-[#5A5A40] space-y-1">
+                <div className="p-3.5 bg-[#FAF6EE] border border-[#716053] rounded-2xl text-[11px] text-[#716053] space-y-1">
                   <p className="font-bold">✨ 自動整合叮嚀：</p>
                   <p>• 系統將自動把《園區 Google Maps 定位》嵌入您的預約卡片。</p>
                   <p>• 錄取後 LINE 機器人會於出班前 1 小時發送導航提醒小幫手。</p>
                 </div>
 
-                <div className="pt-2 flex justify-end space-x-3 border-t border-[#5A5A40]/10">
+                <div className="pt-2 flex justify-end space-x-3 border-t border-[#716053]">
                   <button
                     type="button"
                     onClick={() => setActiveShiftForApply(null)}
-                    className="px-5 py-2.5 rounded-full font-bold text-slate-600 hover:bg-[#f5f5f0] cursor-pointer"
+                    className="px-5 py-2.5 rounded-full font-bold text-slate-600 hover:bg-[#FAF6EE] cursor-pointer"
                   >
                     取消
                   </button>
 
                   <button
                     type="submit"
-                    className="px-6 py-2.5 rounded-full font-bold bg-[#5A5A40] hover:bg-[#484833] text-white shadow-xs cursor-pointer"
+                    className="px-6 py-2.5 rounded-full font-bold bg-[#716053] hover:bg-[#5A4A3F] text-white shadow-xs cursor-pointer"
                   >
                     確認報名此班次
                   </button>

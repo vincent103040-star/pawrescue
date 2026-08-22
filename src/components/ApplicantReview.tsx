@@ -79,10 +79,10 @@ export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
     <div className="space-y-6 py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
       
       {/* Top Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 sm:p-8 rounded-[32px] border border-[#5A5A40]/12 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 sm:p-8 rounded-[32px] border border-[#716053] shadow-xs">
         <div>
-          <h2 className="text-2xl font-bold font-serif italic text-[#5A5A40] flex items-center gap-2">
-            <ShieldCheck className="w-6 h-6 text-[#5A5A40]" />
+          <h2 className="text-2xl font-bold font-serif italic text-[#716053] flex items-center gap-2">
+            <ShieldCheck className="w-6 h-6 text-[#716053]" />
             <span>志工報名審核與名單派發中心</span>
           </h2>
           <p className="text-xs text-slate-500 mt-1 font-sans">
@@ -104,7 +104,7 @@ export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
             )}
           </button>
 
-          <span className="px-3.5 py-1.5 bg-[#E6E2D3] text-[#5A5A40] font-bold rounded-full">
+          <span className="px-3.5 py-1.5 bg-[#F5E6D0] text-[#716053] font-bold rounded-full">
             待審核：{applications.filter(a => a.status === 'pending').length} 筆
           </span>
           <span className="px-3.5 py-1.5 bg-emerald-100 text-emerald-900 font-bold rounded-full">
@@ -114,7 +114,7 @@ export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white p-4 sm:p-5 rounded-[24px] border border-[#5A5A40]/12">
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white p-4 sm:p-5 rounded-[24px] border border-[#716053]">
         
         {/* Status Pills */}
         <div className="flex flex-wrap items-center gap-2 text-xs font-semibold w-full sm:w-auto">
@@ -122,8 +122,8 @@ export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
             onClick={() => setSelectedStatus('all')}
             className={`px-4 py-1.5 rounded-full transition cursor-pointer ${
               selectedStatus === 'all'
-                ? 'bg-[#5A5A40] text-white shadow-xs font-bold'
-                : 'bg-[#f5f5f0] text-slate-600 hover:bg-[#E6E2D3]/40'
+                ? 'bg-[#716053] text-white shadow-xs font-bold'
+                : 'bg-[#FAF6EE] text-slate-600 hover:bg-[#F5E6D0]/40'
             }`}
           >
             全部申請 ({applications.length})
@@ -159,7 +159,7 @@ export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
             className={`px-4 py-1.5 rounded-full transition cursor-pointer ${
               selectedStatus === 'rejected'
                 ? 'bg-slate-700 text-white shadow-xs font-bold'
-                : 'bg-[#f5f5f0] text-slate-600'
+                : 'bg-[#FAF6EE] text-slate-600'
             }`}
           >
             已退回
@@ -168,24 +168,24 @@ export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
 
         {/* Search input */}
         <div className="relative w-full sm:w-72">
-          <Search className="w-4 h-4 text-[#5A5A40] absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-[#716053] absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
             placeholder="搜尋姓名、電話、LINE ID..."
-            className="w-full pl-10 pr-4 py-2 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-full text-xs focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+            className="w-full pl-10 pr-4 py-2 bg-[#FAF6EE] border border-[#716053] rounded-full text-xs focus:ring-2 focus:ring-[#716053] focus:outline-none"
           />
         </div>
 
       </div>
 
       {/* Applications Table / Cards */}
-      <div className="bg-white rounded-[28px] border border-[#5A5A40]/12 shadow-xs overflow-hidden">
+      <div className="bg-white rounded-[28px] border border-[#716053] shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-[#f5f5f0] border-b border-[#5A5A40]/12 text-[11px] font-bold text-[#5A5A40] uppercase tracking-wider">
+              <tr className="bg-[#FAF6EE] border-b border-[#716053] text-[11px] font-bold text-[#716053] uppercase tracking-wider">
                 <th className="py-4 px-5">志工姓名 / 聯絡資訊</th>
                 <th className="py-4 px-5">報名班次與場域</th>
                 <th className="py-4 px-5">經驗等級</th>
@@ -195,7 +195,7 @@ export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-[#5A5A40]/10 text-xs font-sans">
+            <tbody className="divide-y divide-[#716053]/10 text-xs font-sans">
               {filteredApps.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-12 text-center text-slate-400">
@@ -210,13 +210,13 @@ export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
                   const hasConflict = !!conflictForApp;
 
                   return (
-                    <tr key={app.id} className={`hover:bg-[#f5f5f0]/60 transition ${hasConflict ? 'bg-rose-50/40' : ''}`}>
+                    <tr key={app.id} className={`hover:bg-[#FAF6EE]/60 transition ${hasConflict ? 'bg-rose-50/40' : ''}`}>
                       
                       {/* Volunteer Info */}
                       <td className="py-4 px-5">
                         <div className="font-bold text-slate-900 flex flex-wrap items-center gap-2">
                           <span>{app.volunteerName}</span>
-                          <span className="text-[10px] bg-[#E6E2D3] text-[#5A5A40] px-2 py-0.5 rounded-full font-bold">
+                          <span className="text-[10px] bg-[#F5E6D0] text-[#716053] px-2 py-0.5 rounded-full font-bold">
                             LINE: @{app.lineId}
                           </span>
                           {hasConflict && (
@@ -267,7 +267,7 @@ export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
 
                       {/* Experience */}
                       <td className="py-4 px-5">
-                        <span className="text-[11px] font-semibold bg-[#f5f5f0] border border-[#5A5A40]/10 px-2.5 py-1 rounded-full text-[#5A5A40]">
+                        <span className="text-[11px] font-semibold bg-[#FAF6EE] border border-[#716053] px-2.5 py-1 rounded-full text-[#716053]">
                           {app.experienceLevel === 'beginner' ? '🐣 新手' : app.experienceLevel === 'intermediate' ? '🐕 中階經驗' : '🏥 資深醫護'}
                         </span>
                       </td>
@@ -301,7 +301,7 @@ export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={e => e.stopPropagation()}
-                                className="text-[10px] text-[#5A5A40] font-bold hover:underline flex items-center gap-0.5 w-fit"
+                                className="text-[10px] text-[#716053] font-bold hover:underline flex items-center gap-0.5 w-fit"
                               >
                                 <Calendar className="w-3 h-3" />
                                 <span>加入日曆</span>
@@ -321,7 +321,7 @@ export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
                       <td className="py-4 px-5 text-right">
                         <button
                           onClick={() => setActiveAppModal(app)}
-                          className="bg-[#5A5A40] hover:bg-[#484833] text-white font-bold text-[11px] px-3.5 py-1.5 rounded-full shadow-2xs transition cursor-pointer"
+                          className="bg-[#716053] hover:bg-[#5A4A3F] text-white font-bold text-[11px] px-3.5 py-1.5 rounded-full shadow-2xs transition cursor-pointer"
                         >
                           審核詳情
                         </button>
@@ -344,17 +344,17 @@ export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
         const isSuggestedDeleteThis = modalConflict ? modalConflict.suggestedDeleteAppId === activeAppModal.id : false;
 
         return (
-          <div className="fixed inset-0 z-50 bg-[#5A5A40]/40 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white rounded-[32px] max-w-lg w-full shadow-2xl p-6 sm:p-8 border border-[#5A5A40]/20 space-y-5">
+          <div className="fixed inset-0 z-50 bg-[#716053]/40 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-[32px] max-w-lg w-full shadow-2xl p-6 sm:p-8 border border-[#716053] space-y-5">
               
-              <div className="flex items-center justify-between border-b border-[#5A5A40]/10 pb-3">
+              <div className="flex items-center justify-between border-b border-[#716053] pb-3">
                 <h3 className="font-bold font-serif text-lg text-slate-900 flex items-center gap-1.5">
                   <span>審核志工報名：</span>
-                  <span className="text-[#5A5A40] italic">{activeAppModal.volunteerName}</span>
+                  <span className="text-[#716053] italic">{activeAppModal.volunteerName}</span>
                 </h3>
                 <button
                   onClick={() => setActiveAppModal(null)}
-                  className="text-slate-400 hover:text-[#5A5A40] font-bold text-lg cursor-pointer"
+                  className="text-slate-400 hover:text-[#716053] font-bold text-lg cursor-pointer"
                 >
                   ✕
                 </button>
@@ -385,7 +385,7 @@ export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
                 </div>
               )}
 
-              <div className="space-y-3 text-xs bg-[#f5f5f0] p-4 rounded-2xl border border-[#5A5A40]/10">
+              <div className="space-y-3 text-xs bg-[#FAF6EE] p-4 rounded-2xl border border-[#716053]">
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <span className="text-slate-500">電話：</span>
@@ -393,25 +393,25 @@ export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
                   </div>
                   <div>
                     <span className="text-slate-500">LINE ID：</span>
-                    <span className="font-bold text-[#5A5A40]">{activeAppModal.lineId}</span>
+                    <span className="font-bold text-[#716053]">{activeAppModal.lineId}</span>
                   </div>
                 </div>
 
                 <div>
                   <span className="text-slate-500">志工自我簡介與經驗：</span>
-                  <p className="mt-1 bg-white p-3 rounded-xl border border-[#5A5A40]/10 font-medium text-slate-800">
+                  <p className="mt-1 bg-white p-3 rounded-xl border border-[#716053] font-medium text-slate-800">
                     {activeAppModal.notes || '無提供特別備註'}
                   </p>
                 </div>
 
-                <div className="flex items-center space-x-3 pt-2 text-[11px] text-[#5A5A40] font-semibold">
+                <div className="flex items-center space-x-3 pt-2 text-[11px] text-[#716053] font-semibold">
                   <span>✅ 自動發送 LINE Notify 推播</span>
                   <span>✅ 同步至 Google 日曆</span>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#5A5A40] mb-1">
+                <label className="block text-xs font-bold text-[#716053] mb-1">
                   給志工的回覆備註 (將同步顯示於志工 LINE 訊息)
                 </label>
                 <textarea
@@ -419,11 +419,11 @@ export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
                   onChange={e => setReviewNoteInput(e.target.value)}
                   placeholder="例如：通過審核！請當天穿著平底鞋與方便運動的服裝，準時至 B 區草坪集合。"
                   rows={3}
-                  className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                  className="w-full p-3 bg-[#FAF6EE] border border-[#716053] rounded-2xl text-xs focus:ring-2 focus:ring-[#716053] focus:outline-none"
                 />
               </div>
 
-              <div className="flex items-center justify-between pt-3 border-t border-[#5A5A40]/10">
+              <div className="flex items-center justify-between pt-3 border-t border-[#716053]">
                 <button
                   onClick={() => handleReject(activeAppModal)}
                   className="px-5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-800 font-bold text-xs rounded-full transition cursor-pointer"
@@ -433,9 +433,9 @@ export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
 
                 <button
                   onClick={() => handleApprove(activeAppModal)}
-                  className="px-6 py-2.5 bg-[#5A5A40] hover:bg-[#484833] text-white font-bold text-xs rounded-full shadow-xs transition cursor-pointer flex items-center gap-1.5"
+                  className="px-6 py-2.5 bg-[#716053] hover:bg-[#5A4A3F] text-white font-bold text-xs rounded-full shadow-xs transition cursor-pointer flex items-center gap-1.5"
                 >
-                  <Check className="w-4 h-4 text-[#E6E2D3]" />
+                  <Check className="w-4 h-4 text-[#F5E6D0]" />
                   <span>通過審核 (發送 LINE 通知)</span>
                 </button>
               </div>

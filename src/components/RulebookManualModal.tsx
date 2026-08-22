@@ -44,10 +44,10 @@ export const RulebookManualModal: React.FC<RulebookManualModalProps> = ({
     <div className="fixed inset-0 z-50 bg-[#333322]/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-in fade-in duration-200 print:p-0 print:bg-white print:static print:overflow-visible">
       
       {/* Container - Styled as elegant booklet card on screen, pure paper on print */}
-      <div className="bg-white rounded-[32px] border border-[#5A5A40]/20 shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden print:max-h-none print:shadow-none print:border-none print:rounded-none print:w-full">
+      <div className="bg-white rounded-[32px] border border-[#716053] shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden print:max-h-none print:shadow-none print:border-none print:rounded-none print:w-full">
         
         {/* Modal Header & Quick Print Actions */}
-        <div className="bg-[#5A5A40] text-white p-5 sm:p-6 flex items-center justify-between shrink-0 print:bg-white print:text-slate-900 print:border-b-2 print:border-slate-800 print:p-0 print:pb-4">
+        <div className="bg-[#716053] text-white p-5 sm:p-6 flex items-center justify-between shrink-0 print:bg-white print:text-slate-900 print:border-b-2 print:border-slate-800 print:p-0 print:pb-4">
           <div className="flex items-center space-x-3">
             <div className="w-12 h-12 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center font-bold shadow-sm print:hidden">
               <BookOpen className="w-6 h-6" />
@@ -57,7 +57,7 @@ export const RulebookManualModal: React.FC<RulebookManualModalProps> = ({
                 <h2 className="text-xl sm:text-2xl font-bold font-serif italic tracking-wide text-white print:text-slate-900">
                   🐾 浪浪家園 志工規章守則 &amp; 系統使用說明書
                 </h2>
-                <span className="bg-[#E6E2D3] text-[#5A5A40] text-[10px] font-extrabold px-2.5 py-0.5 rounded-full print:hidden">
+                <span className="bg-[#F5E6D0] text-[#716053] text-[10px] font-extrabold px-2.5 py-0.5 rounded-full print:hidden">
                   官方標準版 2026.V2
                 </span>
               </div>
@@ -86,13 +86,13 @@ export const RulebookManualModal: React.FC<RulebookManualModalProps> = ({
         </div>
 
         {/* Tab Switcher (Screen only) */}
-        <div className="bg-[#f5f5f0] border-b border-[#5A5A40]/15 px-6 py-2.5 flex items-center justify-between shrink-0 print:hidden">
+        <div className="bg-[#FAF6EE] border-b border-[#716053] px-6 py-2.5 flex items-center justify-between shrink-0 print:hidden">
           <div className="flex items-center space-x-2">
             <button
               onClick={() => setActiveSubTab('rulebook')}
               className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                 activeSubTab === 'rulebook'
-                  ? 'bg-[#5A5A40] text-white shadow-xs'
+                  ? 'bg-[#716053] text-white shadow-xs'
                   : 'text-slate-600 hover:bg-slate-200'
               }`}
             >
@@ -104,7 +104,7 @@ export const RulebookManualModal: React.FC<RulebookManualModalProps> = ({
               onClick={() => setActiveSubTab('manual')}
               className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                 activeSubTab === 'manual'
-                  ? 'bg-[#5A5A40] text-white shadow-xs'
+                  ? 'bg-[#716053] text-white shadow-xs'
                   : 'text-slate-600 hover:bg-slate-200'
               }`}
             >
@@ -125,8 +125,8 @@ export const RulebookManualModal: React.FC<RulebookManualModalProps> = ({
           {(activeSubTab === 'rulebook' || true) && (
             <section className={`space-y-6 ${activeSubTab !== 'rulebook' ? 'print:block hidden' : 'block'}`}>
               
-              <div className="border-b-2 border-[#5A5A40] pb-2 flex items-center justify-between">
-                <h3 className="text-lg font-serif font-bold text-[#5A5A40] flex items-center gap-2">
+              <div className="border-b-2 border-[#716053] pb-2 flex items-center justify-between">
+                <h3 className="text-lg font-serif font-bold text-[#716053] flex items-center gap-2">
                   <ShieldCheck className="w-5 h-5 text-amber-600" />
                   <span>第一章：志工服務規章與園區安全守則 (Rulebook &amp; Safety Protocols)</span>
                 </h3>
@@ -134,9 +134,9 @@ export const RulebookManualModal: React.FC<RulebookManualModalProps> = ({
               </div>
 
               {/* 1.1 園區安全守則 */}
-              <div className="bg-[#fdfdfb] p-5 rounded-2xl border border-[#5A5A40]/15 space-y-3">
+              <div className="bg-[#FFFDF7] p-5 rounded-2xl border border-[#716053] space-y-3">
                 <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-full bg-[#5A5A40] text-white flex items-center justify-center text-xs font-mono">1.1</span>
+                  <span className="w-6 h-6 rounded-full bg-[#716053] text-white flex items-center justify-center text-xs font-mono">1.1</span>
                   <span>園區出入與防護紀律</span>
                 </h4>
                 <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-700 leading-relaxed pl-2">
@@ -160,9 +160,9 @@ export const RulebookManualModal: React.FC<RulebookManualModalProps> = ({
               </div>
 
               {/* 1.2 志工階級升級與考核規章 */}
-              <div className="bg-[#fdfdfb] p-5 rounded-2xl border border-[#5A5A40]/15 space-y-3">
+              <div className="bg-[#FFFDF7] p-5 rounded-2xl border border-[#716053] space-y-3">
                 <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-full bg-[#5A5A40] text-white flex items-center justify-center text-xs font-mono">1.2</span>
+                  <span className="w-6 h-6 rounded-full bg-[#716053] text-white flex items-center justify-center text-xs font-mono">1.2</span>
                   <span>志工成長階級與考核升級制度</span>
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
@@ -171,15 +171,15 @@ export const RulebookManualModal: React.FC<RulebookManualModalProps> = ({
                       <strong className="text-slate-800">🌱 實習志工 (Novice)</strong>
                       <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded-full text-slate-600">入門初階</span>
                     </div>
-                    <p className="text-[#5A5A40] text-[11px]">【考核目標】：完成 1 次園區實體培訓 + 完成 10 小時服務（配合資深志工）。</p>
+                    <p className="text-[#716053] text-[11px]">【考核目標】：完成 1 次園區實體培訓 + 完成 10 小時服務（配合資深志工）。</p>
                   </div>
 
-                  <div className="bg-white p-3.5 rounded-xl border border-[#5A5A40]/30 space-y-1.5">
+                  <div className="bg-white p-3.5 rounded-xl border border-[#716053] space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <strong className="text-[#5A5A40]">⭐ 正式志工 (Regular)</strong>
+                      <strong className="text-[#716053]">⭐ 正式志工 (Regular)</strong>
                       <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold">主力幹部</span>
                     </div>
-                    <p className="text-[#5A5A40] text-[11px]">【考核目標】：累積 30 小時 + 獨立完成大狗放風與貓房照護 SOP 檢定。</p>
+                    <p className="text-[#716053] text-[11px]">【考核目標】：累積 30 小時 + 獨立完成大狗放風與貓房照護 SOP 檢定。</p>
                   </div>
 
                   <div className="bg-white p-3.5 rounded-xl border border-amber-300 space-y-1.5">
@@ -187,15 +187,15 @@ export const RulebookManualModal: React.FC<RulebookManualModalProps> = ({
                       <strong className="text-amber-800">🎖️ 資深志工 (Senior Leader)</strong>
                       <span className="text-[10px] bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full font-extrabold">核心督導</span>
                     </div>
-                    <p className="text-[#5A5A40] text-[11px]">【考核目標】：累積 50 小時 + 通過急救與醫療投藥認證，系統將自動通知管理者審核。</p>
+                    <p className="text-[#716053] text-[11px]">【考核目標】：累積 50 小時 + 通過急救與醫療投藥認證，系統將自動通知管理者審核。</p>
                   </div>
                 </div>
               </div>
 
               {/* 1.3 班次請假與誠信規範 */}
-              <div className="bg-[#fdfdfb] p-5 rounded-2xl border border-[#5A5A40]/15 space-y-2 text-xs">
+              <div className="bg-[#FFFDF7] p-5 rounded-2xl border border-[#716053] space-y-2 text-xs">
                 <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-full bg-[#5A5A40] text-white flex items-center justify-center text-xs font-mono">1.3</span>
+                  <span className="w-6 h-6 rounded-full bg-[#716053] text-white flex items-center justify-center text-xs font-mono">1.3</span>
                   <span>請假、代班與誠信管理規範</span>
                 </h4>
                 <p className="text-slate-600 leading-relaxed pl-8">
@@ -210,8 +210,8 @@ export const RulebookManualModal: React.FC<RulebookManualModalProps> = ({
           {(activeSubTab === 'manual' || true) && (
             <section className={`space-y-6 ${activeSubTab !== 'manual' ? 'print:block hidden' : 'block'}`}>
               
-              <div className="border-b-2 border-[#5A5A40] pb-2 flex items-center justify-between">
-                <h3 className="text-lg font-serif font-bold text-[#5A5A40] flex items-center gap-2">
+              <div className="border-b-2 border-[#716053] pb-2 flex items-center justify-between">
+                <h3 className="text-lg font-serif font-bold text-[#716053] flex items-center gap-2">
                   <FileText className="w-5 h-5 text-sky-600" />
                   <span>第二章：系統功能操作使用說明書 (System User Manual)</span>
                 </h3>
@@ -226,7 +226,7 @@ export const RulebookManualModal: React.FC<RulebookManualModalProps> = ({
                 </h4>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                  <div className="bg-[#fdfdfb] p-4 rounded-2xl border border-slate-200 space-y-1.5">
+                  <div className="bg-[#FFFDF7] p-4 rounded-2xl border border-slate-200 space-y-1.5">
                     <div className="flex items-center gap-2 font-bold text-slate-900">
                       <ShieldCheck className="w-4 h-4 text-amber-600" />
                       <span>1. 缺工看板與 AI 智慧一鍵排班</span>
@@ -236,7 +236,7 @@ export const RulebookManualModal: React.FC<RulebookManualModalProps> = ({
                     </p>
                   </div>
 
-                  <div className="bg-[#fdfdfb] p-4 rounded-2xl border border-slate-200 space-y-1.5">
+                  <div className="bg-[#FFFDF7] p-4 rounded-2xl border border-slate-200 space-y-1.5">
                     <div className="flex items-center gap-2 font-bold text-slate-900">
                       <Calendar className="w-4 h-4 text-emerald-600" />
                       <span>2. 班次發布與 Google 地圖日曆同步</span>
@@ -246,7 +246,7 @@ export const RulebookManualModal: React.FC<RulebookManualModalProps> = ({
                     </p>
                   </div>
 
-                  <div className="bg-[#fdfdfb] p-4 rounded-2xl border border-slate-200 space-y-1.5">
+                  <div className="bg-[#FFFDF7] p-4 rounded-2xl border border-slate-200 space-y-1.5">
                     <div className="flex items-center gap-2 font-bold text-slate-900">
                       <Users className="w-4 h-4 text-purple-600" />
                       <span>3. 志工人才庫與自動升級通知</span>
@@ -256,7 +256,7 @@ export const RulebookManualModal: React.FC<RulebookManualModalProps> = ({
                     </p>
                   </div>
 
-                  <div className="bg-[#fdfdfb] p-4 rounded-2xl border border-slate-200 space-y-1.5">
+                  <div className="bg-[#FFFDF7] p-4 rounded-2xl border border-slate-200 space-y-1.5">
                     <div className="flex items-center gap-2 font-bold text-slate-900">
                       <Sparkles className="w-4 h-4 text-sky-600" />
                       <span>4. 雙週物資人力 AI 預警地圖 &amp; SOP 追蹤</span>
@@ -271,12 +271,12 @@ export const RulebookManualModal: React.FC<RulebookManualModalProps> = ({
               {/* 2.2 志工夥伴功能 */}
               <div className="space-y-3">
                 <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-lg bg-[#5A5A40] text-white font-mono text-xs">B</span>
+                  <span className="px-2.5 py-0.5 rounded-lg bg-[#716053] text-white font-mono text-xs">B</span>
                   <span>志工夥伴 (Volunteer Guide)</span>
                 </h4>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                  <div className="bg-[#fdfdfb] p-4 rounded-2xl border border-slate-200 space-y-1.5">
+                  <div className="bg-[#FFFDF7] p-4 rounded-2xl border border-slate-200 space-y-1.5">
                     <div className="flex items-center gap-2 font-bold text-slate-900">
                       <PawPrint className="w-4 h-4 text-purple-600" />
                       <span>1. 志工線上搶班門戶</span>
@@ -286,7 +286,7 @@ export const RulebookManualModal: React.FC<RulebookManualModalProps> = ({
                     </p>
                   </div>
 
-                  <div className="bg-[#fdfdfb] p-4 rounded-2xl border border-slate-200 space-y-1.5">
+                  <div className="bg-[#FFFDF7] p-4 rounded-2xl border border-slate-200 space-y-1.5">
                     <div className="flex items-center gap-2 font-bold text-slate-900">
                       <QrCode className="w-4 h-4 text-emerald-600" />
                       <span>2. 現場 QR Code 簽到與簽退打卡</span>
@@ -296,7 +296,7 @@ export const RulebookManualModal: React.FC<RulebookManualModalProps> = ({
                     </p>
                   </div>
 
-                  <div className="bg-[#fdfdfb] p-4 rounded-2xl border border-slate-200 space-y-1.5">
+                  <div className="bg-[#FFFDF7] p-4 rounded-2xl border border-slate-200 space-y-1.5">
                     <div className="flex items-center gap-2 font-bold text-slate-900">
                       <Award className="w-4 h-4 text-amber-600" />
                       <span>3. 志工成長軌跡與數位服務證明</span>
@@ -306,7 +306,7 @@ export const RulebookManualModal: React.FC<RulebookManualModalProps> = ({
                     </p>
                   </div>
 
-                  <div className="bg-[#fdfdfb] p-4 rounded-2xl border border-slate-200 space-y-1.5">
+                  <div className="bg-[#FFFDF7] p-4 rounded-2xl border border-slate-200 space-y-1.5">
                     <div className="flex items-center gap-2 font-bold text-slate-900">
                       <CheckCircle2 className="w-4 h-4 text-indigo-600" />
                       <span>4. 勤務看板 SOP 現場執行打勾</span>
@@ -330,7 +330,7 @@ export const RulebookManualModal: React.FC<RulebookManualModalProps> = ({
         </div>
 
         {/* Modal Footer Controls */}
-        <div className="bg-[#f5f5f0] p-4 sm:p-5 border-t border-[#5A5A40]/15 flex items-center justify-between shrink-0 print:hidden">
+        <div className="bg-[#FAF6EE] p-4 sm:p-5 border-t border-[#716053] flex items-center justify-between shrink-0 print:hidden">
           <div className="text-xs text-slate-500 flex items-center gap-2">
             <Heart className="w-4 h-4 text-rose-500 fill-rose-500" />
             <span>感謝您為 434 隻浪浪付出關愛與溫暖！</span>
@@ -339,7 +339,7 @@ export const RulebookManualModal: React.FC<RulebookManualModalProps> = ({
           <div className="flex items-center gap-3">
             <button
               onClick={handlePrintPdf}
-              className="bg-[#5A5A40] hover:bg-[#484833] text-white text-xs font-bold px-5 py-2.5 rounded-2xl transition flex items-center gap-2 cursor-pointer shadow-xs"
+              className="bg-[#716053] hover:bg-[#5A4A3F] text-white text-xs font-bold px-5 py-2.5 rounded-2xl transition flex items-center gap-2 cursor-pointer shadow-xs"
             >
               <Download className="w-4 h-4 text-amber-300" />
               <span>一鍵下載 / 列印 PDF 守則</span>

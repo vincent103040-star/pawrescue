@@ -160,7 +160,7 @@ export const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({
       const canvas = await html2canvas(reportRef.current, {
         scale: 2,
         useCORS: true,
-        backgroundColor: '#FCFAF5',
+        backgroundColor: '#FAF6EE',
         logging: false
       });
 
@@ -193,11 +193,11 @@ export const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#5A5A40]/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto font-sans">
-      <div className="bg-white rounded-[32px] max-w-4xl w-full shadow-2xl border border-[#5A5A40]/20 overflow-hidden my-6 animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 bg-[#716053]/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto font-sans">
+      <div className="bg-white rounded-[32px] max-w-4xl w-full shadow-2xl border border-[#716053] overflow-hidden my-6 animate-in fade-in zoom-in-95 duration-200">
         
         {/* Header Bar */}
-        <div className="bg-[#5A5A40] text-white p-6 flex items-center justify-between">
+        <div className="bg-[#716053] text-white p-6 flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center shadow-md font-bold">
               <FileSpreadsheet className="w-6 h-6 text-slate-900" />
@@ -205,11 +205,11 @@ export const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({
             <div>
               <h3 className="font-bold font-serif text-lg text-white italic flex items-center gap-2">
                 <span>月度據點志工績效總結與報表匯出</span>
-                <span className="text-[10px] bg-[#E6E2D3] text-[#5A5A40] px-2.5 py-0.5 rounded-full font-extrabold not-italic">
+                <span className="text-[10px] bg-[#F5E6D0] text-[#716053] px-2.5 py-0.5 rounded-full font-extrabold not-italic">
                   {month} 統計數據
                 </span>
               </h3>
-              <p className="text-xs text-[#E6E2D3] mt-0.5">
+              <p className="text-xs text-[#F5E6D0] mt-0.5">
                 自動整合園區志工總數、服務總時數與缺工率分析
               </p>
             </div>
@@ -224,7 +224,7 @@ export const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({
         </div>
 
         {/* Action Toolbar */}
-        <div className="bg-[#f5f5f0] border-b border-[#5A5A40]/15 px-6 py-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="bg-[#FAF6EE] border-b border-[#716053] px-6 py-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center space-x-2 text-xs text-slate-600 font-bold">
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
             <span>統計月分：{formattedMonthTitle} ({month})</span>
@@ -247,7 +247,7 @@ export const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({
             <button
               onClick={handleExportPDF}
               disabled={isGeneratingPdf}
-              className="bg-[#5A5A40] hover:bg-[#484833] text-white font-bold px-4 py-2 rounded-xl text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              className="bg-[#716053] hover:bg-[#5A4A3F] text-white font-bold px-4 py-2 rounded-xl text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               {isGeneratingPdf ? (
                 <>
@@ -278,23 +278,23 @@ export const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({
             
             <div
               ref={reportRef}
-              className="w-[780px] bg-[#FCFAF5] p-8 border-4 border-[#5A5A40] rounded-xl shadow-lg text-[#333333] space-y-6 select-none font-sans"
+              className="w-[780px] bg-[#FAF6EE] p-8 border-4 border-[#716053] rounded-xl shadow-lg text-[#716053] space-y-6 select-none font-sans"
             >
               
               {/* Official Header */}
-              <div className="border-b-2 border-[#5A5A40] pb-4 flex items-center justify-between">
+              <div className="border-b-2 border-[#716053] pb-4 flex items-center justify-between">
                 <div>
-                  <div className="flex items-center space-x-2 text-[#5A5A40] font-bold text-xs uppercase tracking-widest">
-                    <ShieldCheck className="w-4 h-4 text-[#5A5A40]" />
+                  <div className="flex items-center space-x-2 text-[#716053] font-bold text-xs uppercase tracking-widest">
+                    <ShieldCheck className="w-4 h-4 text-[#716053]" />
                     <span>PawRescue Animal Shelter Monthly Performance Report</span>
                   </div>
-                  <h1 className="text-2xl font-extrabold font-serif text-[#5A5A40] mt-1">
+                  <h1 className="text-2xl font-extrabold font-serif text-[#716053] mt-1">
                     流浪動物之家人力排班 - 月度據點績效總結報告
                   </h1>
                 </div>
 
                 <div className="text-right text-xs">
-                  <div className="bg-[#5A5A40] text-white font-extrabold px-3 py-1 rounded-lg">
+                  <div className="bg-[#716053] text-white font-extrabold px-3 py-1 rounded-lg">
                     {formattedMonthTitle}
                   </div>
                   <p className="text-[11px] text-slate-500 font-mono mt-1">
@@ -305,28 +305,28 @@ export const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({
 
               {/* High-Level Overview Cards */}
               <div className="grid grid-cols-4 gap-3 text-center">
-                <div className="bg-white p-3.5 rounded-xl border border-[#5A5A40]/15 shadow-2xs">
+                <div className="bg-white p-3.5 rounded-xl border border-[#716053] shadow-2xs">
                   <p className="text-[11px] font-bold text-slate-500">當月總志工數</p>
-                  <p className="text-2xl font-extrabold text-[#5A5A40] font-serif mt-1">
+                  <p className="text-2xl font-extrabold text-[#716053] font-serif mt-1">
                     {overallVolunteers} <span className="text-xs font-sans">位</span>
                   </p>
                 </div>
 
-                <div className="bg-white p-3.5 rounded-xl border border-[#5A5A40]/15 shadow-2xs">
+                <div className="bg-white p-3.5 rounded-xl border border-[#716053] shadow-2xs">
                   <p className="text-[11px] font-bold text-slate-500">完成服務總時數</p>
                   <p className="text-2xl font-extrabold text-slate-900 font-serif mt-1">
                     {overallCompletedHours} <span className="text-xs font-sans">小時</span>
                   </p>
                 </div>
 
-                <div className="bg-white p-3.5 rounded-xl border border-[#5A5A40]/15 shadow-2xs">
+                <div className="bg-white p-3.5 rounded-xl border border-[#716053] shadow-2xs">
                   <p className="text-[11px] font-bold text-slate-500">總排班需求人數</p>
                   <p className="text-2xl font-extrabold text-sky-900 font-serif mt-1">
                     {overallRequired} <span className="text-xs font-sans">人</span>
                   </p>
                 </div>
 
-                <div className="bg-white p-3.5 rounded-xl border border-[#5A5A40]/15 shadow-2xs">
+                <div className="bg-white p-3.5 rounded-xl border border-[#716053] shadow-2xs">
                   <p className="text-[11px] font-bold text-slate-500">全機構平均缺工率</p>
                   <p className={`text-2xl font-extrabold font-serif mt-1 ${overallShortageRate > 20 ? 'text-rose-600' : 'text-emerald-700'}`}>
                     {overallShortageRate}%
@@ -338,33 +338,33 @@ export const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <h3 className="font-bold font-serif text-slate-900 text-sm flex items-center gap-1.5">
-                    <Building2 className="w-4 h-4 text-[#5A5A40]" />
+                    <Building2 className="w-4 h-4 text-[#716053]" />
                     <span>園區數據明細</span>
                   </h3>
                 </div>
 
-                <table className="w-full text-xs text-left border-collapse border border-[#5A5A40]/20 rounded-xl overflow-hidden bg-white">
+                <table className="w-full text-xs text-left border-collapse border border-[#716053] rounded-xl overflow-hidden bg-white">
                   <thead>
-                    <tr className="bg-[#5A5A40] text-white font-bold text-[11px]">
-                      <th className="p-3 border-b border-[#5A5A40]/20">園區名稱</th>
-                      <th className="p-3 border-b border-[#5A5A40]/20 text-center">總班次</th>
-                      <th className="p-3 border-b border-[#5A5A40]/20 text-center">總志工數</th>
-                      <th className="p-3 border-b border-[#5A5A40]/20 text-center">服務總時數</th>
-                      <th className="p-3 border-b border-[#5A5A40]/20 text-center">需求 / 已補</th>
-                      <th className="p-3 border-b border-[#5A5A40]/20 text-center">缺工人數</th>
-                      <th className="p-3 border-b border-[#5A5A40]/20 text-center">缺工率 (%)</th>
-                      <th className="p-3 border-b border-[#5A5A40]/20 text-center">運作評等</th>
+                    <tr className="bg-[#716053] text-white font-bold text-[11px]">
+                      <th className="p-3 border-b border-[#716053]">園區名稱</th>
+                      <th className="p-3 border-b border-[#716053] text-center">總班次</th>
+                      <th className="p-3 border-b border-[#716053] text-center">總志工數</th>
+                      <th className="p-3 border-b border-[#716053] text-center">服務總時數</th>
+                      <th className="p-3 border-b border-[#716053] text-center">需求 / 已補</th>
+                      <th className="p-3 border-b border-[#716053] text-center">缺工人數</th>
+                      <th className="p-3 border-b border-[#716053] text-center">缺工率 (%)</th>
+                      <th className="p-3 border-b border-[#716053] text-center">運作評等</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
-                    <tr className="hover:bg-[#f5f5f0]/50">
+                    <tr className="hover:bg-[#FAF6EE]/50">
                       <td className="p-3 font-bold text-slate-900 flex flex-col">
                         <span>{shelterLocation.name}</span>
                         <span className="text-[10px] text-slate-400 font-normal">{shelterLocation.address}</span>
                       </td>
                       <td className="p-3 text-center font-mono">{stat.totalShifts} 班</td>
                       <td className="p-3 text-center font-bold text-slate-800 font-mono">{stat.totalVolunteers} 人</td>
-                      <td className="p-3 text-center font-bold text-[#5A5A40] font-mono">{stat.totalCompletedHours} hr</td>
+                      <td className="p-3 text-center font-bold text-[#716053] font-mono">{stat.totalCompletedHours} hr</td>
                       <td className="p-3 text-center font-mono">{stat.requiredCount} / {stat.filledCount}</td>
                       <td className={`p-3 text-center font-bold font-mono ${stat.shortageCount > 0 ? 'text-rose-600' : 'text-slate-600'}`}>
                         {stat.shortageCount} 人
@@ -382,14 +382,14 @@ export const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({
                     </tr>
                   </tbody>
                   <tfoot>
-                    <tr className="bg-[#E6E2D3]/40 font-bold border-t-2 border-[#5A5A40]">
+                    <tr className="bg-[#F5E6D0]/40 font-bold border-t-2 border-[#716053]">
                       <td className="p-3 text-slate-900 font-serif">全機構總計</td>
                       <td className="p-3 text-center font-mono">{overallShifts} 班</td>
                       <td className="p-3 text-center font-mono text-slate-900">{overallVolunteers} 人</td>
-                      <td className="p-3 text-center font-mono text-[#5A5A40]">{overallCompletedHours} hr</td>
+                      <td className="p-3 text-center font-mono text-[#716053]">{overallCompletedHours} hr</td>
                       <td className="p-3 text-center font-mono">{overallRequired} / {overallFilled}</td>
                       <td className="p-3 text-center font-mono text-rose-700">{overallShortage} 人</td>
-                      <td className="p-3 text-center font-mono text-base text-[#5A5A40]">{overallShortageRate}%</td>
+                      <td className="p-3 text-center font-mono text-base text-[#716053]">{overallShortageRate}%</td>
                       <td className="p-3 text-center text-[11px] text-slate-700 font-serif">機構綜合評價</td>
                     </tr>
                   </tfoot>
@@ -397,8 +397,8 @@ export const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({
               </div>
 
               {/* Analysis & Recommendations Notes */}
-              <div className="bg-[#f5f5f0] p-4 rounded-xl border border-[#5A5A40]/15 text-xs space-y-2">
-                <div className="font-bold text-[#5A5A40] flex items-center gap-1.5">
+              <div className="bg-[#FAF6EE] p-4 rounded-xl border border-[#716053] text-xs space-y-2">
+                <div className="font-bold text-[#716053] flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4 text-amber-600" />
                   <span>社工團隊缺工分析與加強招募建議：</span>
                 </div>
@@ -413,10 +413,10 @@ export const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({
               </div>
 
               {/* Official Seal & Sign-off Footer */}
-              <div className="pt-4 border-t border-[#5A5A40]/20 flex items-end justify-between text-xs">
+              <div className="pt-4 border-t border-[#716053] flex items-end justify-between text-xs">
                 <div className="space-y-1">
                   <p className="text-slate-500 text-[10px]">PawRescue Animal Shelter Command Center</p>
-                  <p className="font-bold text-[#5A5A40]">流浪動物之家 志工督導管理團隊 敬啟</p>
+                  <p className="font-bold text-[#716053]">流浪動物之家 志工督導管理團隊 敬啟</p>
                 </div>
 
                 <div className="flex items-center space-x-6 text-center">
@@ -440,10 +440,10 @@ export const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({
         </div>
 
         {/* Footer Close Button */}
-        <div className="bg-white px-6 py-4 border-t border-[#5A5A40]/10 flex justify-end">
+        <div className="bg-white px-6 py-4 border-t border-[#716053] flex justify-end">
           <button
             onClick={onClose}
-            className="bg-[#5A5A40] hover:bg-[#484833] text-white font-bold px-6 py-2 rounded-full text-xs shadow-xs transition cursor-pointer"
+            className="bg-[#716053] hover:bg-[#5A4A3F] text-white font-bold px-6 py-2 rounded-full text-xs shadow-xs transition cursor-pointer"
           >
             關閉報表
           </button>

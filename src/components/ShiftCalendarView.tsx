@@ -291,9 +291,9 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
     <div className="space-y-6">
       
       {/* Google Calendar Sync Status Bar */}
-      <div className="bg-[#fdfdfb] border border-[#5A5A40]/15 rounded-[28px] p-5 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-[#FFFDF7] border border-[#716053] rounded-[28px] p-5 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-[#5A5A40] text-amber-300 flex items-center justify-center shrink-0 shadow-xs font-bold text-lg">
+          <div className="w-11 h-11 rounded-2xl bg-[#716053] text-amber-300 flex items-center justify-center shrink-0 shadow-xs font-bold text-lg">
             🗓️
           </div>
           <div>
@@ -322,7 +322,7 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
             <button
               onClick={handleManualGCalSync}
               disabled={isSyncingGCal}
-              className="bg-[#5A5A40] hover:bg-[#484833] text-white font-bold text-xs px-4 py-2 rounded-xl shadow-2xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+              className="bg-[#716053] hover:bg-[#5A4A3F] text-white font-bold text-xs px-4 py-2 rounded-xl shadow-2xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
             >
               <RefreshCw className={`w-3.5 h-3.5 text-amber-300 ${isSyncingGCal ? 'animate-spin' : ''}`} />
               <span>{isSyncingGCal ? '同步中...' : '手動同步 Google 日曆'}</span>
@@ -331,9 +331,9 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
             <button
               onClick={handleManualGCalSync}
               disabled={isSyncingGCal}
-              className="bg-[#f5f5f0] hover:bg-[#E6E2D3]/40 text-[#5A5A40] border border-[#5A5A40]/15 font-bold text-xs px-3.5 py-2 rounded-xl shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
+              className="bg-[#FAF6EE] hover:bg-[#F5E6D0]/40 text-[#716053] border border-[#716053] font-bold text-xs px-3.5 py-2 rounded-xl shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
             >
-              <RefreshCw className={`w-3.5 h-3.5 text-[#5A5A40] ${isSyncingGCal ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 text-[#716053] ${isSyncingGCal ? 'animate-spin' : ''}`} />
               <span>重新整理班表</span>
             </button>
           )}
@@ -341,21 +341,21 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
       </div>
 
       {/* Calendar Header Controls */}
-      <div className="bg-white rounded-[28px] border border-[#5A5A40]/15 p-5 shadow-xs flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+      <div className="bg-white rounded-[28px] border border-[#716053] p-5 shadow-xs flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
         
         {/* Navigation & Month Title */}
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1 bg-[#f5f5f0] p-1 rounded-2xl border border-[#5A5A40]/15">
+          <div className="flex items-center gap-1 bg-[#FAF6EE] p-1 rounded-2xl border border-[#716053]">
             <button
               onClick={handlePrevMonth}
-              className="p-2 hover:bg-white rounded-xl text-[#5A5A40] transition cursor-pointer"
+              className="p-2 hover:bg-white rounded-xl text-[#716053] transition cursor-pointer"
               title="上個月"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
               onClick={handleNextMonth}
-              className="p-2 hover:bg-white rounded-xl text-[#5A5A40] transition cursor-pointer"
+              className="p-2 hover:bg-white rounded-xl text-[#716053] transition cursor-pointer"
               title="下個月"
             >
               <ChevronRight className="w-4 h-4" />
@@ -364,13 +364,13 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
 
           <button
             onClick={handleToday}
-            className="bg-white hover:bg-[#f5f5f0] text-[#5A5A40] border border-[#5A5A40]/20 font-bold text-xs px-3 py-2 rounded-2xl transition cursor-pointer"
+            className="bg-white hover:bg-[#FAF6EE] text-[#716053] border border-[#716053] font-bold text-xs px-3 py-2 rounded-2xl transition cursor-pointer"
           >
             今天 ({todayYear}/{todayMonth}/{todayDay})
           </button>
 
           <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
-            <CalendarIcon className="w-5 h-5 text-[#5A5A40]" />
+            <CalendarIcon className="w-5 h-5 text-[#716053]" />
             <h2 className="text-xl font-bold font-serif italic text-slate-900">
               {year} 年 {monthNames[month]}
             </h2>
@@ -381,7 +381,7 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
             selector. Volunteers see it read-only. */}
         {shelterLocation && (
           !isEditingLocation ? (
-            <div className="flex items-center gap-2 bg-[#f5f5f0] px-3 py-2 rounded-2xl border border-[#5A5A40]/15 text-xs">
+            <div className="flex items-center gap-2 bg-[#FAF6EE] px-3 py-2 rounded-2xl border border-[#716053] text-xs">
               <MapPin className="w-4 h-4 text-rose-600 shrink-0" />
               <div className="min-w-0">
                 <span className="font-bold text-slate-800">{shelterLocation.name}</span>
@@ -393,7 +393,7 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
               {!isVolunteerMode && (
                 <button
                   onClick={handleStartEditLocation}
-                  className="text-[#5A5A40] hover:bg-white p-1 rounded-lg transition cursor-pointer shrink-0"
+                  className="text-[#716053] hover:bg-white p-1 rounded-lg transition cursor-pointer shrink-0"
                   title="編輯園區地點"
                 >
                   <Edit2 className="w-3.5 h-3.5" />
@@ -407,21 +407,21 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
                 value={locationDraft.name}
                 onChange={e => setLocationDraft({ ...locationDraft, name: e.target.value })}
                 placeholder="園區名稱"
-                className="w-full p-2 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-xl font-bold focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                className="w-full p-2 bg-[#FAF6EE] border border-[#716053] rounded-xl font-bold focus:ring-2 focus:ring-amber-400 focus:outline-none"
               />
               <input
                 type="text"
                 value={locationDraft.address}
                 onChange={e => setLocationDraft({ ...locationDraft, address: e.target.value })}
                 placeholder="完整地址（將用於 Google 地圖定位與導航）"
-                className="w-full p-2 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-xl focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                className="w-full p-2 bg-[#FAF6EE] border border-[#716053] rounded-xl focus:ring-2 focus:ring-amber-400 focus:outline-none"
               />
               <input
                 type="text"
                 value={locationDraft.openHours}
                 onChange={e => setLocationDraft({ ...locationDraft, openHours: e.target.value })}
                 placeholder="開放時間"
-                className="w-full p-2 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-xl focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                className="w-full p-2 bg-[#FAF6EE] border border-[#716053] rounded-xl focus:ring-2 focus:ring-amber-400 focus:outline-none"
               />
               <div className="flex justify-end gap-2">
                 <button
@@ -449,8 +449,8 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
             onClick={() => setSelectedZoneFilter('all')}
             className={`px-3 py-1.5 rounded-xl font-bold transition cursor-pointer border ${
               selectedZoneFilter === 'all'
-                ? 'bg-[#5A5A40] text-white border-[#5A5A40]'
-                : 'bg-white text-slate-600 hover:bg-[#f5f5f0] border-slate-200'
+                ? 'bg-[#716053] text-white border-[#716053]'
+                : 'bg-white text-slate-600 hover:bg-[#FAF6EE] border-slate-200'
             }`}
           >
             全部場域
@@ -463,8 +463,8 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
                 onClick={() => setSelectedZoneFilter(zKey)}
                 className={`px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1 cursor-pointer border ${
                   selectedZoneFilter === zKey
-                    ? 'bg-[#5A5A40] text-white border-[#5A5A40]'
-                    : 'bg-white text-slate-600 hover:bg-[#f5f5f0] border-slate-200'
+                    ? 'bg-[#716053] text-white border-[#716053]'
+                    : 'bg-white text-slate-600 hover:bg-[#FAF6EE] border-slate-200'
                 }`}
               >
                 <span>{z.icon}</span>
@@ -498,14 +498,14 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
               <div
                 key={cell.dateStr}
                 className={`bg-white rounded-2xl border overflow-hidden shadow-2xs ${
-                  cell.isToday ? 'border-amber-400 ring-1 ring-amber-300' : 'border-[#5A5A40]/12'
+                  cell.isToday ? 'border-amber-400 ring-1 ring-amber-300' : 'border-[#716053]'
                 }`}
               >
                 <button
                   type="button"
                   onClick={() => hasShifts && toggleAgendaDate(cell.dateStr)}
                   className={`w-full px-4 py-2.5 flex items-center justify-between gap-2 text-left ${
-                    hasShifts ? 'cursor-pointer active:bg-[#f5f5f0]' : 'cursor-default'
+                    hasShifts ? 'cursor-pointer active:bg-[#FAF6EE]' : 'cursor-default'
                   } ${cell.isToday ? 'bg-amber-50' : hasShifts ? 'bg-[#f8f8f5]' : 'bg-white'}`}
                 >
                   <div className="flex items-center gap-2 min-w-0">
@@ -598,15 +598,15 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
 
       {/* Main Full Page Calendar Grid (desktop/tablet only -- a 7-column grid
           doesn't fit readable text on a phone screen, see the agenda list above) */}
-      <div className="hidden md:block bg-white rounded-[32px] border border-[#5A5A40]/15 overflow-hidden shadow-xs">
+      <div className="hidden md:block bg-white rounded-[32px] border border-[#716053] overflow-hidden shadow-xs">
 
         {/* Days of Week Header */}
-        <div className="grid grid-cols-7 border-b border-[#5A5A40]/15 bg-[#f8f8f5] text-center">
+        <div className="grid grid-cols-7 border-b border-[#716053] bg-[#f8f8f5] text-center">
           {weekDays.map((wd, i) => (
             <div
               key={wd}
               className={`py-3 text-xs font-bold font-serif ${
-                i === 0 || i === 6 ? 'text-amber-800 bg-amber-500/10' : 'text-[#5A5A40]'
+                i === 0 || i === 6 ? 'text-amber-800 bg-amber-500/10' : 'text-[#716053]'
               }`}
             >
               {wd}
@@ -615,7 +615,7 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
         </div>
 
         {/* 6x7 Calendar Matrix */}
-        <div className="grid grid-cols-7 auto-rows-fr divide-x divide-y divide-[#5A5A40]/10 bg-slate-50/30">
+        <div className="grid grid-cols-7 auto-rows-fr divide-x divide-y divide-[#716053]/10 bg-slate-50/30">
           {calendarCells.map((cell, index) => {
             const dayShifts = filteredShifts.filter(s => s.date === cell.dateStr);
             const isDragTarget = dragOverDate === cell.dateStr;
@@ -649,7 +649,7 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
                   </span>
 
                   {dayShifts.length > 0 && (
-                    <span className="text-[10px] font-bold text-[#5A5A40] bg-[#f5f5f0] border border-[#5A5A40]/10 px-1.5 py-0.2 rounded-full">
+                    <span className="text-[10px] font-bold text-[#716053] bg-[#FAF6EE] border border-[#716053] px-1.5 py-0.2 rounded-full">
                       {dayShifts.length} 班次
                     </span>
                   )}
@@ -670,7 +670,7 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
                         onDragStart={e => !isVolunteerMode && handleDragStart(e, shift)}
                         onClick={() => setActiveShiftDetail(shift)}
                         className={`p-2 rounded-xl text-xs border transition shadow-2xs group relative hover:shadow-md ${
-                          !isVolunteerMode ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer hover:border-[#5A5A40]'
+                          !isVolunteerMode ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer hover:border-[#716053]'
                         } ${
                           isBeingDragged ? 'opacity-40 scale-95 border-amber-500' : ''
                         } ${
@@ -764,7 +764,7 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
       {/* Modal: Shift Detail Preview */}
       {activeShiftDetail && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-[#5A5A40]/20 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-[#716053] space-y-4 max-h-[90vh] overflow-y-auto">
             
             <div className="flex items-start justify-between border-b border-slate-100 pb-3">
               <div>
@@ -785,24 +785,24 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
 
             <div className="space-y-2.5 text-xs text-slate-600">
               <div className="flex items-center gap-2">
-                <CalendarIcon className="w-4 h-4 text-[#5A5A40] shrink-0" />
+                <CalendarIcon className="w-4 h-4 text-[#716053] shrink-0" />
                 <span>日期：<strong className="text-slate-900 font-mono">{activeShiftDetail.date}</strong></span>
               </div>
               <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-[#5A5A40] shrink-0" />
+                <Clock className="w-4 h-4 text-[#716053] shrink-0" />
                 <span>時間時段：<strong className="text-slate-900 font-mono">{activeShiftDetail.timeRange}</strong></span>
               </div>
               <div className="flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-[#5A5A40] shrink-0" />
+                <MapPin className="w-4 h-4 text-[#716053] shrink-0" />
                 <span>集合據點：<strong>{activeShiftDetail.locationDetails}</strong></span>
               </div>
               <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-[#5A5A40] shrink-0" />
+                <Users className="w-4 h-4 text-[#716053] shrink-0" />
                 <span>招募名額：<strong>已報名 {activeShiftDetail.currentCount} / 目標 {activeShiftDetail.requiredCount} 位</strong></span>
               </div>
 
               <div className="pt-1">
-                <span className="inline-block text-[10px] font-bold bg-[#f5f5f0] border border-[#5A5A40]/10 px-2.5 py-0.5 rounded-full text-[#5A5A40]">
+                <span className="inline-block text-[10px] font-bold bg-[#FAF6EE] border border-[#716053] px-2.5 py-0.5 rounded-full text-[#716053]">
                   志工門檻：{activeShiftDetail.skillRequired === 'beginner' ? '新手皆可' : activeShiftDetail.skillRequired === 'intermediate' ? '需具備基礎散步經驗' : '需資深志工/專業認證'}
                 </span>
               </div>
@@ -810,8 +810,8 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
 
             {/* Tasks list */}
             {activeShiftDetail.tasks && activeShiftDetail.tasks.length > 0 && (
-              <div className="bg-[#fdfdfb] p-3.5 rounded-2xl border border-slate-200 text-xs space-y-1.5">
-                <span className="font-bold text-[#5A5A40] block text-[11px]">🐾 本班次主要服務任務：</span>
+              <div className="bg-[#FFFDF7] p-3.5 rounded-2xl border border-slate-200 text-xs space-y-1.5">
+                <span className="font-bold text-[#716053] block text-[11px]">🐾 本班次主要服務任務：</span>
                 {activeShiftDetail.tasks.map((task, idx) => (
                   <div key={idx} className="flex items-center gap-1.5 text-slate-700 text-xs">
                     <span className="text-amber-500 font-bold">•</span>
@@ -822,8 +822,8 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
             )}
 
             {isVolunteerMode && (
-              <div className="bg-[#f5f5f0] p-3 rounded-xl border border-[#5A5A40]/10 text-xs space-y-1">
-                <span className="font-bold text-[#5A5A40] block">Google 日曆</span>
+              <div className="bg-[#FAF6EE] p-3 rounded-xl border border-[#716053] text-xs space-y-1">
+                <span className="font-bold text-[#716053] block">Google 日曆</span>
                 <p className="text-slate-600 text-[11px]">
                   {myAppliedShiftIds.includes(activeShiftDetail.id)
                     ? '已報名此班次，可點擊下方按鈕加入你自己的 Google 日曆。'
@@ -844,7 +844,7 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
                           setActiveShiftDetail(null);
                         }
                       }}
-                      className="bg-[#5A5A40] hover:bg-[#484833] text-white font-bold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+                      className="bg-[#716053] hover:bg-[#5A4A3F] text-white font-bold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
                     >
                       <Edit2 className="w-3.5 h-3.5" />
                       <span>編輯班次時間與名額</span>
@@ -894,7 +894,7 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
                         })}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="bg-[#5A5A40] hover:bg-[#484833] text-white font-bold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+                        className="bg-[#716053] hover:bg-[#5A4A3F] text-white font-bold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
                       >
                         <CalendarIcon className="w-3.5 h-3.5 text-amber-300" />
                         <span>加入 Google 日曆</span>
@@ -970,7 +970,7 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
                   required
                   value={editDate}
                   onChange={e => setEditDate(e.target.value)}
-                  className="w-full p-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#5A5A40]"
+                  className="w-full p-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#716053]"
                 />
               </div>
 
@@ -982,7 +982,7 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
                   value={editTimeRange}
                   onChange={e => setEditTimeRange(e.target.value)}
                   placeholder="如：10:00 - 13:00"
-                  className="w-full p-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#5A5A40]"
+                  className="w-full p-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#716053]"
                 />
               </div>
 
@@ -995,7 +995,7 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
                   required
                   value={editRequiredCount}
                   onChange={e => setEditRequiredCount(Number(e.target.value))}
-                  className="w-full p-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#5A5A40]"
+                  className="w-full p-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#716053]"
                 />
               </div>
 
@@ -1009,7 +1009,7 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl font-bold bg-[#5A5A40] hover:bg-[#484833] text-white shadow-xs cursor-pointer flex items-center gap-1"
+                  className="px-5 py-2 rounded-xl font-bold bg-[#716053] hover:bg-[#5A4A3F] text-white shadow-xs cursor-pointer flex items-center gap-1"
                 >
                   <Check className="w-4 h-4 text-amber-300" />
                   <span>儲存並同步至 Google Calendar</span>

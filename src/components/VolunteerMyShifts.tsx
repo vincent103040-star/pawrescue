@@ -68,7 +68,7 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
     <div className="space-y-8 py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto font-sans">
       
       {/* Header Banner */}
-      <div className="bg-white rounded-[32px] p-6 sm:p-8 border border-[#5A5A40]/15 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="bg-white rounded-[32px] p-6 sm:p-8 border border-[#716053] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="space-y-2">
           <div className="inline-flex items-center gap-2 bg-amber-100 text-amber-900 px-3 py-1 rounded-full text-xs font-extrabold border border-amber-300">
             <Calendar className="w-3.5 h-3.5 text-amber-700" />
@@ -93,7 +93,7 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
 
           <button
             onClick={() => setShowCertificateModal(true)}
-            className="bg-[#5A5A40] hover:bg-[#484833] text-white font-extrabold px-5 py-2.5 rounded-full text-xs shadow-xs transition flex items-center gap-2 cursor-pointer"
+            className="bg-[#716053] hover:bg-[#5A4A3F] text-white font-extrabold px-5 py-2.5 rounded-full text-xs shadow-xs transition flex items-center gap-2 cursor-pointer"
           >
             <Award className="w-4 h-4 text-amber-300" />
             <span>匯出服務證明 PDF</span>
@@ -103,12 +103,12 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
 
       {/* Summary Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-[24px] border border-[#5A5A40]/12 shadow-2xs space-y-1">
+        <div className="bg-white p-5 rounded-[24px] border border-[#716053] shadow-2xs space-y-1">
           <div className="text-xs text-slate-500 font-semibold flex items-center gap-1.5">
-            <Clock className="w-4 h-4 text-[#5A5A40]" />
+            <Clock className="w-4 h-4 text-[#716053]" />
             <span>累計服務總時數</span>
           </div>
-          <div className="text-2xl font-extrabold text-[#5A5A40]">
+          <div className="text-2xl font-extrabold text-[#716053]">
             {totalCompletedHours} <span className="text-xs font-bold text-slate-600">小時</span>
           </div>
           <div className="text-[11px] text-emerald-700 font-bold flex items-center gap-1">
@@ -116,7 +116,7 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-[24px] border border-[#5A5A40]/12 shadow-2xs space-y-1">
+        <div className="bg-white p-5 rounded-[24px] border border-[#716053] shadow-2xs space-y-1">
           <div className="text-xs text-slate-500 font-semibold flex items-center gap-1.5">
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
             <span>即將出勤 (已錄取)</span>
@@ -127,7 +127,7 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
           <div className="text-[11px] text-slate-500 font-medium">已同步至 Google 日曆</div>
         </div>
 
-        <div className="bg-white p-5 rounded-[24px] border border-[#5A5A40]/12 shadow-2xs space-y-1">
+        <div className="bg-white p-5 rounded-[24px] border border-[#716053] shadow-2xs space-y-1">
           <div className="text-xs text-slate-500 font-semibold flex items-center gap-1.5">
             <AlertCircle className="w-4 h-4 text-amber-600" />
             <span>審核中志工報名</span>
@@ -138,7 +138,7 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
           <div className="text-[11px] text-slate-500 font-medium">社工督導審查中</div>
         </div>
 
-        <div className="bg-white p-5 rounded-[24px] border border-[#5A5A40]/12 shadow-2xs space-y-1">
+        <div className="bg-white p-5 rounded-[24px] border border-[#716053] shadow-2xs space-y-1">
           <div className="text-xs text-slate-500 font-semibold flex items-center gap-1.5">
             <Award className="w-4 h-4 text-amber-600" />
             <span>目前志工位階</span>
@@ -151,14 +151,14 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-3.5 rounded-[24px] border border-[#5A5A40]/12 shadow-2xs">
+      <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-3.5 rounded-[24px] border border-[#716053] shadow-2xs">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setActiveSubTab('all')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
               activeSubTab === 'all'
-                ? 'bg-[#5A5A40] text-white shadow-xs'
-                : 'text-slate-600 hover:bg-[#f5f5f0]'
+                ? 'bg-[#716053] text-white shadow-xs'
+                : 'text-slate-600 hover:bg-[#FAF6EE]'
             }`}
           >
             全部紀錄 ({myApplications.length})
@@ -168,8 +168,8 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
             onClick={() => setActiveSubTab('upcoming')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
               activeSubTab === 'upcoming'
-                ? 'bg-[#5A5A40] text-white shadow-xs'
-                : 'text-slate-600 hover:bg-[#f5f5f0]'
+                ? 'bg-[#716053] text-white shadow-xs'
+                : 'text-slate-600 hover:bg-[#FAF6EE]'
             }`}
           >
             即將出勤 ({approvedApps.length})
@@ -179,8 +179,8 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
             onClick={() => setActiveSubTab('pending')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
               activeSubTab === 'pending'
-                ? 'bg-[#5A5A40] text-white shadow-xs'
-                : 'text-slate-600 hover:bg-[#f5f5f0]'
+                ? 'bg-[#716053] text-white shadow-xs'
+                : 'text-slate-600 hover:bg-[#FAF6EE]'
             }`}
           >
             審核中 ({pendingApps.length})
@@ -190,8 +190,8 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
             onClick={() => setActiveSubTab('completed')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
               activeSubTab === 'completed'
-                ? 'bg-[#5A5A40] text-white shadow-xs'
-                : 'text-slate-600 hover:bg-[#f5f5f0]'
+                ? 'bg-[#716053] text-white shadow-xs'
+                : 'text-slate-600 hover:bg-[#FAF6EE]'
             }`}
           >
             已完成服務 ({completedAttendance.length})
@@ -205,8 +205,8 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
 
       {/* Shifts Application Cards */}
       {filteredApps.length === 0 ? (
-        <div className="bg-white rounded-[32px] p-12 text-center border border-[#5A5A40]/15 space-y-4">
-          <div className="w-16 h-16 rounded-full bg-[#f5f5f0] text-slate-400 flex items-center justify-center mx-auto">
+        <div className="bg-white rounded-[32px] p-12 text-center border border-[#716053] space-y-4">
+          <div className="w-16 h-16 rounded-full bg-[#FAF6EE] text-slate-400 flex items-center justify-center mx-auto">
             <Heart className="w-8 h-8 text-slate-400" />
           </div>
           <h3 className="font-serif font-bold text-slate-800 text-lg">目前尚無此狀態的班次紀錄</h3>
@@ -223,7 +223,7 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
             return (
               <div
                 key={app.id}
-                className="bg-white rounded-[28px] p-6 border border-[#5A5A40]/15 shadow-xs space-y-4 flex flex-col justify-between hover:shadow-md transition"
+                className="bg-white rounded-[28px] p-6 border border-[#716053] shadow-xs space-y-4 flex flex-col justify-between hover:shadow-md transition"
               >
                 <div className="space-y-3">
                   
@@ -268,26 +268,26 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
                   </h3>
 
                   {/* Info Details */}
-                  <div className="space-y-2 text-xs text-slate-600 bg-[#f5f5f0] p-4 rounded-2xl border border-[#5A5A40]/10 font-sans">
+                  <div className="space-y-2 text-xs text-slate-600 bg-[#FAF6EE] p-4 rounded-2xl border border-[#716053] font-sans">
                     <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4 text-[#5A5A40] shrink-0" />
+                      <MapPin className="w-4 h-4 text-[#716053] shrink-0" />
                       <span className="font-bold text-slate-900">{shift?.locationDetails}</span>
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-[#5A5A40] shrink-0" />
-                      <span className="font-bold text-[#5A5A40]">
+                      <Calendar className="w-4 h-4 text-[#716053] shrink-0" />
+                      <span className="font-bold text-[#716053]">
                         {shift?.date} ({shift?.timeRange})
                       </span>
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-[#5A5A40] shrink-0" />
+                      <Clock className="w-4 h-4 text-[#716053] shrink-0" />
                       <span>報名登記時間：{app.appliedAt}</span>
                     </div>
 
                     {app.reviewNotes && (
-                      <div className="pt-2 mt-2 border-t border-[#5A5A40]/10 text-slate-700">
+                      <div className="pt-2 mt-2 border-t border-[#716053] text-slate-700">
                         <strong>社工回覆：</strong> {app.reviewNotes}
                       </div>
                     )}
@@ -295,14 +295,14 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
                 </div>
 
                 {/* Bottom Actions */}
-                <div className="pt-3 border-t border-[#5A5A40]/10 flex flex-wrap items-center justify-between gap-3">
+                <div className="pt-3 border-t border-[#716053] flex flex-wrap items-center justify-between gap-3">
                   <div className="flex flex-wrap items-center gap-3">
                     {shelterLocation.googleMapsUrl && (
                       <a
                         href={shelterLocation.googleMapsUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs text-[#5A5A40] font-bold hover:underline flex items-center gap-1"
+                        className="text-xs text-[#716053] font-bold hover:underline flex items-center gap-1"
                       >
                         <MapPin className="w-3.5 h-3.5" />
                         <span>查看導航</span>
@@ -321,7 +321,7 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
                         })}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs text-[#5A5A40] font-bold hover:underline flex items-center gap-1"
+                        className="text-xs text-[#716053] font-bold hover:underline flex items-center gap-1"
                       >
                         <Calendar className="w-3.5 h-3.5" />
                         <span>加入 Google 日曆</span>

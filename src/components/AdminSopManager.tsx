@@ -276,9 +276,9 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
     <div className="space-y-6 py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto font-sans">
 
       {/* Header */}
-      <div className="bg-white p-6 rounded-[28px] border border-[#5A5A40]/15 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-white p-6 rounded-[28px] border border-[#716053] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-[#5A5A40] text-white flex items-center justify-center shrink-0 shadow-xs">
+          <div className="w-12 h-12 rounded-2xl bg-[#716053] text-white flex items-center justify-center shrink-0 shadow-xs">
             <BookOpen className="w-6 h-6 text-amber-300" />
           </div>
           <div>
@@ -291,7 +291,7 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
         <button
           onClick={handleSave}
           disabled={isSaving}
-          className="bg-[#5A5A40] hover:bg-[#484833] disabled:opacity-50 text-white font-extrabold px-6 py-3 rounded-full text-xs shadow-md transition flex items-center gap-2 cursor-pointer shrink-0"
+          className="bg-[#716053] hover:bg-[#5A4A3F] disabled:opacity-50 text-white font-extrabold px-6 py-3 rounded-full text-xs shadow-md transition flex items-center gap-2 cursor-pointer shrink-0"
         >
           {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 text-amber-300" />}
           <span>{isSaving ? '儲存並產生向量中...' : '儲存並同步至志工端'}</span>
@@ -299,24 +299,24 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
       </div>
 
       {/* Banner Text */}
-      <div className="bg-white p-6 rounded-[28px] border border-[#5A5A40]/15 shadow-xs space-y-3">
-        <h3 className="font-bold font-serif text-slate-900 text-sm border-b border-[#5A5A40]/10 pb-2">頁面標題橫幅</h3>
+      <div className="bg-white p-6 rounded-[28px] border border-[#716053] shadow-xs space-y-3">
+        <h3 className="font-bold font-serif text-slate-900 text-sm border-b border-[#716053] pb-2">頁面標題橫幅</h3>
         <div>
-          <label className="block text-xs font-bold text-[#5A5A40] mb-1">標題</label>
+          <label className="block text-xs font-bold text-[#716053] mb-1">標題</label>
           <input
             type="text"
             value={content.bannerTitle}
             onChange={e => setContent({ ...content, bannerTitle: e.target.value })}
-            className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs font-medium focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+            className="w-full p-3 bg-[#FAF6EE] border border-[#716053] rounded-2xl text-xs font-medium focus:ring-2 focus:ring-[#716053] focus:outline-none"
           />
         </div>
         <div>
-          <label className="block text-xs font-bold text-[#5A5A40] mb-1">副標說明</label>
+          <label className="block text-xs font-bold text-[#716053] mb-1">副標說明</label>
           <textarea
             value={content.bannerSubtitle}
             onChange={e => setContent({ ...content, bannerSubtitle: e.target.value })}
             rows={2}
-            className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs focus:ring-2 focus:ring-[#5A5A40] focus:outline-none resize-none"
+            className="w-full p-3 bg-[#FAF6EE] border border-[#716053] rounded-2xl text-xs focus:ring-2 focus:ring-[#716053] focus:outline-none resize-none"
           />
         </div>
       </div>
@@ -331,13 +331,13 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
                   type="text"
                   value={section.icon}
                   onChange={e => updateSection(sIdx, { icon: e.target.value })}
-                  className="w-12 p-2 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-xl text-center text-lg"
+                  className="w-12 p-2 bg-[#FAF6EE] border border-[#716053] rounded-xl text-center text-lg"
                   maxLength={4}
                 />
                 <select
                   value={section.colorTheme}
                   onChange={e => updateSection(sIdx, { colorTheme: e.target.value as SopSection['colorTheme'] })}
-                  className="p-2 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-xl text-[11px] font-bold cursor-pointer"
+                  className="p-2 bg-[#FAF6EE] border border-[#716053] rounded-xl text-[11px] font-bold cursor-pointer"
                 >
                   {COLOR_THEME_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
@@ -356,33 +356,33 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
               value={section.title}
               onChange={e => updateSection(sIdx, { title: e.target.value })}
               placeholder="SOP 標題"
-              className="w-full p-2.5 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+              className="w-full p-2.5 bg-[#FAF6EE] border border-[#716053] rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#716053] focus:outline-none"
             />
             <input
               type="text"
               value={section.subtitle}
               onChange={e => updateSection(sIdx, { subtitle: e.target.value })}
               placeholder="副標說明"
-              className="w-full p-2.5 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-xl text-xs focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+              className="w-full p-2.5 bg-[#FAF6EE] border border-[#716053] rounded-xl text-xs focus:ring-2 focus:ring-[#716053] focus:outline-none"
             />
 
             <div className="space-y-2">
               {section.items.map((item, iIdx) => (
-                <div key={iIdx} className="flex items-start gap-1.5 bg-[#fdfdfb] p-2.5 rounded-xl border border-[#5A5A40]/10">
+                <div key={iIdx} className="flex items-start gap-1.5 bg-[#FFFDF7] p-2.5 rounded-xl border border-[#716053]">
                   <div className="flex-1 space-y-1.5">
                     <input
                       type="text"
                       value={item.label}
                       onChange={e => updateSectionItem(sIdx, iIdx, 'label', e.target.value)}
                       placeholder="規範名稱"
-                      className="w-full p-1.5 bg-white border border-[#5A5A40]/15 rounded-lg text-[11px] font-bold focus:ring-1 focus:ring-[#5A5A40] focus:outline-none"
+                      className="w-full p-1.5 bg-white border border-[#716053] rounded-lg text-[11px] font-bold focus:ring-1 focus:ring-[#716053] focus:outline-none"
                     />
                     <textarea
                       value={item.text}
                       onChange={e => updateSectionItem(sIdx, iIdx, 'text', e.target.value)}
                       rows={2}
                       placeholder="規範說明內容"
-                      className="w-full p-1.5 bg-white border border-[#5A5A40]/15 rounded-lg text-[11px] focus:ring-1 focus:ring-[#5A5A40] focus:outline-none resize-none"
+                      className="w-full p-1.5 bg-white border border-[#716053] rounded-lg text-[11px] focus:ring-1 focus:ring-[#716053] focus:outline-none resize-none"
                     />
                   </div>
                   <button
@@ -395,7 +395,7 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
               ))}
               <button
                 onClick={() => addSectionItem(sIdx)}
-                className="w-full py-2 border border-dashed border-[#5A5A40]/25 text-[#5A5A40] rounded-xl text-[11px] font-bold hover:bg-[#f5f5f0] transition cursor-pointer flex items-center justify-center gap-1"
+                className="w-full py-2 border border-dashed border-[#716053] text-[#716053] rounded-xl text-[11px] font-bold hover:bg-[#FAF6EE] transition cursor-pointer flex items-center justify-center gap-1"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>新增規範項目</span>
@@ -406,7 +406,7 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
 
         <button
           onClick={addSection}
-          className="bg-[#fdfdfb] border-2 border-dashed border-[#5A5A40]/25 rounded-[28px] p-6 text-[#5A5A40] font-bold text-sm hover:bg-[#f5f5f0] transition cursor-pointer flex items-center justify-center gap-2 min-h-[200px]"
+          className="bg-[#FFFDF7] border-2 border-dashed border-[#716053] rounded-[28px] p-6 text-[#716053] font-bold text-sm hover:bg-[#FAF6EE] transition cursor-pointer flex items-center justify-center gap-2 min-h-[200px]"
         >
           <Plus className="w-5 h-5" />
           <span>新增一組 SOP 卡片</span>
@@ -414,9 +414,9 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
       </div>
 
       {/* Shift Template Cards -- auto-synced from published shifts, read/delete only */}
-      <div className="bg-white p-6 rounded-[28px] border border-[#5A5A40]/15 shadow-xs space-y-4">
-        <div className="flex items-center gap-2 font-bold font-serif text-slate-900 text-sm border-b border-[#5A5A40]/10 pb-2">
-          <CalendarClock className="w-4 h-4 text-[#5A5A40]" />
+      <div className="bg-white p-6 rounded-[28px] border border-[#716053] shadow-xs space-y-4">
+        <div className="flex items-center gap-2 font-bold font-serif text-slate-900 text-sm border-b border-[#716053] pb-2">
+          <CalendarClock className="w-4 h-4 text-[#716053]" />
           <span>班次範本卡片庫</span>
           <span className="text-[10px] font-sans font-normal text-slate-400">
             每次在「職位與班次發布」發布新班次時自動同步建立，供發布表單的「套用過去班次範本」下拉選單使用
@@ -428,9 +428,9 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {shiftTemplates.map(t => (
-              <div key={t.id} className="bg-[#fdfdfb] p-4 rounded-2xl border border-[#5A5A40]/10 space-y-2">
+              <div key={t.id} className="bg-[#FFFDF7] p-4 rounded-2xl border border-[#716053] space-y-2">
                 <div className="flex items-start justify-between gap-2">
-                  <span className="text-[10px] font-extrabold bg-[#E6E2D3] text-[#5A5A40] px-2 py-0.5 rounded-full shrink-0">
+                  <span className="text-[10px] font-extrabold bg-[#F5E6D0] text-[#716053] px-2 py-0.5 rounded-full shrink-0">
                     屬性：班次
                   </span>
                   <button
@@ -492,9 +492,9 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
       </div>
 
       {/* PDF Reference Documents */}
-      <div className="bg-white p-6 rounded-[28px] border border-[#5A5A40]/15 shadow-xs space-y-4">
-        <div className="flex items-center gap-2 font-bold font-serif text-slate-900 text-sm border-b border-[#5A5A40]/10 pb-2">
-          <FileText className="w-4 h-4 text-[#5A5A40]" />
+      <div className="bg-white p-6 rounded-[28px] border border-[#716053] shadow-xs space-y-4">
+        <div className="flex items-center gap-2 font-bold font-serif text-slate-900 text-sm border-b border-[#716053] pb-2">
+          <FileText className="w-4 h-4 text-[#716053]" />
           <span>上傳 PDF 說明教學文件</span>
           <span className="text-[10px] font-sans font-normal text-slate-400">會自動擷取文字並轉為向量，供 AI 問答參考</span>
         </div>
@@ -505,19 +505,19 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
             value={docTitle}
             onChange={e => setDocTitle(e.target.value)}
             placeholder="文件標題，例如：新進志工完整訓練手冊 2026"
-            className="flex-1 p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+            className="flex-1 p-3 bg-[#FAF6EE] border border-[#716053] rounded-2xl text-xs focus:ring-2 focus:ring-[#716053] focus:outline-none"
           />
           <input
             ref={docFileInputRef}
             type="file"
             accept="application/pdf"
             onChange={e => setDocFile(e.target.files?.[0] || null)}
-            className="flex-1 p-2.5 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs file:mr-2 file:px-3 file:py-1.5 file:rounded-full file:border-0 file:bg-[#5A5A40] file:text-white file:text-[11px] file:font-bold file:cursor-pointer"
+            className="flex-1 p-2.5 bg-[#FAF6EE] border border-[#716053] rounded-2xl text-xs file:mr-2 file:px-3 file:py-1.5 file:rounded-full file:border-0 file:bg-[#716053] file:text-white file:text-[11px] file:font-bold file:cursor-pointer"
           />
           <button
             onClick={handleUploadDoc}
             disabled={!docTitle.trim() || !docFile || isUploadingDoc}
-            className="bg-[#5A5A40] hover:bg-[#484833] disabled:opacity-40 text-white font-bold px-5 py-2.5 rounded-2xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+            className="bg-[#716053] hover:bg-[#5A4A3F] disabled:opacity-40 text-white font-bold px-5 py-2.5 rounded-2xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
           >
             {isUploadingDoc ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4 text-amber-300" />}
             <span>{isUploadingDoc ? '解析並索引中...' : '上傳'}</span>
@@ -527,8 +527,8 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
         {documents.length > 0 && (
           <div className="space-y-2">
             {documents.map(doc => (
-              <div key={doc.id} className="flex items-center justify-between gap-2 bg-[#fdfdfb] p-3 rounded-xl border border-[#5A5A40]/10 text-xs">
-                <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[#5A5A40] font-bold hover:underline truncate">
+              <div key={doc.id} className="flex items-center justify-between gap-2 bg-[#FFFDF7] p-3 rounded-xl border border-[#716053] text-xs">
+                <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[#716053] font-bold hover:underline truncate">
                   <FileText className="w-4 h-4 shrink-0" />
                   <span className="truncate">{doc.title}</span>
                 </a>
@@ -542,9 +542,9 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
       </div>
 
       {/* Teaching Videos */}
-      <div className="bg-white p-6 rounded-[28px] border border-[#5A5A40]/15 shadow-xs space-y-4">
-        <div className="flex items-center gap-2 font-bold font-serif text-slate-900 text-sm border-b border-[#5A5A40]/10 pb-2">
-          <Video className="w-4 h-4 text-[#5A5A40]" />
+      <div className="bg-white p-6 rounded-[28px] border border-[#716053] shadow-xs space-y-4">
+        <div className="flex items-center gap-2 font-bold font-serif text-slate-900 text-sm border-b border-[#716053] pb-2">
+          <Video className="w-4 h-4 text-[#716053]" />
           <span>上傳教學影片</span>
           <span className="text-[10px] font-sans font-normal text-slate-400">影片檔案請盡量壓縮，避免上傳過大檔案</span>
         </div>
@@ -555,14 +555,14 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
             value={videoTitle}
             onChange={e => setVideoTitle(e.target.value)}
             placeholder="影片標題"
-            className="p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+            className="p-3 bg-[#FAF6EE] border border-[#716053] rounded-2xl text-xs focus:ring-2 focus:ring-[#716053] focus:outline-none"
           />
           <input
             type="text"
             value={videoDescription}
             onChange={e => setVideoDescription(e.target.value)}
             placeholder="簡短說明（選填）"
-            className="p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+            className="p-3 bg-[#FAF6EE] border border-[#716053] rounded-2xl text-xs focus:ring-2 focus:ring-[#716053] focus:outline-none"
           />
         </div>
         <div className="flex flex-col sm:flex-row gap-2">
@@ -571,12 +571,12 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
             type="file"
             accept="video/*"
             onChange={e => setVideoFile(e.target.files?.[0] || null)}
-            className="flex-1 p-2.5 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs file:mr-2 file:px-3 file:py-1.5 file:rounded-full file:border-0 file:bg-[#5A5A40] file:text-white file:text-[11px] file:font-bold file:cursor-pointer"
+            className="flex-1 p-2.5 bg-[#FAF6EE] border border-[#716053] rounded-2xl text-xs file:mr-2 file:px-3 file:py-1.5 file:rounded-full file:border-0 file:bg-[#716053] file:text-white file:text-[11px] file:font-bold file:cursor-pointer"
           />
           <button
             onClick={handleUploadVideo}
             disabled={!videoTitle.trim() || !videoFile || isUploadingVideo}
-            className="bg-[#5A5A40] hover:bg-[#484833] disabled:opacity-40 text-white font-bold px-5 py-2.5 rounded-2xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+            className="bg-[#716053] hover:bg-[#5A4A3F] disabled:opacity-40 text-white font-bold px-5 py-2.5 rounded-2xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
           >
             {isUploadingVideo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4 text-amber-300" />}
             <span>{isUploadingVideo ? '上傳中...' : '上傳'}</span>
@@ -586,7 +586,7 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
         {videos.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {videos.map(video => (
-              <div key={video.id} className="bg-[#fdfdfb] p-3 rounded-xl border border-[#5A5A40]/10 space-y-2">
+              <div key={video.id} className="bg-[#FFFDF7] p-3 rounded-xl border border-[#716053] space-y-2">
                 <video src={video.fileUrl} controls className="w-full rounded-lg bg-black max-h-40" />
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">

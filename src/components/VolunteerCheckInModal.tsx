@@ -346,11 +346,11 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#5A5A40]/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto font-sans">
-      <div className="bg-white rounded-[32px] max-w-2xl w-full shadow-2xl border border-[#5A5A40]/20 overflow-hidden my-6 animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 bg-[#716053]/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto font-sans">
+      <div className="bg-white rounded-[32px] max-w-2xl w-full shadow-2xl border border-[#716053] overflow-hidden my-6 animate-in fade-in zoom-in-95 duration-200">
         
         {/* Header Bar */}
-        <div className="bg-[#5A5A40] text-white p-6 flex items-center justify-between relative">
+        <div className="bg-[#716053] text-white p-6 flex items-center justify-between relative">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-md">
               <QrCode className="w-6 h-6" />
@@ -364,7 +364,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                   LINE LIFF 驗證
                 </span>
               </div>
-              <p className="text-xs text-[#E6E2D3] mt-0.5">
+              <p className="text-xs text-[#F5E6D0] mt-0.5">
                 模擬志工抵達園區後使用 LINE 相機掃描 QR Code 簽到 / 離場核銷時數
               </p>
             </div>
@@ -378,14 +378,14 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
         </div>
 
         {/* Modal Navigation Tabs */}
-        <div className="bg-[#f5f5f0] p-2 border-b border-[#5A5A40]/12 flex justify-between items-center px-6">
+        <div className="bg-[#FAF6EE] p-2 border-b border-[#716053] flex justify-between items-center px-6">
           <div className="flex space-x-2">
             <button
               onClick={() => setActiveTab('scan')}
               className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
                 activeTab === 'scan'
-                  ? 'bg-white text-[#5A5A40] shadow-xs'
-                  : 'text-slate-600 hover:text-[#5A5A40]'
+                  ? 'bg-white text-[#716053] shadow-xs'
+                  : 'text-slate-600 hover:text-[#716053]'
               }`}
             >
               <Camera className="w-4 h-4 text-emerald-600" />
@@ -395,8 +395,8 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
               onClick={() => setActiveTab('records')}
               className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
                 activeTab === 'records'
-                  ? 'bg-white text-[#5A5A40] shadow-xs'
-                  : 'text-slate-600 hover:text-[#5A5A40]'
+                  ? 'bg-white text-[#716053] shadow-xs'
+                  : 'text-slate-600 hover:text-[#716053]'
               }`}
             >
               <Clock className="w-4 h-4 text-sky-600" />
@@ -420,14 +420,14 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
             <div className="space-y-6">
               
               {/* Geofencing Location Verification Card */}
-              <div className="bg-[#f5f5f0] border border-[#5A5A40]/20 rounded-2xl p-4 text-xs space-y-3 font-sans shadow-2xs">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[#5A5A40]/15">
+              <div className="bg-[#FAF6EE] border border-[#716053] rounded-2xl p-4 text-xs space-y-3 font-sans shadow-2xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[#716053]">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-[#5A5A40] text-[#E6E2D3] flex items-center justify-center shrink-0">
+                    <div className="w-8 h-8 rounded-xl bg-[#716053] text-[#F5E6D0] flex items-center justify-center shrink-0">
                       <Compass className="w-4 h-4 animate-spin-slow" />
                     </div>
                     <div>
-                      <div className="font-bold text-[#5A5A40] text-sm flex items-center gap-1.5">
+                      <div className="font-bold text-[#716053] text-sm flex items-center gap-1.5">
                         <span>📡 地理圍欄 (Geofencing) 500m 防偽驗證</span>
                         {isWithinGeofence ? (
                           <span className="bg-emerald-100 text-emerald-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-emerald-300 flex items-center gap-1">
@@ -458,10 +458,10 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                 </div>
 
                 {/* Distance Meter Gauge */}
-                <div className="bg-white rounded-xl p-3 border border-[#5A5A40]/12 space-y-2">
+                <div className="bg-white rounded-xl p-3 border border-[#716053] space-y-2">
                   <div className="flex justify-between items-center font-bold">
                     <span className="text-slate-600 flex items-center gap-1">
-                      <MapPin className="w-3.5 h-3.5 text-[#5A5A40]" />
+                      <MapPin className="w-3.5 h-3.5 text-[#716053]" />
                       當前測得直線距離：
                     </span>
                     <span className={`text-sm ${isWithinGeofence ? 'text-emerald-700' : 'text-rose-600'}`}>
@@ -556,7 +556,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                         <span className="text-rose-400">🔴 OUT OF FENCE</span>
                       )}
                     </div>
-                    <div className="absolute top-2 right-2 text-[10px] text-[#E6E2D3] font-mono">LINE API</div>
+                    <div className="absolute top-2 right-2 text-[10px] text-[#F5E6D0] font-mono">LINE API</div>
                     
                     <QrCode className={`w-24 h-24 transition-transform duration-300 ${
                       isWithinGeofence ? 'text-emerald-400' : 'text-slate-500 opacity-60'
@@ -619,7 +619,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                   <div className="grid grid-cols-2 gap-2 text-slate-700 font-sans">
                     <div><span className="text-slate-500">志工姓名：</span><strong className="text-slate-900">{selectedVolunteerName}</strong></div>
                     <div><span className="text-slate-500">LINE ID：</span><strong>@{selectedLineId}</strong></div>
-                    <div><span className="text-slate-500">簽到班次：</span><strong className="text-[#5A5A40]">{currentShift?.title}</strong></div>
+                    <div><span className="text-slate-500">簽到班次：</span><strong className="text-[#716053]">{currentShift?.title}</strong></div>
                     <div><span className="text-slate-500">預計時段：</span><strong>{currentShift?.timeRange}</strong></div>
                   </div>
                   <div className="pt-2 flex justify-end">
@@ -635,10 +635,10 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
               )}
 
               {/* Manual Selection Form (for admins & testing) */}
-              <div className="bg-[#f5f5f0] rounded-2xl p-5 border border-[#5A5A40]/15 space-y-4 text-xs font-sans">
+              <div className="bg-[#FAF6EE] rounded-2xl p-5 border border-[#716053] space-y-4 text-xs font-sans">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-[#5A5A40] flex items-center gap-1">
-                    <UserCheck className="w-4 h-4 text-[#5A5A40]" />
+                  <span className="font-bold text-[#716053] flex items-center gap-1">
+                    <UserCheck className="w-4 h-4 text-[#716053]" />
                     <span>手動選擇簽到人員與對應班次 (社工協助備用)</span>
                   </span>
                   <span className="text-[11px] text-slate-500">若手機沒電時適用</span>
@@ -647,7 +647,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Volunteer Name */}
                   <div>
-                    <label className="block font-bold text-[#5A5A40] mb-1">志工姓名 / LINE 名稱 *</label>
+                    <label className="block font-bold text-[#716053] mb-1">志工姓名 / LINE 名稱 *</label>
                     <select
                       value={selectedVolunteerName}
                       onChange={e => {
@@ -655,7 +655,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                         const app = applications.find(a => a.volunteerName === e.target.value);
                         if (app?.lineId) setSelectedLineId(app.lineId);
                       }}
-                      className="w-full p-2.5 bg-white border border-[#5A5A40]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#5A5A40]"
+                      className="w-full p-2.5 bg-white border border-[#716053] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#716053]"
                     >
                       {applications.map(app => (
                         <option key={app.id} value={app.volunteerName}>
@@ -672,11 +672,11 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
 
                   {/* Shift Selection */}
                   <div>
-                    <label className="block font-bold text-[#5A5A40] mb-1">簽到班次 *</label>
+                    <label className="block font-bold text-[#716053] mb-1">簽到班次 *</label>
                     <select
                       value={selectedShiftId}
                       onChange={e => setSelectedShiftId(e.target.value)}
-                      className="w-full p-2.5 bg-white border border-[#5A5A40]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#5A5A40]"
+                      className="w-full p-2.5 bg-white border border-[#716053] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#716053]"
                     >
                       {shifts.map(shift => (
                         <option key={shift.id} value={shift.id}>
@@ -687,17 +687,17 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                   </div>
                 </div>
 
-                <div className="flex justify-end pt-2 border-t border-[#5A5A40]/10">
+                <div className="flex justify-end pt-2 border-t border-[#716053]">
                   <button
                     onClick={handleConfirmCheckIn}
                     disabled={!isWithinGeofence}
                     className={`font-bold py-2 px-5 rounded-full text-xs shadow-xs transition flex items-center space-x-1.5 cursor-pointer disabled:opacity-50 ${
                       isWithinGeofence
-                        ? 'bg-[#5A5A40] hover:bg-[#484833] text-white'
+                        ? 'bg-[#716053] hover:bg-[#5A4A3F] text-white'
                         : 'bg-rose-700 text-white cursor-not-allowed'
                     }`}
                   >
-                    <LogIn className="w-4 h-4 text-[#E6E2D3]" />
+                    <LogIn className="w-4 h-4 text-[#F5E6D0]" />
                     <span>{isWithinGeofence ? '直接進行【抵達簽到】' : '超出 500m 圍欄 (無法簽到)'}</span>
                   </button>
                 </div>
@@ -729,7 +729,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
 
                           <button
                             onClick={() => handleOpenCheckOutFeedback(rec)}
-                            className="bg-[#5A5A40] hover:bg-[#484833] text-white font-bold px-3 py-1.5 rounded-lg text-xs transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                            className="bg-[#716053] hover:bg-[#5A4A3F] text-white font-bold px-3 py-1.5 rounded-lg text-xs transition flex items-center gap-1 cursor-pointer shadow-2xs"
                           >
                             <LogOut className="w-3.5 h-3.5 text-amber-300" />
                             <span>離場簽退 & 收集回饋</span>
@@ -745,13 +745,13 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
             /* Records Table View */
             <div className="space-y-4">
               <div className="flex justify-between items-center text-xs">
-                <span className="font-bold text-[#5A5A40]">歷史簽到與時數紀錄冊：</span>
+                <span className="font-bold text-[#716053]">歷史簽到與時數紀錄冊：</span>
                 <span className="text-slate-500">共 {attendanceRecords.length} 筆簽到簽退數據</span>
               </div>
 
-              <div className="border border-[#5A5A40]/15 rounded-2xl overflow-hidden text-xs">
+              <div className="border border-[#716053] rounded-2xl overflow-hidden text-xs">
                 <table className="w-full text-left border-collapse">
-                  <thead className="bg-[#f5f5f0] text-[#5A5A40] font-bold border-b border-[#5A5A40]/15">
+                  <thead className="bg-[#FAF6EE] text-[#716053] font-bold border-b border-[#716053]">
                     <tr>
                       <th className="p-3">志工姓名</th>
                       <th className="p-3">對應班次 / 場域</th>
@@ -762,7 +762,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                       <th className="p-3 text-right">狀態與核銷</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#5A5A40]/10 bg-white">
+                  <tbody className="divide-y divide-[#716053]/10 bg-white">
                     {attendanceRecords.length === 0 ? (
                       <tr>
                         <td colSpan={7} className="p-6 text-center text-slate-400 italic">
@@ -775,7 +775,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                         const isCheckedIn = rec.status === 'checked_in';
 
                         return (
-                          <tr key={rec.id} className="hover:bg-[#f5f5f0]/50 transition">
+                          <tr key={rec.id} className="hover:bg-[#FAF6EE]/50 transition">
                             <td className="p-3 font-bold text-slate-900">
                               {rec.volunteerName}
                               <div className="text-[10px] text-slate-400 font-normal">LINE: @{rec.lineId || '無'}</div>
@@ -800,7 +800,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                             <td className="p-3 text-slate-700 font-mono text-[11px]">
                               {rec.checkOutTime ? rec.checkOutTime : <span className="text-amber-600 italic">服務中...</span>}
                             </td>
-                            <td className="p-3 font-bold text-[#5A5A40]">
+                            <td className="p-3 font-bold text-[#716053]">
                               <div>{rec.hoursLogged ? `${rec.hoursLogged} 小時` : '--'}</div>
                               {rec.rating && (
                                 <div className="flex items-center gap-0.5 text-amber-500 mt-1" title={`${rec.rating} 星評分`}>
@@ -817,7 +817,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                               {isCheckedIn ? (
                                 <button
                                   onClick={() => handleOpenCheckOutFeedback(rec)}
-                                  className="bg-[#5A5A40] hover:bg-[#484833] text-white text-[11px] font-bold px-3 py-1 rounded-full shadow-2xs transition inline-flex items-center gap-1 cursor-pointer"
+                                  className="bg-[#716053] hover:bg-[#5A4A3F] text-white text-[11px] font-bold px-3 py-1 rounded-full shadow-2xs transition inline-flex items-center gap-1 cursor-pointer"
                                 >
                                   <LogOut className="w-3 h-3 text-amber-300" />
                                   <span>簽退 & 送出 LINE 提醒</span>
@@ -850,14 +850,14 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
         </div>
 
         {/* Footer info */}
-        <div className="bg-[#f5f5f0] p-4 border-t border-[#5A5A40]/10 flex justify-between items-center text-xs text-slate-500 font-sans">
-          <div className="flex items-center space-x-1.5 text-[#5A5A40]">
+        <div className="bg-[#FAF6EE] p-4 border-t border-[#716053] flex justify-between items-center text-xs text-slate-500 font-sans">
+          <div className="flex items-center space-x-1.5 text-[#716053]">
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
             <span className="font-medium">LINE 官方帳號 Rich Menu 與自動簽到整合完畢</span>
           </div>
           <button
             onClick={onClose}
-            className="px-5 py-2 bg-[#5A5A40] text-white rounded-full font-bold hover:bg-[#484833] cursor-pointer"
+            className="px-5 py-2 bg-[#716053] text-white rounded-full font-bold hover:bg-[#5A4A3F] cursor-pointer"
           >
             關閉視窗
           </button>
@@ -886,7 +886,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    志工：<strong className="text-slate-800">{pendingFeedbackRecord.volunteerName}</strong> ｜ 班次：<strong className="text-[#5A5A40]">{pendingFeedbackRecord.shiftTitle}</strong>
+                    志工：<strong className="text-slate-800">{pendingFeedbackRecord.volunteerName}</strong> ｜ 班次：<strong className="text-[#716053]">{pendingFeedbackRecord.shiftTitle}</strong>
                   </p>
                 </div>
               </div>
@@ -919,7 +919,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
             </div>
 
             {/* 1 - 5 Star Rating Selection */}
-            <div className="space-y-2 bg-[#fdfdfb] p-4 rounded-2xl border border-[#5A5A40]/15">
+            <div className="space-y-2 bg-[#FFFDF7] p-4 rounded-2xl border border-[#716053]">
               <label className="block text-xs font-bold text-slate-800 flex justify-between items-center">
                 <span className="flex items-center gap-1.5">
                   <Star className="w-4 h-4 text-amber-500 fill-amber-400" />
@@ -994,7 +994,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                       type="button"
                       onClick={() => pendingFeedbackRecord && handleAiCaptionPhoto(pendingFeedbackRecord.shiftTitle, pendingFeedbackRecord.zone)}
                       disabled={isCaptioning}
-                      className="w-full bg-[#5A5A40] hover:bg-[#484833] text-white text-[11px] font-bold py-2 rounded-xl flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                      className="w-full bg-[#716053] hover:bg-[#5A4A3F] text-white text-[11px] font-bold py-2 rounded-xl flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
                     >
                       <Sparkles className="w-3.5 h-3.5 text-amber-300" />
                       <span>{isCaptioning ? 'AI 看照片寫心得中...' : '請 AI 幫我看照片寫心得'}</span>
@@ -1009,7 +1009,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                   </div>
                 </div>
               ) : (
-                <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-300 hover:border-[#5A5A40]/40 rounded-xl py-4 text-xs text-slate-500 cursor-pointer transition">
+                <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-300 hover:border-[#716053] rounded-xl py-4 text-xs text-slate-500 cursor-pointer transition">
                   <Camera className="w-4 h-4" />
                   <span>拍照或選擇一張今天的服務照片</span>
                   <input
@@ -1034,7 +1034,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                 onChange={e => setFeedbackComment(e.target.value)}
                 placeholder="例如：今天幼犬溫室照護流程很清晰，督導說明的餵量剛好，希望能繼續參與下一期班次！"
                 rows={3}
-                className="w-full p-3 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#5A5A40] resize-none"
+                className="w-full p-3 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#716053] resize-none"
               />
             </div>
 

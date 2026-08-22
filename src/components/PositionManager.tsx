@@ -121,11 +121,11 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
     <div className="space-y-6 py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
       
       {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 sm:p-8 rounded-[32px] border border-[#5A5A40]/12 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 sm:p-8 rounded-[32px] border border-[#716053] shadow-xs">
         <div>
-          <h2 className="text-2xl font-bold font-serif italic text-[#5A5A40] flex items-center gap-2">
+          <h2 className="text-2xl font-bold font-serif italic text-[#716053] flex items-center gap-2">
             <span>職位發布與排班時間表管理</span>
-            <span className="text-xs font-semibold font-sans bg-[#E6E2D3] text-[#5A5A40] px-3 py-1 rounded-full">
+            <span className="text-xs font-semibold font-sans bg-[#F5E6D0] text-[#716053] px-3 py-1 rounded-full">
               共 {filteredShifts.length} 班次
             </span>
           </h2>
@@ -164,7 +164,7 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
 
           <button
             onClick={() => setShowCreateModal(true)}
-            className="bg-[#5A5A40] hover:bg-[#484833] text-white font-extrabold text-lg px-24 py-4 rounded-full shadow-md transition flex items-center gap-2.5 cursor-pointer"
+            className="bg-[#716053] hover:bg-[#5A4A3F] text-white font-extrabold text-lg px-24 py-4 rounded-full shadow-md transition flex items-center gap-2.5 cursor-pointer"
           >
             <Plus className="w-6 h-6 text-emerald-300" />
             <span>發布全新志工班次</span>
@@ -200,14 +200,14 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
       )}
 
       {/* Mode Switcher & Zone Filter Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-[#5A5A40]/12 shadow-2xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-[#716053] shadow-2xs">
         {/* View Mode Tabs */}
-        <div className="flex items-center gap-1.5 bg-[#f5f5f0] p-1 rounded-xl border border-[#5A5A40]/12">
+        <div className="flex items-center gap-1.5 bg-[#FAF6EE] p-1 rounded-xl border border-[#716053]">
           <button
             onClick={() => setViewMode('calendar')}
             className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
               viewMode === 'calendar'
-                ? 'bg-[#5A5A40] text-white shadow-xs'
+                ? 'bg-[#716053] text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -219,7 +219,7 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
             onClick={() => setViewMode('grid')}
             className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
               viewMode === 'grid'
-                ? 'bg-[#5A5A40] text-white shadow-xs'
+                ? 'bg-[#716053] text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -231,13 +231,13 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
         {/* Zone Filter Pills for Grid Mode */}
         {viewMode === 'grid' && (
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-bold text-[#5A5A40] mr-1 uppercase tracking-wider">區域：</span>
+            <span className="text-xs font-bold text-[#716053] mr-1 uppercase tracking-wider">區域：</span>
             <button
               onClick={() => setFilterZone('all')}
               className={`px-3 py-1 rounded-full text-xs font-bold transition cursor-pointer ${
                 filterZone === 'all'
-                  ? 'bg-[#5A5A40] text-white shadow-xs'
-                  : 'bg-white text-slate-600 border border-[#5A5A40]/12 hover:bg-[#E6E2D3]/40'
+                  ? 'bg-[#716053] text-white shadow-xs'
+                  : 'bg-white text-slate-600 border border-[#716053] hover:bg-[#F5E6D0]/40'
               }`}
             >
               全部
@@ -251,8 +251,8 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
                   onClick={() => setFilterZone(zKey)}
                   className={`px-3 py-1 rounded-full text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
                     filterZone === zKey
-                      ? 'bg-[#5A5A40] text-white shadow-xs'
-                      : 'bg-white text-slate-600 border border-[#5A5A40]/12 hover:bg-[#E6E2D3]/40'
+                      ? 'bg-[#716053] text-white shadow-xs'
+                      : 'bg-white text-slate-600 border border-[#716053] hover:bg-[#F5E6D0]/40'
                   }`}
                 >
                   <span>{zConf.icon}</span>
@@ -283,7 +283,7 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
             return (
               <div
                 key={shift.id}
-                className="bg-white rounded-[28px] border border-[#5A5A40]/12 p-6 shadow-xs flex flex-col justify-between hover:border-[#5A5A40]/30 transition space-y-4"
+                className="bg-white rounded-[28px] border border-[#716053] p-6 shadow-xs flex flex-col justify-between hover:border-[#716053] transition space-y-4"
               >
                 <div className="space-y-4">
                   
@@ -297,7 +297,7 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
                     <span className={`text-xs font-bold px-3 py-1 rounded-full ${
                       isFull
                         ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-[#E6E2D3] text-[#5A5A40]'
+                        : 'bg-[#F5E6D0] text-[#716053]'
                     }`}>
                       {isFull ? '已滿班' : `缺 ${shift.requiredCount - shift.currentCount} 人`}
                     </span>
@@ -311,49 +311,49 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
                   {/* Info List */}
                   <div className="space-y-2 text-xs text-slate-600 font-sans">
                     <div className="flex items-center gap-2">
-                      <MapPin className="w-3.5 h-3.5 text-[#5A5A40] shrink-0" />
+                      <MapPin className="w-3.5 h-3.5 text-[#716053] shrink-0" />
                       <span className="font-bold text-slate-800">{shift.locationDetails}</span>
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <Calendar className="w-3.5 h-3.5 text-[#5A5A40] shrink-0" />
+                      <Calendar className="w-3.5 h-3.5 text-[#716053] shrink-0" />
                       <span>日期：{shift.date}</span>
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <Clock className="w-3.5 h-3.5 text-[#5A5A40] shrink-0" />
+                      <Clock className="w-3.5 h-3.5 text-[#716053] shrink-0" />
                       <span>時段：{shift.timeRange}</span>
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <Users className="w-3.5 h-3.5 text-[#5A5A40] shrink-0" />
+                      <Users className="w-3.5 h-3.5 text-[#716053] shrink-0" />
                       <span>名額：已報名 {shift.currentCount} / 目標 {shift.requiredCount} 人</span>
                     </div>
 
                     <div className="flex items-center gap-2 pt-1">
-                      <span className="text-[10px] font-bold bg-[#f5f5f0] border border-[#5A5A40]/10 px-2.5 py-0.5 rounded-full text-[#5A5A40]">
+                      <span className="text-[10px] font-bold bg-[#FAF6EE] border border-[#716053] px-2.5 py-0.5 rounded-full text-[#716053]">
                         經驗門檻：{shift.skillRequired === 'beginner' ? '新手皆可' : shift.skillRequired === 'intermediate' ? '需具備基礎散步經驗' : '需資深志工/專業'}
                       </span>
                     </div>
                   </div>
 
                   {/* Tasks List */}
-                  <div className="bg-[#fdfdfb] p-3.5 rounded-2xl border border-[#5A5A40]/10 text-xs space-y-1">
-                    <p className="font-bold text-[#5A5A40] text-[11px] mb-1">任務範疇：</p>
+                  <div className="bg-[#FFFDF7] p-3.5 rounded-2xl border border-[#716053] text-xs space-y-1">
+                    <p className="font-bold text-[#716053] text-[11px] mb-1">任務範疇：</p>
                     {shift.tasks.map((task, idx) => (
                       <div key={idx} className="flex items-center gap-1.5 text-slate-600">
-                        <span className="text-[#5A5A40] font-bold">•</span>
+                        <span className="text-[#716053] font-bold">•</span>
                         <span>{task}</span>
                       </div>
                     ))}
                   </div>
 
                   {/* Location Note & Attachment */}
-                  <div className="text-[11px] text-slate-500 space-y-1 border-t border-[#5A5A40]/10 pt-2">
+                  <div className="text-[11px] text-slate-500 space-y-1 border-t border-[#716053] pt-2">
                     <p>📌 集合據點：{shift.locationDetails}</p>
                     {shift.attachmentUrl && (
-                      <p className="text-[#5A5A40] font-semibold flex items-center gap-1">
-                        <FileCheck className="w-3 h-3 text-[#5A5A40]" />
+                      <p className="text-[#716053] font-semibold flex items-center gap-1">
+                        <FileCheck className="w-3 h-3 text-[#716053]" />
                         <span>含園區配置圖附件</span>
                       </p>
                     )}
@@ -362,7 +362,7 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
                 </div>
 
                 {/* Action Buttons */}
-                <div className="mt-6 pt-4 border-t border-[#5A5A40]/10 flex flex-wrap items-center justify-between gap-2">
+                <div className="mt-6 pt-4 border-t border-[#716053] flex flex-wrap items-center justify-between gap-2">
                   
                   {/* AI Schedule Suggestion Button */}
                   <button
@@ -376,10 +376,10 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
                   {/* AI Recruitment Post Button */}
                   <button
                     onClick={() => onOpenAiGenerator(shift)}
-                    className="bg-[#5A5A40] hover:bg-[#484833] text-white font-bold text-xs py-2.5 px-3 rounded-full shadow-2xs transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="bg-[#716053] hover:bg-[#5A4A3F] text-white font-bold text-xs py-2.5 px-3 rounded-full shadow-2xs transition flex items-center justify-center gap-1.5 cursor-pointer"
                     title="產出宣傳推播文案"
                   >
-                    <Sparkles className="w-4 h-4 text-[#E6E2D3]" />
+                    <Sparkles className="w-4 h-4 text-[#F5E6D0]" />
                     <span>招募貼文</span>
                   </button>
 
@@ -411,17 +411,17 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
 
       {/* Modal: Create New Shift */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 bg-[#5A5A40]/40 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-[32px] max-w-xl w-full shadow-2xl p-6 sm:p-8 border border-[#5A5A40]/20 my-8 space-y-5">
+        <div className="fixed inset-0 z-50 bg-[#716053]/40 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-[32px] max-w-xl w-full shadow-2xl p-6 sm:p-8 border border-[#716053] my-8 space-y-5">
             
-            <div className="flex items-center justify-between border-b border-[#5A5A40]/10 pb-4">
+            <div className="flex items-center justify-between border-b border-[#716053] pb-4">
               <div>
-                <h3 className="text-xl font-bold font-serif italic text-[#5A5A40]">發布全新志工需求班次</h3>
+                <h3 className="text-xl font-bold font-serif italic text-[#716053]">發布全新志工需求班次</h3>
                 <p className="text-xs text-slate-500 font-sans mt-0.5">將自動嵌入 Google 地圖據點與 LINE 報名推播</p>
               </div>
               <button
                 onClick={() => { setShowCreateModal(false); setSelectedTemplateId(''); }}
-                className="text-slate-400 hover:text-[#5A5A40] text-xl font-bold cursor-pointer"
+                className="text-slate-400 hover:text-[#716053] text-xl font-bold cursor-pointer"
               >
                 ✕
               </button>
@@ -448,24 +448,24 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
               )}
 
               <div>
-                <label className="block font-bold text-[#5A5A40] mb-1">班次招募名稱</label>
+                <label className="block font-bold text-[#716053] mb-1">班次招募名稱</label>
                 <input
                   type="text"
                   required
                   value={formData.title}
                   onChange={e => setFormData({ ...formData, title: e.target.value })}
                   placeholder="例如：大狗運動場假日牽繩放風與洗澡"
-                  className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                  className="w-full p-3 bg-[#FAF6EE] border border-[#716053] rounded-2xl focus:ring-2 focus:ring-[#716053] focus:outline-none"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block font-bold text-[#5A5A40] mb-1">志工門檻</label>
+                  <label className="block font-bold text-[#716053] mb-1">志工門檻</label>
                   <select
                     value={formData.skillRequired}
                     onChange={e => setFormData({ ...formData, skillRequired: e.target.value as SkillLevel })}
-                    className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                    className="w-full p-3 bg-[#FAF6EE] border border-[#716053] rounded-2xl focus:ring-2 focus:ring-[#716053] focus:outline-none"
                   >
                     <option value="beginner">🌱 新手皆可</option>
                     <option value="intermediate">🌿 需具備基礎散步經驗</option>
@@ -474,11 +474,11 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
                 </div>
 
                 <div>
-                  <label className="block font-bold text-[#5A5A40] mb-1">場域類別 (日曆色彩)</label>
+                  <label className="block font-bold text-[#716053] mb-1">場域類別 (日曆色彩)</label>
                   <select
                     value={formData.zone}
                     onChange={e => setFormData({ ...formData, zone: e.target.value as ZoneCategory })}
-                    className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                    className="w-full p-3 bg-[#FAF6EE] border border-[#716053] rounded-2xl focus:ring-2 focus:ring-[#716053] focus:outline-none"
                   >
                     {Object.keys(ZONE_CONFIGS).map(zKey => (
                       <option key={zKey} value={zKey}>
@@ -491,30 +491,30 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block font-bold text-[#5A5A40] mb-1">日期</label>
+                  <label className="block font-bold text-[#716053] mb-1">日期</label>
                   <input
                     type="date"
                     required
                     value={formData.date}
                     onChange={e => setFormData({ ...formData, date: e.target.value })}
-                    className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                    className="w-full p-3 bg-[#FAF6EE] border border-[#716053] rounded-2xl focus:ring-2 focus:ring-[#716053] focus:outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block font-bold text-[#5A5A40] mb-1">服務時段</label>
+                  <label className="block font-bold text-[#716053] mb-1">服務時段</label>
                   <input
                     type="text"
                     required
                     value={formData.timeRange}
                     onChange={e => setFormData({ ...formData, timeRange: e.target.value })}
                     placeholder="10:00 - 13:00"
-                    className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                    className="w-full p-3 bg-[#FAF6EE] border border-[#716053] rounded-2xl focus:ring-2 focus:ring-[#716053] focus:outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block font-bold text-[#5A5A40] mb-1">需求志工名額</label>
+                  <label className="block font-bold text-[#716053] mb-1">需求志工名額</label>
                   <input
                     type="number"
                     min="1"
@@ -522,55 +522,55 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
                     required
                     value={formData.requiredCount}
                     onChange={e => setFormData({ ...formData, requiredCount: Number(e.target.value) })}
-                    className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                    className="w-full p-3 bg-[#FAF6EE] border border-[#716053] rounded-2xl focus:ring-2 focus:ring-[#716053] focus:outline-none"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block font-bold text-[#5A5A40] mb-1">詳細任務與規定 (請用頓號分隔)</label>
+                <label className="block font-bold text-[#716053] mb-1">詳細任務與規定 (請用頓號分隔)</label>
                 <input
                   type="text"
                   value={formData.tasks}
                   onChange={e => setFormData({ ...formData, tasks: e.target.value })}
                   placeholder="貓砂清理、飼料補滿、親人安撫"
-                  className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                  className="w-full p-3 bg-[#FAF6EE] border border-[#716053] rounded-2xl focus:ring-2 focus:ring-[#716053] focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-[#5A5A40] mb-1">園區內部詳細集合點</label>
+                <label className="block font-bold text-[#716053] mb-1">園區內部詳細集合點</label>
                 <input
                   type="text"
                   value={formData.locationDetails}
                   onChange={e => setFormData({ ...formData, locationDetails: e.target.value })}
                   placeholder="如：總部 A棟2樓貓房大廳"
-                  className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                  className="w-full p-3 bg-[#FAF6EE] border border-[#716053] rounded-2xl focus:ring-2 focus:ring-[#716053] focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-[#5A5A40] mb-1">園區配置圖 / PDF 須知連結 (選填)</label>
+                <label className="block font-bold text-[#716053] mb-1">園區配置圖 / PDF 須知連結 (選填)</label>
                 <input
                   type="url"
                   value={formData.attachmentUrl}
                   onChange={e => setFormData({ ...formData, attachmentUrl: e.target.value })}
                   placeholder="https://drive.google.com/..."
-                  className="w-full p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                  className="w-full p-3 bg-[#FAF6EE] border border-[#716053] rounded-2xl focus:ring-2 focus:ring-[#716053] focus:outline-none"
                 />
               </div>
 
-              <div className="pt-4 flex justify-end space-x-3 border-t border-[#5A5A40]/10">
+              <div className="pt-4 flex justify-end space-x-3 border-t border-[#716053]">
                 <button
                   type="button"
                   onClick={() => { setShowCreateModal(false); setSelectedTemplateId(''); }}
-                  className="px-5 py-2.5 rounded-full font-bold text-slate-600 hover:bg-[#f5f5f0] cursor-pointer"
+                  className="px-5 py-2.5 rounded-full font-bold text-slate-600 hover:bg-[#FAF6EE] cursor-pointer"
                 >
                   取消
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-full font-bold bg-[#5A5A40] hover:bg-[#484833] text-white shadow-xs cursor-pointer"
+                  className="px-6 py-2.5 rounded-full font-bold bg-[#716053] hover:bg-[#5A4A3F] text-white shadow-xs cursor-pointer"
                 >
                   確認發布班次
                 </button>

@@ -1,29 +1,197 @@
 @import "tailwindcss";
 
+/* ============================================================================
+   Cozy Playroom & Hand-drawn Flat Style（童趣溫馨手繪風）
+   ----------------------------------------------------------------------------
+   Design rules this implements:
+     - Cream butter background (#FAF6EE), warm chocolate brown ink (#716053)
+     - Never pure black, never pure white
+     - Thick brown borders + completely un-blurred flat offset shadows,
+       for a "building block / sticker" feel
+     - Rounded display type (Fredoka) + Noto Sans TC, generous corner radii
+
+   Implementation note: the components use ~2,200 Tailwind palette classes
+   (slate/white/amber/...) and ~1,100 hardcoded hexes. Rather than rewriting
+   every class name, the palette classes are remapped here at the theme level
+   so `text-slate-900`, `bg-white`, `shadow-md` etc. automatically render in
+   the new style everywhere. Only the hardcoded hexes were find-replaced.
+   ============================================================================ */
+
+@theme {
+  /* --- Core surfaces: warm off-white instead of pure white --- */
+  --color-white: #FFFDF7;
+  --color-black: #4A3D34;
+
+  /* --- Neutral ramp retinted from cold grey to warm brown --- */
+  --color-slate-50:  #FAF6EE;
+  --color-slate-100: #F2EAD9;
+  --color-slate-200: #E6DCCB;
+  --color-slate-300: #D5C9B8;
+  --color-slate-400: #BCAE9F;
+  --color-slate-500: #A8968A;
+  --color-slate-600: #978472;
+  --color-slate-700: #8A7767;
+  --color-slate-800: #7D6B5D;
+  --color-slate-900: #716053;
+  --color-slate-950: #4A3D34;
+
+  /* Some components use gray-* / stone-* interchangeably with slate-* */
+  --color-gray-50:  #FAF6EE;
+  --color-gray-100: #F2EAD9;
+  --color-gray-200: #E6DCCB;
+  --color-gray-300: #D5C9B8;
+  --color-gray-400: #BCAE9F;
+  --color-gray-500: #A8968A;
+  --color-gray-600: #978472;
+  --color-gray-700: #8A7767;
+  --color-gray-800: #7D6B5D;
+  --color-gray-900: #716053;
+
+  /* --- Accent hues kept (they carry status meaning) but warmed to match --- */
+  --color-amber-50:  #FDF6E6;
+  --color-amber-100: #FBEAC6;
+  --color-amber-200: #F7D89B;
+  --color-amber-300: #F2C46E;
+  --color-amber-400: #EDAE45;
+  --color-amber-500: #E39A22;
+  --color-amber-600: #C97F14;
+  --color-amber-700: #A26410;
+  --color-amber-800: #7D4D0F;
+  --color-amber-900: #5E3A0D;
+
+  --color-emerald-50:  #EDF7EE;
+  --color-emerald-100: #D5ECD8;
+  --color-emerald-200: #AEDAB4;
+  --color-emerald-300: #83C48D;
+  --color-emerald-400: #5DAE69;
+  --color-emerald-500: #429553;
+  --color-emerald-600: #357B44;
+  --color-emerald-700: #2B6237;
+  --color-emerald-800: #234E2C;
+  --color-emerald-900: #1C3D23;
+
+  --color-rose-50:  #FDF0EE;
+  --color-rose-100: #FADAD5;
+  --color-rose-200: #F4B5AC;
+  --color-rose-300: #EC8B7E;
+  --color-rose-400: #E26654;
+  --color-rose-500: #D24A36;
+  --color-rose-600: #B23A29;
+  --color-rose-700: #8E2E21;
+  --color-rose-800: #70251A;
+  --color-rose-900: #571D15;
+
+  --color-sky-50:  #EDF4FA;
+  --color-sky-100: #D3E5F3;
+  --color-sky-200: #A9CBE7;
+  --color-sky-300: #7BADD8;
+  --color-sky-400: #548FC6;
+  --color-sky-500: #3A75AF;
+  --color-sky-600: #2E5E8F;
+  --color-sky-700: #254B72;
+  --color-sky-800: #1E3C5B;
+  --color-sky-900: #182F47;
+
+  --color-purple-50:  #F5F0FA;
+  --color-purple-100: #E7DCF3;
+  --color-purple-200: #CFBAE6;
+  --color-purple-300: #B295D6;
+  --color-purple-400: #9775C4;
+  --color-purple-500: #7F5CAE;
+  --color-purple-600: #67498E;
+  --color-purple-700: #533B72;
+  --color-purple-800: #422F5B;
+  --color-purple-900: #352646;
+
+  /* --- Signature look: flat offset shadows, zero blur ("sticker" depth) --- */
+  --shadow-2xs: 2px 2px 0px 0px #716053;
+  --shadow-xs:  3px 3px 0px 0px #716053;
+  --shadow-sm:  4px 4px 0px 0px #716053;
+  --shadow-md:  5px 5px 0px 0px #716053;
+  --shadow-lg:  6px 6px 0px 0px #716053;
+  --shadow-xl:  8px 8px 0px 0px #716053;
+  --shadow-2xl: 10px 10px 0px 0px #716053;
+  --shadow-inner: inset 3px 3px 0px 0px rgba(113, 96, 83, 0.15);
+
+  /* --- Generous, playful corner radii --- */
+  --radius-sm:  10px;
+  --radius-md:  14px;
+  --radius-lg:  18px;
+  --radius-xl:  22px;
+  --radius-2xl: 24px;
+  --radius-3xl: 30px;
+
+  --font-sans: 'Noto Sans TC', 'Fredoka', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-serif: 'Fredoka', 'Noto Sans TC', system-ui, sans-serif;
+}
+
 @layer base {
   body {
-    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    background-color: #f5f5f0;
-    color: #333333;
+    font-family: 'Noto Sans TC', 'Fredoka', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background-color: #FAF6EE;
+    color: #716053;
   }
 
-  h1, h2, h3, .font-serif {
-    font-family: 'Noto Serif TC', 'Playfair Display', Georgia, serif;
+  /* Rounded display type for every heading -- "圓體大標" */
+  h1, h2, h3, h4, .font-serif {
+    font-family: 'Fredoka', 'Noto Sans TC', system-ui, sans-serif;
+    letter-spacing: 0.01em;
+  }
+
+  /* The hand-drawn look wants chunky outlines, not hairlines. Tailwind's
+     `border` is 1px by default; bumping the default width turns every
+     already-bordered card into a thick-outlined sticker without touching
+     any component markup. */
+  *, ::before, ::after {
+    border-color: #716053;
+  }
+
+  /* Inputs/selects get the same chunky treatment so forms match the cards. */
+  input, textarea, select {
+    border-width: 2px;
+    border-color: #E6DCCB;
+    font-family: 'Noto Sans TC', sans-serif;
+  }
+
+  input:focus, textarea:focus, select:focus {
+    border-color: #716053;
+  }
+}
+
+@layer utilities {
+  /* `border` (1px) -> 3px, `border-2` -> 4px: thick outlines per the spec's
+     3-6px range. Declared as utilities so they still lose to explicit
+     border-[Npx] values a component sets deliberately. */
+  .border {
+    border-width: 3px;
+  }
+  .border-2 {
+    border-width: 4px;
   }
 }
 
 .natural-card {
-  background-color: #ffffff;
-  border: 1px solid rgba(90, 90, 64, 0.12);
-  border-radius: 2rem;
+  background-color: #FFFDF7;
+  border: 3px solid #716053;
+  border-radius: 24px;
+  box-shadow: 4px 4px 0px 0px #716053;
 }
 
 .natural-olive-btn {
-  background-color: #5A5A40;
-  color: #ffffff;
-  transition: all 0.2s ease;
+  background-color: #716053;
+  color: #FFFDF7;
+  border: 3px solid #716053;
+  box-shadow: 4px 4px 0px 0px #4A3D34;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 
+/* Buttons "press into" the page rather than fading -- keeps the flat,
+   physical sticker feel instead of a soft hover glow. */
 .natural-olive-btn:hover {
-  background-color: #484833;
+  background-color: #5A4A3F;
+}
+
+.natural-olive-btn:active {
+  transform: translate(3px, 3px);
+  box-shadow: 0px 0px 0px 0px #4A3D34;
 }

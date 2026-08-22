@@ -69,16 +69,16 @@ export const VolunteerSopGuide: React.FC<VolunteerSopGuideProps> = ({
     <div className="space-y-8 py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto font-sans">
 
       {/* Header Banner */}
-      <div className="bg-[#5A5A40] rounded-[32px] p-8 sm:p-10 text-white shadow-md flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="bg-[#716053] rounded-[32px] p-8 sm:p-10 text-white shadow-md flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="space-y-3 max-w-2xl">
-          <div className="inline-flex items-center gap-2 bg-white/15 backdrop-blur-xs px-3.5 py-1 rounded-full text-xs font-bold text-[#E6E2D3]">
-            <BookOpen className="w-4 h-4 text-[#E6E2D3]" />
+          <div className="inline-flex items-center gap-2 bg-white/15 backdrop-blur-xs px-3.5 py-1 rounded-full text-xs font-bold text-[#F5E6D0]">
+            <BookOpen className="w-4 h-4 text-[#F5E6D0]" />
             <span>園區標準作業守則 &bull; 志工安全指引</span>
           </div>
           <h2 className="text-3xl font-serif italic text-white font-bold leading-tight">
             {content.bannerTitle}
           </h2>
-          <p className="text-[#E6E2D3] text-xs sm:text-sm leading-relaxed">
+          <p className="text-[#F5E6D0] text-xs sm:text-sm leading-relaxed">
             {content.bannerSubtitle}
           </p>
         </div>
@@ -93,9 +93,9 @@ export const VolunteerSopGuide: React.FC<VolunteerSopGuideProps> = ({
       </div>
 
       {/* Rulebook AI Q&A (RAG over the rulebook/SOP content above) */}
-      <div className="bg-white rounded-[28px] p-6 border border-[#5A5A40]/15 shadow-xs space-y-4">
+      <div className="bg-white rounded-[28px] p-6 border border-[#716053] shadow-xs space-y-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-[#E6E2D3] text-[#5A5A40] flex items-center justify-center">
+          <div className="w-10 h-10 rounded-2xl bg-[#F5E6D0] text-[#716053] flex items-center justify-center">
             <MessageCircleQuestion className="w-5 h-5" />
           </div>
           <div>
@@ -110,12 +110,12 @@ export const VolunteerSopGuide: React.FC<VolunteerSopGuideProps> = ({
             value={ragQuestion}
             onChange={e => setRagQuestion(e.target.value)}
             placeholder="例如：貓咪飛機耳的時候該怎麼辦？"
-            className="flex-1 p-3 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl focus:ring-2 focus:ring-[#5A5A40] focus:outline-none text-xs"
+            className="flex-1 p-3 bg-[#FAF6EE] border border-[#716053] rounded-2xl focus:ring-2 focus:ring-[#716053] focus:outline-none text-xs"
           />
           <button
             type="submit"
             disabled={!ragQuestion.trim() || ragLoading}
-            className="px-5 py-3 bg-[#5A5A40] hover:bg-[#484833] text-white rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-40 cursor-pointer shrink-0"
+            className="px-5 py-3 bg-[#716053] hover:bg-[#5A4A3F] text-white rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-40 cursor-pointer shrink-0"
           >
             {ragLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-amber-300" />}
             <span>{ragLoading ? '查詢中...' : '問問看'}</span>
@@ -123,13 +123,13 @@ export const VolunteerSopGuide: React.FC<VolunteerSopGuideProps> = ({
         </form>
 
         {ragAnswer && (
-          <div className="bg-[#f5f5f0] p-4 rounded-2xl text-xs text-slate-700 leading-relaxed space-y-2">
+          <div className="bg-[#FAF6EE] p-4 rounded-2xl text-xs text-slate-700 leading-relaxed space-y-2">
             <p className="whitespace-pre-line">{ragAnswer.answer}</p>
             {ragAnswer.sources.length > 0 && (
               <div className="flex flex-wrap gap-1.5 pt-1">
                 <span className="text-[10px] text-slate-400">參考段落：</span>
                 {ragAnswer.sources.map(s => (
-                  <span key={s} className="text-[10px] bg-white border border-[#5A5A40]/15 text-[#5A5A40] px-2 py-0.5 rounded-full">{s}</span>
+                  <span key={s} className="text-[10px] bg-white border border-[#716053] text-[#716053] px-2 py-0.5 rounded-full">{s}</span>
                 ))}
               </div>
             )}
@@ -142,7 +142,7 @@ export const VolunteerSopGuide: React.FC<VolunteerSopGuideProps> = ({
         {content.sections.map(section => {
           const theme = COLOR_THEME_CLASSES[section.colorTheme] || COLOR_THEME_CLASSES.emerald;
           return (
-            <div key={section.id} className="bg-white rounded-[28px] p-6 border border-[#5A5A40]/15 shadow-xs space-y-4">
+            <div key={section.id} className="bg-white rounded-[28px] p-6 border border-[#716053] shadow-xs space-y-4">
               <div className="flex items-center gap-3">
                 <div className={`w-10 h-10 rounded-2xl ${theme.badgeBg} ${theme.badgeText} flex items-center justify-center font-bold text-lg`}>
                   {section.icon}

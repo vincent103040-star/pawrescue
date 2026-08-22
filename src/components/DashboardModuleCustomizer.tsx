@@ -111,7 +111,7 @@ export const DASHBOARD_MODULE_DEFS: ModuleDefinition[] = [
     icon: '🎨',
     description: '依貓舍(粉)、犬舍(棕)、幼犬隔離(綠)、醫療(藍)、後勤(金)分區色標檢視人力。',
     badge: '場域色彩',
-    badgeColor: 'bg-[#E6E2D3] text-[#5A5A40] border-[#5A5A40]/30',
+    badgeColor: 'bg-[#F5E6D0] text-[#716053] border-[#716053]',
     defaultVisible: true
   }
 ];
@@ -168,11 +168,11 @@ export const DashboardModuleCustomizer: React.FC<DashboardModuleCustomizerProps>
   return (
     <div className="relative z-20">
       {/* Trigger & Quick Status Bar */}
-      <div className="bg-white/90 backdrop-blur-md p-3 sm:p-4 rounded-2xl border border-[#5A5A40]/15 shadow-xs flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-white/90 backdrop-blur-md p-3 sm:p-4 rounded-2xl border border-[#716053] shadow-xs flex flex-wrap items-center justify-between gap-3">
         
         {/* Left Status & Title */}
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-[#5A5A40] text-amber-300 flex items-center justify-center font-bold text-sm shadow-2xs">
+          <div className="w-8 h-8 rounded-xl bg-[#716053] text-amber-300 flex items-center justify-center font-bold text-sm shadow-2xs">
             <SlidersHorizontal className="w-4 h-4" />
           </div>
           <div>
@@ -180,7 +180,7 @@ export const DashboardModuleCustomizer: React.FC<DashboardModuleCustomizerProps>
               <span className="text-xs sm:text-sm font-bold font-serif text-slate-900">
                 看板模組個人化自訂
               </span>
-              <span className="text-[11px] font-mono font-bold bg-[#E6E2D3] text-[#5A5A40] px-2 py-0.5 rounded-full">
+              <span className="text-[11px] font-mono font-bold bg-[#F5E6D0] text-[#716053] px-2 py-0.5 rounded-full">
                 {visibleCount} / {totalCount} 模組啟用中
               </span>
             </div>
@@ -197,7 +197,7 @@ export const DashboardModuleCustomizer: React.FC<DashboardModuleCustomizerProps>
           <button
             type="button"
             onClick={() => onToggleAllCollapse(totalCollapsedCount === 0)}
-            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-[#f5f5f0] hover:bg-[#E6E2D3] text-[#5A5A40] border border-[#5A5A40]/15 transition flex items-center gap-1 cursor-pointer active:scale-95"
+            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-[#FAF6EE] hover:bg-[#F5E6D0] text-[#716053] border border-[#716053] transition flex items-center gap-1 cursor-pointer active:scale-95"
             title={totalCollapsedCount === 0 ? '一鍵全部折疊' : '一鍵全部展開'}
           >
             {totalCollapsedCount === 0 ? (
@@ -219,7 +219,7 @@ export const DashboardModuleCustomizer: React.FC<DashboardModuleCustomizerProps>
             onClick={() => setIsOpen(!isOpen)}
             className={`px-4 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-2xs active:scale-95 ${
               isOpen
-                ? 'bg-[#5A5A40] text-white ring-2 ring-[#5A5A40]/30'
+                ? 'bg-[#716053] text-white ring-2 ring-[#716053]/30'
                 : 'bg-amber-600 hover:bg-amber-700 text-white'
             }`}
           >
@@ -258,10 +258,10 @@ export const DashboardModuleCustomizer: React.FC<DashboardModuleCustomizerProps>
 
       {/* Popover / Customizer Drawer Modal */}
       {isOpen && (
-        <div className="mt-3 bg-white rounded-3xl border-2 border-[#5A5A40]/20 shadow-xl p-5 sm:p-6 space-y-5 animate-fadeIn">
+        <div className="mt-3 bg-white rounded-3xl border-2 border-[#716053] shadow-xl p-5 sm:p-6 space-y-5 animate-fadeIn">
           
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-[#5A5A40]/10 pb-3">
+          <div className="flex items-center justify-between border-b border-[#716053] pb-3">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-900 flex items-center justify-center font-bold text-sm">
                 ⚙️
@@ -286,8 +286,8 @@ export const DashboardModuleCustomizer: React.FC<DashboardModuleCustomizerProps>
           </div>
 
           {/* Quick Presets Bar */}
-          <div className="flex flex-wrap items-center gap-2 bg-[#f5f5f0] p-3 rounded-2xl border border-[#5A5A40]/10">
-            <span className="text-xs font-bold text-[#5A5A40] flex items-center gap-1 mr-1">
+          <div className="flex flex-wrap items-center gap-2 bg-[#FAF6EE] p-3 rounded-2xl border border-[#716053]">
+            <span className="text-xs font-bold text-[#716053] flex items-center gap-1 mr-1">
               <Sparkles className="w-3.5 h-3.5 text-amber-600" />
               快速預設模式：
             </span>
@@ -297,7 +297,7 @@ export const DashboardModuleCustomizer: React.FC<DashboardModuleCustomizerProps>
               onClick={() => onApplyPreset('all')}
               className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
                 visibleCount === totalCount
-                  ? 'bg-[#5A5A40] text-white shadow-2xs'
+                  ? 'bg-[#716053] text-white shadow-2xs'
                   : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
               }`}
             >
@@ -342,7 +342,7 @@ export const DashboardModuleCustomizer: React.FC<DashboardModuleCustomizerProps>
                   onClick={() => onToggleModuleVisibility(mod.id)}
                   className={`p-4 rounded-2xl border transition-all flex items-start gap-3 cursor-pointer select-none ${
                     isVisible
-                      ? 'bg-white border-[#5A5A40]/25 shadow-xs hover:border-[#5A5A40]'
+                      ? 'bg-white border-[#716053] shadow-xs hover:border-[#716053]'
                       : 'bg-slate-50/70 border-slate-200 opacity-60 hover:opacity-90'
                   }`}
                 >
@@ -396,14 +396,14 @@ export const DashboardModuleCustomizer: React.FC<DashboardModuleCustomizerProps>
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between border-t border-[#5A5A40]/10 pt-3">
+          <div className="flex items-center justify-between border-t border-[#716053] pt-3">
             <span className="text-xs text-slate-500">
               💡 提示：您也可以在各模組卡片的右上角，隨時點選 <strong>「折疊」</strong> 或 <strong>「隱藏」</strong> 按鈕進行即時縮放。
             </span>
             <button
               type="button"
               onClick={() => setIsOpen(false)}
-              className="bg-[#5A5A40] hover:bg-[#484833] text-white font-bold px-5 py-2 rounded-xl text-xs shadow-xs transition cursor-pointer"
+              className="bg-[#716053] hover:bg-[#5A4A3F] text-white font-bold px-5 py-2 rounded-xl text-xs shadow-xs transition cursor-pointer"
             >
               完成配置並返回
             </button>

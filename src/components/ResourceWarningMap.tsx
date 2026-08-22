@@ -111,10 +111,10 @@ export const ResourceWarningMap: React.FC<ResourceWarningMapProps> = ({
   return (
     <div
       id="module-ai_warning_map"
-      className="bg-white rounded-[32px] border border-[#5A5A40]/15 p-6 sm:p-8 shadow-xs space-y-6 transition-all duration-300 overflow-hidden"
+      className="bg-white rounded-[32px] border border-[#716053] p-6 sm:p-8 shadow-xs space-y-6 transition-all duration-300 overflow-hidden"
     >
       {/* Header & Gemini AI Prediction Trigger Bar */}
-      <div className={`flex flex-col lg:flex-row lg:items-center justify-between gap-4 ${isCollapsed ? '' : 'border-b border-[#5A5A40]/10 pb-5'}`}>
+      <div className={`flex flex-col lg:flex-row lg:items-center justify-between gap-4 ${isCollapsed ? '' : 'border-b border-[#716053] pb-5'}`}>
         <div
           onClick={onToggleCollapse}
           className="flex items-start gap-3 cursor-pointer select-none group"
@@ -124,7 +124,7 @@ export const ResourceWarningMap: React.FC<ResourceWarningMapProps> = ({
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-xl font-bold font-serif italic text-slate-900 group-hover:text-[#5A5A40] transition-colors">
+              <h3 className="text-xl font-bold font-serif italic text-slate-900 group-hover:text-[#716053] transition-colors">
                 3. 資源需求預警 &amp; 雙週物資人力 AI 預測
               </h3>
               <span className="bg-amber-100 text-amber-900 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border border-amber-300 flex items-center gap-1">
@@ -170,16 +170,16 @@ export const ResourceWarningMap: React.FC<ResourceWarningMapProps> = ({
               type="button"
               onClick={onToggleCollapse}
               title={isCollapsed ? '展開此模組' : '折疊收合此模組'}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-[#f5f5f0] hover:bg-[#E6E2D3] text-[#5A5A40] border border-[#5A5A40]/15 transition flex items-center gap-1 cursor-pointer active:scale-95 shadow-2xs"
+              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-[#FAF6EE] hover:bg-[#F5E6D0] text-[#716053] border border-[#716053] transition flex items-center gap-1 cursor-pointer active:scale-95 shadow-2xs"
             >
               {isCollapsed ? (
                 <>
-                  <ChevronDown className="w-4 h-4 text-[#5A5A40]" />
+                  <ChevronDown className="w-4 h-4 text-[#716053]" />
                   <span>展開</span>
                 </>
               ) : (
                 <>
-                  <ChevronUp className="w-4 h-4 text-[#5A5A40]" />
+                  <ChevronUp className="w-4 h-4 text-[#716053]" />
                   <span>折疊</span>
                 </>
               )}
@@ -204,7 +204,7 @@ export const ResourceWarningMap: React.FC<ResourceWarningMapProps> = ({
       {isCollapsed && (
         <div
           onClick={onToggleCollapse}
-          className="pt-2 border-t border-[#5A5A40]/10 flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-600 cursor-pointer gap-2"
+          className="pt-2 border-t border-[#716053] flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-600 cursor-pointer gap-2"
         >
           <div className="flex items-center gap-2 overflow-hidden text-ellipsis">
             <span className="font-bold text-amber-700 shrink-0">🔮 AI 預測摘要：</span>
@@ -212,7 +212,7 @@ export const ResourceWarningMap: React.FC<ResourceWarningMapProps> = ({
               {globalSummary}
             </span>
           </div>
-          <span className="text-[11px] font-bold text-[#5A5A40] hover:underline shrink-0 flex items-center gap-0.5">
+          <span className="text-[11px] font-bold text-[#716053] hover:underline shrink-0 flex items-center gap-0.5">
             <span>點擊展開詳情</span>
             <ChevronDown className="w-3.5 h-3.5" />
           </span>
@@ -223,7 +223,7 @@ export const ResourceWarningMap: React.FC<ResourceWarningMapProps> = ({
       {!isCollapsed && (
         <div className="space-y-6 animate-fadeIn">
           {/* AI Global Summary Callout */}
-          <div className="bg-[#fdfdfb] p-4 rounded-2xl border border-amber-300/80 shadow-2xs flex items-start gap-3 text-xs leading-relaxed text-slate-800">
+          <div className="bg-[#FFFDF7] p-4 rounded-2xl border border-amber-300/80 shadow-2xs flex items-start gap-3 text-xs leading-relaxed text-slate-800">
             <div className="p-2 rounded-xl bg-amber-100 text-amber-800 shrink-0 font-bold">
               💡 AI 營運總結
             </div>
@@ -265,7 +265,7 @@ export const ResourceWarningMap: React.FC<ResourceWarningMapProps> = ({
             </div>
 
             {/* Right Column (7 cols): Detailed Prediction Card */}
-            <div className="lg:col-span-7 bg-[#fdfdfb] rounded-[28px] border border-[#5A5A40]/15 p-5 shadow-xs flex flex-col justify-between space-y-4">
+            <div className="lg:col-span-7 bg-[#FFFDF7] rounded-[28px] border border-[#716053] p-5 shadow-xs flex flex-col justify-between space-y-4">
 
               <div className="space-y-4">
                 {/* Quick Metrics */}
@@ -309,7 +309,7 @@ export const ResourceWarningMap: React.FC<ResourceWarningMapProps> = ({
 
                 {/* Gemini Recommended Urgent Actions */}
                 <div className="bg-white p-3.5 rounded-2xl border border-slate-200 text-xs space-y-2">
-                  <span className="font-bold text-[#5A5A40] text-[11px] block">
+                  <span className="font-bold text-[#716053] text-[11px] block">
                     ⚡ Gemini 建議即刻發起處置：
                   </span>
                   <ul className="space-y-1.5 text-slate-700 font-sans pl-1">
@@ -325,10 +325,10 @@ export const ResourceWarningMap: React.FC<ResourceWarningMapProps> = ({
               </div>
 
               {/* Direct LINE Mobilization Button */}
-              <div className="pt-2 border-t border-[#5A5A40]/10 flex flex-col gap-2">
+              <div className="pt-2 border-t border-[#716053] flex flex-col gap-2">
                 <button
                   onClick={() => onSendLineToast('🚨 已發送園區緊急缺工與物資撥補通報至 LINE 志工大群組！')}
-                  className="w-full bg-[#5A5A40] hover:bg-[#484833] text-white font-extrabold text-xs py-2.5 px-4 rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full bg-[#716053] hover:bg-[#5A4A3F] text-white font-extrabold text-xs py-2.5 px-4 rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Send className="w-4 h-4 text-amber-300" />
                   <span>一鍵發布 LINE 急召與物資調度廣播</span>

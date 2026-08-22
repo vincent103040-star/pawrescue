@@ -24,13 +24,13 @@ export const AdminNavbar: React.FC<AdminNavbarProps> = ({
   onLogout
 }) => {
   return (
-    <header className="bg-white border-b border-[#5A5A40]/15 sticky top-0 z-40 shadow-xs">
+    <header className="bg-white border-b border-[#716053] sticky top-0 z-40 shadow-xs">
       
       {/* Top Admin Notice & Status Bar */}
-      <div className="bg-[#5A5A40] text-white text-xs py-1.5 px-4 flex justify-between items-center font-medium">
+      <div className="bg-[#716053] text-white text-xs py-1.5 px-4 flex justify-between items-center font-medium">
         <div className="flex items-center space-x-2">
-          <span className="bg-[#E6E2D3] text-[#5A5A40] px-2.5 py-0.5 rounded-full text-[10px] font-extrabold tracking-wider uppercase flex items-center gap-1">
-            <Shield className="w-3 h-3 text-[#5A5A40]" />
+          <span className="bg-[#F5E6D0] text-[#716053] px-2.5 py-0.5 rounded-full text-[10px] font-extrabold tracking-wider uppercase flex items-center gap-1">
+            <Shield className="w-3 h-3 text-[#716053]" />
             <span>管理督導控制台</span>
           </span>
           <span className="font-sans text-white/90">
@@ -40,7 +40,7 @@ export const AdminNavbar: React.FC<AdminNavbarProps> = ({
 
         <div className="flex items-center space-x-3 text-white/90 text-[11px]">
           <div className="hidden sm:flex items-center gap-2 bg-black/20 px-2.5 py-0.5 rounded-full">
-            <User className="w-3.5 h-3.5 text-[#E6E2D3]" />
+            <User className="w-3.5 h-3.5 text-[#F5E6D0]" />
             <span>登入者：<strong>{currentUser?.name || '蔡督導'}</strong> ({currentUser?.roleTitle || '系統管理員'})</span>
           </div>
 
@@ -60,15 +60,15 @@ export const AdminNavbar: React.FC<AdminNavbarProps> = ({
           
           {/* Logo & System Name */}
           <div className="flex items-center space-x-3 cursor-pointer group" onClick={() => setActiveTab('dashboard')}>
-            <div className="w-11 h-11 rounded-2xl bg-[#5A5A40] text-white flex items-center justify-center shadow-xs transform transition group-hover:scale-105">
+            <div className="w-11 h-11 rounded-2xl bg-[#716053] text-white flex items-center justify-center shadow-xs transform transition group-hover:scale-105">
               <PawPrint className="w-6 h-6 text-white" />
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <h1 className="text-xl font-bold font-serif italic text-[#5A5A40] tracking-tight">
+                <h1 className="text-xl font-bold font-serif italic text-[#716053] tracking-tight">
                   浪浪家園 PawRescue
                 </h1>
-                <span className="text-[10px] bg-[#5A5A40] text-white px-2.5 py-0.5 rounded-full font-bold">
+                <span className="text-[10px] bg-[#716053] text-white px-2.5 py-0.5 rounded-full font-bold">
                   管理督導後台
                 </span>
               </div>
@@ -102,9 +102,9 @@ export const AdminNavbar: React.FC<AdminNavbarProps> = ({
 
             <button
               onClick={openCreateModal}
-              className="bg-[#5A5A40] hover:bg-[#484833] text-white px-4 py-2.5 rounded-full text-xs font-bold flex items-center space-x-1.5 shadow-sm transition transform active:scale-95 cursor-pointer"
+              className="bg-[#716053] hover:bg-[#5A4A3F] text-white px-4 py-2.5 rounded-full text-xs font-bold flex items-center space-x-1.5 shadow-sm transition transform active:scale-95 cursor-pointer"
             >
-              <PlusCircle className="w-4 h-4 text-[#E6E2D3]" />
+              <PlusCircle className="w-4 h-4 text-[#F5E6D0]" />
               <span className="hidden sm:inline">發布新志工班次</span>
               <span className="sm:hidden">發布班次</span>
             </button>
@@ -112,13 +112,13 @@ export const AdminNavbar: React.FC<AdminNavbarProps> = ({
         </div>
 
         {/* Admin Navigation Tabs (Exclusively for Staff/Managers) */}
-        <div className="flex space-x-1 overflow-x-auto pb-2.5 pt-1 border-t border-[#5A5A40]/10 no-scrollbar">
+        <div className="flex space-x-1 overflow-x-auto pb-2.5 pt-1 border-t border-[#716053] no-scrollbar">
           <button
             onClick={() => setActiveTab('dashboard')}
             className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap flex items-center space-x-1.5 transition cursor-pointer ${
               activeTab === 'dashboard'
-                ? 'bg-[#5A5A40] text-white shadow-xs'
-                : 'text-slate-600 hover:bg-[#E6E2D3]/40 hover:text-[#5A5A40]'
+                ? 'bg-[#716053] text-white shadow-xs'
+                : 'text-slate-600 hover:bg-[#F5E6D0]/40 hover:text-[#716053]'
             }`}
           >
             <Shield className="w-4 h-4 text-amber-300" />
@@ -129,8 +129,8 @@ export const AdminNavbar: React.FC<AdminNavbarProps> = ({
             onClick={() => setActiveTab('positions')}
             className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap flex items-center space-x-1.5 transition cursor-pointer ${
               activeTab === 'positions'
-                ? 'bg-[#5A5A40] text-white shadow-xs'
-                : 'text-slate-600 hover:bg-[#E6E2D3]/40 hover:text-[#5A5A40]'
+                ? 'bg-[#716053] text-white shadow-xs'
+                : 'text-slate-600 hover:bg-[#F5E6D0]/40 hover:text-[#716053]'
             }`}
           >
             <Calendar className="w-4 h-4 text-emerald-300" />
@@ -141,8 +141,8 @@ export const AdminNavbar: React.FC<AdminNavbarProps> = ({
             onClick={() => setActiveTab('applications')}
             className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap flex items-center space-x-1.5 transition relative cursor-pointer ${
               activeTab === 'applications'
-                ? 'bg-[#5A5A40] text-white shadow-xs'
-                : 'text-slate-600 hover:bg-[#E6E2D3]/40 hover:text-[#5A5A40]'
+                ? 'bg-[#716053] text-white shadow-xs'
+                : 'text-slate-600 hover:bg-[#F5E6D0]/40 hover:text-[#716053]'
             }`}
           >
             <UserCheck className="w-4 h-4 text-sky-300" />
@@ -158,8 +158,8 @@ export const AdminNavbar: React.FC<AdminNavbarProps> = ({
             onClick={() => setActiveTab('roster')}
             className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap flex items-center space-x-1.5 transition cursor-pointer ${
               activeTab === 'roster'
-                ? 'bg-[#5A5A40] text-white shadow-xs'
-                : 'text-slate-600 hover:bg-[#E6E2D3]/40 hover:text-[#5A5A40]'
+                ? 'bg-[#716053] text-white shadow-xs'
+                : 'text-slate-600 hover:bg-[#F5E6D0]/40 hover:text-[#716053]'
             }`}
           >
             <Sparkles className="w-4 h-4 text-amber-300" />
@@ -170,8 +170,8 @@ export const AdminNavbar: React.FC<AdminNavbarProps> = ({
             onClick={() => setActiveTab('sopManager')}
             className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap flex items-center space-x-1.5 transition cursor-pointer ${
               activeTab === 'sopManager'
-                ? 'bg-[#5A5A40] text-white shadow-xs'
-                : 'text-slate-600 hover:bg-[#E6E2D3]/40 hover:text-[#5A5A40]'
+                ? 'bg-[#716053] text-white shadow-xs'
+                : 'text-slate-600 hover:bg-[#F5E6D0]/40 hover:text-[#716053]'
             }`}
           >
             <BookOpen className="w-4 h-4 text-emerald-300" />

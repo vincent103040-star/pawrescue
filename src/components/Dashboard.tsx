@@ -288,23 +288,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const pendingApps = applications.filter(a => a.status === 'pending');
 
   return (
-    <div className="bg-[#f5f5f0] min-h-screen py-6 px-4 sm:px-6 lg:px-8 space-y-8 max-w-7xl mx-auto">
+    <div className="bg-[#FAF6EE] min-h-screen py-6 px-4 sm:px-6 lg:px-8 space-y-8 max-w-7xl mx-auto">
       
       {/* Hero Welcome Banner */}
-      <div className="bg-[#5A5A40] rounded-[32px] p-6 sm:p-8 text-white shadow-md relative overflow-hidden border border-[#5A5A40]/20">
+      <div className="bg-[#716053] rounded-[32px] p-6 sm:p-8 text-white shadow-md relative overflow-hidden border border-[#716053]">
         <div className="absolute right-0 top-0 bottom-0 opacity-10 flex items-center pointer-events-none pr-8">
           <span className="text-[180px]">🐾</span>
         </div>
         
         <div className="relative z-10 max-w-3xl space-y-4">
-          <div className="inline-flex items-center space-x-2 bg-white/15 backdrop-blur-xs px-3.5 py-1 rounded-full text-xs font-semibold text-[#E6E2D3]">
+          <div className="inline-flex items-center space-x-2 bg-white/15 backdrop-blur-xs px-3.5 py-1 rounded-full text-xs font-semibold text-[#F5E6D0]">
             <Sparkles className="w-3.5 h-3.5 text-amber-200" />
             <span className="font-sans uppercase tracking-wider">流浪動物之家人力即時控制台</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-bold font-serif italic tracking-tight text-white">
             今日缺工即時數據看板 &amp; 據點色標管理
           </h2>
-          <p className="text-[#E6E2D3] text-sm leading-relaxed font-sans">
+          <p className="text-[#F5E6D0] text-sm leading-relaxed font-sans">
             串聯 Google 地圖場域定位、Google 日曆色彩分類與 LINE 班表提醒。為社工與志工隊長打造最省時、最直覺的排班指揮中心。
           </p>
 
@@ -347,7 +347,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
             <button
               onClick={() => onNavigateToTab('portal')}
-              className="bg-white text-[#5A5A40] hover:bg-[#E6E2D3] px-5 py-2.5 rounded-full font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              className="bg-white text-[#716053] hover:bg-[#F5E6D0] px-5 py-2.5 rounded-full font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
             >
               <span>🐾 模擬志工視角報名</span>
               <ArrowRight className="w-4 h-4" />
@@ -419,7 +419,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             
             {/* Total Gap Card */}
-            <div className="bg-[#fafaf7] border border-[#5A5A40]/12 p-5 rounded-[24px] shadow-2xs flex items-center space-x-4">
+            <div className="bg-[#FAF6EE] border border-[#716053] p-5 rounded-[24px] shadow-2xs flex items-center space-x-4">
               <div className={`p-3.5 rounded-2xl ${totalGap > 0 ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>
                 {totalGap > 0 ? <AlertCircle className="w-7 h-7 animate-bounce" /> : <CheckCircle2 className="w-7 h-7" />}
               </div>
@@ -438,22 +438,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
 
             {/* Fill Rate Card */}
-            <div className="bg-[#fafaf7] border border-[#5A5A40]/12 p-5 rounded-[24px] shadow-2xs flex items-center space-x-4">
-              <div className="p-3.5 rounded-2xl bg-[#E6E2D3] text-[#5A5A40]">
+            <div className="bg-[#FAF6EE] border border-[#716053] p-5 rounded-[24px] shadow-2xs flex items-center space-x-4">
+              <div className="p-3.5 rounded-2xl bg-[#F5E6D0] text-[#716053]">
                 <Users className="w-7 h-7" />
               </div>
               <div className="flex-1">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">排班達成率</p>
                 <div className="flex items-baseline justify-between">
-                  <span className="text-2xl font-bold font-serif text-[#5A5A40]">
+                  <span className="text-2xl font-bold font-serif text-[#716053]">
                     {fillRate}%
                   </span>
-                  <span className="text-xs text-[#5A5A40] font-bold">{totalFilled} / {totalRequired} 人</span>
+                  <span className="text-xs text-[#716053] font-bold">{totalFilled} / {totalRequired} 人</span>
                 </div>
                 {/* Progress Bar */}
-                <div className="w-full bg-[#f5f5f0] rounded-full h-2 mt-2 overflow-hidden">
+                <div className="w-full bg-[#FAF6EE] rounded-full h-2 mt-2 overflow-hidden">
                   <div
-                    className="bg-[#5A5A40] h-2 rounded-full transition-all duration-500"
+                    className="bg-[#716053] h-2 rounded-full transition-all duration-500"
                     style={{ width: `${Math.min(fillRate, 100)}%` }}
                   ></div>
                 </div>
@@ -461,7 +461,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
 
             {/* Pending Approval Card */}
-            <div className="bg-[#fafaf7] border border-[#5A5A40]/12 p-5 rounded-[24px] shadow-2xs flex items-center space-x-4">
+            <div className="bg-[#FAF6EE] border border-[#716053] p-5 rounded-[24px] shadow-2xs flex items-center space-x-4">
               <div className="p-3.5 rounded-2xl bg-sky-50 text-sky-700 relative">
                 <ShieldAlert className="w-7 h-7" />
                 {pendingApps.length > 0 && (
@@ -475,7 +475,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </span>
                 <button
                   onClick={() => onNavigateToTab('applications')}
-                  className="text-xs text-[#5A5A40] hover:underline block font-bold mt-1 cursor-pointer"
+                  className="text-xs text-[#716053] hover:underline block font-bold mt-1 cursor-pointer"
                 >
                   前往審核與聯繫 →
                 </button>
@@ -483,7 +483,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
 
             {/* Shelter Location Card */}
-            <div className="bg-[#fafaf7] border border-[#5A5A40]/12 p-5 rounded-[24px] shadow-2xs flex items-center space-x-4">
+            <div className="bg-[#FAF6EE] border border-[#716053] p-5 rounded-[24px] shadow-2xs flex items-center space-x-4">
               <div className="p-3.5 rounded-2xl bg-purple-50 text-purple-700">
                 <MapPin className="w-7 h-7" />
               </div>
@@ -503,13 +503,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {/* Real LINE Broadcast Composer -- moved here from the Integration Hub tab so
           it sits directly under the key-metrics/alerts card instead of buried in a
           separate tab. */}
-      <div className="bg-white p-6 sm:p-8 rounded-[32px] border-2 border-[#5A5A40]/30 shadow-xs space-y-4">
+      <div className="bg-white p-6 sm:p-8 rounded-[32px] border-2 border-[#716053] shadow-xs space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="font-bold font-serif text-xl text-[#5A5A40] flex items-center gap-2">
+          <h3 className="font-bold font-serif text-xl text-[#716053] flex items-center gap-2">
             <Megaphone className="w-5 h-5 text-amber-600" />
             <span>發送官方 LINE 廣播訊息</span>
           </h3>
-          <span className="text-[10px] bg-[#E6E2D3] text-[#5A5A40] px-2.5 py-0.5 rounded-full font-bold">
+          <span className="text-[10px] bg-[#F5E6D0] text-[#716053] px-2.5 py-0.5 rounded-full font-bold">
             LINE Messaging API
           </span>
         </div>
@@ -522,7 +522,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           onChange={e => setBroadcastText(e.target.value)}
           rows={5}
           placeholder="輸入要發送給所有志工好友的官方訊息內容..."
-          className="w-full p-3.5 bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl text-xs focus:ring-2 focus:ring-[#5A5A40] focus:outline-none font-sans"
+          className="w-full p-3.5 bg-[#FAF6EE] border border-[#716053] rounded-2xl text-xs focus:ring-2 focus:ring-[#716053] focus:outline-none font-sans"
         />
 
         {broadcastResult && (
@@ -538,7 +538,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           type="button"
           onClick={handleSendBroadcast}
           disabled={isBroadcasting || !broadcastText.trim()}
-          className="w-full py-3 bg-[#5A5A40] hover:bg-[#484833] disabled:opacity-50 text-white font-extrabold rounded-2xl text-xs shadow-xs transition flex items-center justify-center gap-2 cursor-pointer"
+          className="w-full py-3 bg-[#716053] hover:bg-[#5A4A3F] disabled:opacity-50 text-white font-extrabold rounded-2xl text-xs shadow-xs transition flex items-center justify-center gap-2 cursor-pointer"
         >
           {isBroadcasting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 text-amber-300" />}
           <span>{isBroadcasting ? '發送中...' : '發送給所有 LINE 好友'}</span>
@@ -596,20 +596,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
             subtitle="自動統計當月各據點總志工數、完成服務總時數與缺工率 (%)，可快速下載 CSV 試算表或 PDF 績效報告"
             icon={<FileSpreadsheet className="w-5 h-5 text-amber-400" />}
             badgeText="各據點指標"
-            badgeColor="bg-[#E6E2D3] text-[#5A5A40]"
+            badgeColor="bg-[#F5E6D0] text-[#716053]"
             isCollapsed={collapsedModules.monthly_report}
             onToggleCollapse={() => handleToggleModuleCollapse('monthly_report')}
             onHide={() => handleHideModule('monthly_report')}
             headerRightExtras={
               <div className="flex flex-wrap items-center gap-2">
                 {/* Month Selector */}
-                <div className="flex items-center gap-1.5 bg-[#f5f5f0] px-3 py-1.5 rounded-2xl border border-[#5A5A40]/15 text-xs font-bold text-[#5A5A40]">
-                  <Calendar className="w-3.5 h-3.5 text-[#5A5A40]" />
+                <div className="flex items-center gap-1.5 bg-[#FAF6EE] px-3 py-1.5 rounded-2xl border border-[#716053] text-xs font-bold text-[#716053]">
+                  <Calendar className="w-3.5 h-3.5 text-[#716053]" />
                   <span>月份：</span>
                   <select
                     value={selectedExportMonth}
                     onChange={e => setSelectedExportMonth(e.target.value)}
-                    className="bg-white border border-[#5A5A40]/20 rounded-xl px-2 py-0.5 text-xs font-bold text-slate-900 focus:outline-none cursor-pointer"
+                    className="bg-white border border-[#716053] rounded-xl px-2 py-0.5 text-xs font-bold text-slate-900 focus:outline-none cursor-pointer"
                   >
                     <option value="2026-08">2026 年 8 月 (當月)</option>
                     <option value="2026-07">2026 年 7 月</option>
@@ -627,7 +627,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
                 <button
                   onClick={() => setShowReportModal(true)}
-                  className="bg-[#5A5A40] hover:bg-[#484833] text-white font-bold px-3 py-1.5 rounded-xl text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                  className="bg-[#716053] hover:bg-[#5A4A3F] text-white font-bold px-3 py-1.5 rounded-xl text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
                 >
                   <Download className="w-3.5 h-3.5 text-amber-300" />
                   <span>PDF 報表</span>
@@ -658,10 +658,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
               }, 0));
 
               return (
-                <div className="bg-[#fdfdfb] p-5 rounded-2xl border border-[#5A5A40]/15 space-y-3">
-                  <div className="flex items-center justify-between border-b border-[#5A5A40]/10 pb-2">
+                <div className="bg-[#FFFDF7] p-5 rounded-2xl border border-[#716053] space-y-3">
+                  <div className="flex items-center justify-between border-b border-[#716053] pb-2">
                     <div className="flex items-center gap-2">
-                      <Building2 className="w-4 h-4 text-[#5A5A40]" />
+                      <Building2 className="w-4 h-4 text-[#716053]" />
                       <span className="font-bold font-serif text-slate-900 text-sm">{shelterLocation.name}</span>
                     </div>
                     <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${
@@ -681,7 +681,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
                     <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
                       <span className="text-[10px] text-slate-400 block font-medium">完成總時數</span>
-                      <span className="font-extrabold text-[#5A5A40] font-mono text-base">{totalHours} <span className="text-[10px] font-sans font-normal">hr</span></span>
+                      <span className="font-extrabold text-[#716053] font-mono text-base">{totalHours} <span className="text-[10px] font-sans font-normal">hr</span></span>
                     </div>
 
                     <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
@@ -694,7 +694,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     <span>共 {mShifts.length} 個班次 (需求 {req} 人)</span>
                     <button
                       onClick={() => setShowReportModal(true)}
-                      className="text-[#5A5A40] font-bold hover:underline flex items-center gap-0.5 cursor-pointer"
+                      className="text-[#716053] font-bold hover:underline flex items-center gap-0.5 cursor-pointer"
                     >
                       <span>開啟詳細報表</span>
                       <ChevronRight className="w-3.5 h-3.5" />
@@ -733,7 +733,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   if (onOpenCheckInModal) onOpenCheckInModal();
                   onSendLineToast('📱 請至【簽到與離場核銷系統】點選志工「離場簽退 & 收集回饋」進行測試！');
                 }}
-                className="bg-[#5A5A40] hover:bg-[#484833] text-white font-bold px-3 py-1.5 rounded-xl text-xs shadow-xs transition flex items-center gap-1.5 shrink-0 cursor-pointer"
+                className="bg-[#716053] hover:bg-[#5A4A3F] text-white font-bold px-3 py-1.5 rounded-xl text-xs shadow-xs transition flex items-center gap-1.5 shrink-0 cursor-pointer"
               >
                 <Smartphone className="w-3.5 h-3.5 text-amber-300" />
                 <span>簽到/離場測試</span>
@@ -749,7 +749,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               {/* Top KPI Metrics Cards */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Average Rating */}
-                <div className="bg-[#fdfdfb] p-4 rounded-2xl border border-amber-200/80 shadow-2xs space-y-1">
+                <div className="bg-[#FFFDF7] p-4 rounded-2xl border border-amber-200/80 shadow-2xs space-y-1">
                   <span className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
                     <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
                     全機構平均滿意度
@@ -766,13 +766,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </div>
 
                 {/* Total Feedbacks */}
-                <div className="bg-[#fdfdfb] p-4 rounded-2xl border border-[#5A5A40]/15 shadow-2xs space-y-1">
+                <div className="bg-[#FFFDF7] p-4 rounded-2xl border border-[#716053] shadow-2xs space-y-1">
                   <span className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
-                    <MessageSquare className="w-3.5 h-3.5 text-[#5A5A40]" />
+                    <MessageSquare className="w-3.5 h-3.5 text-[#716053]" />
                     已收集 LINE 回饋數
                   </span>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-extrabold text-[#5A5A40] font-mono">{totalCount}</span>
+                    <span className="text-2xl font-extrabold text-[#716053] font-mono">{totalCount}</span>
                     <span className="text-xs text-slate-500 font-bold">筆心得建議</span>
                   </div>
                   <span className="text-[10px] text-emerald-700 font-semibold block pt-0.5">
@@ -781,7 +781,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </div>
 
                 {/* High Rating Percentage */}
-                <div className="bg-[#fdfdfb] p-4 rounded-2xl border border-emerald-200/80 shadow-2xs space-y-1">
+                <div className="bg-[#FFFDF7] p-4 rounded-2xl border border-emerald-200/80 shadow-2xs space-y-1">
                   <span className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
                     <ThumbsUp className="w-3.5 h-3.5 text-emerald-600" />
                     優良好評率 (4-5星)
@@ -796,7 +796,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </div>
 
                 {/* LINE Reminder Dispatch Status */}
-                <div className="bg-[#fdfdfb] p-4 rounded-2xl border border-emerald-200/80 shadow-2xs space-y-1">
+                <div className="bg-[#FFFDF7] p-4 rounded-2xl border border-emerald-200/80 shadow-2xs space-y-1">
                   <span className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
                     <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
                     離場 LINE 提醒發送狀態
@@ -812,7 +812,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </div>
 
               {/* Filter and Search Toolbar */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#f5f5f0]/80 p-3 rounded-2xl border border-[#5A5A40]/12">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#FAF6EE]/80 p-3 rounded-2xl border border-[#716053]">
                 {/* Search Input */}
                 <div className="relative w-full sm:w-64">
                   <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -821,7 +821,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     value={feedbackSearchTerm}
                     onChange={e => setFeedbackSearchTerm(e.target.value)}
                     placeholder="搜尋志工姓名、回饋關鍵字..."
-                    className="w-full pl-8 pr-3 py-1.5 bg-white border border-[#5A5A40]/20 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#5A5A40]"
+                    className="w-full pl-8 pr-3 py-1.5 bg-white border border-[#716053] rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#716053]"
                   />
                 </div>
 
@@ -832,7 +832,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     onClick={() => setFeedbackRatingFilter('all')}
                     className={`px-3 py-1 rounded-xl transition cursor-pointer border ${
                       feedbackRatingFilter === 'all'
-                        ? 'bg-[#5A5A40] text-white border-[#5A5A40]'
+                        ? 'bg-[#716053] text-white border-[#716053]'
                         : 'bg-white text-slate-700 hover:bg-slate-100 border-slate-200'
                     }`}
                   >
@@ -892,7 +892,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
                   if (filtered.length === 0) {
                     return (
-                      <div className="col-span-2 bg-[#fdfdfb] p-8 text-center rounded-2xl border border-dashed border-[#5A5A40]/20 text-slate-400 italic text-xs">
+                      <div className="col-span-2 bg-[#FFFDF7] p-8 text-center rounded-2xl border border-dashed border-[#716053] text-slate-400 italic text-xs">
                         尚無符合條件的志工回饋紀錄，請至「簽到系統」完成一次離場簽退以測試 LINE 提醒收集功能！
                       </div>
                     );
@@ -905,11 +905,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     return (
                       <div
                         key={item.id}
-                        className="bg-[#fdfdfb] p-5 rounded-2xl border border-[#5A5A40]/15 shadow-2xs hover:shadow-xs transition space-y-3 flex flex-col justify-between"
+                        className="bg-[#FFFDF7] p-5 rounded-2xl border border-[#716053] shadow-2xs hover:shadow-xs transition space-y-3 flex flex-col justify-between"
                       >
                         <div className="space-y-2.5">
                           {/* Header Line */}
-                          <div className="flex items-start justify-between gap-2 border-b border-[#5A5A40]/10 pb-2">
+                          <div className="flex items-start justify-between gap-2 border-b border-[#716053] pb-2">
                             <div>
                               <div className="flex items-center gap-2">
                                 <span className="font-bold text-slate-900 text-sm font-serif">{item.volunteerName}</span>
@@ -917,7 +917,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                   LINE: @{item.lineId || '已驗證'}
                                 </span>
                               </div>
-                              <span className="text-[11px] text-[#5A5A40] font-medium block mt-0.5">
+                              <span className="text-[11px] text-[#716053] font-medium block mt-0.5">
                                 📍 {item.shiftTitle}
                               </span>
                             </div>
@@ -1004,7 +1004,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           subtitle="依據場域屬性（狗園放風、貓舍清潔、幼犬餵食、醫療協助）進行即時招募與報名管理"
           icon={<Building2 className="w-5 h-5 text-amber-300" />}
           badgeText="5 大場域"
-          badgeColor="bg-[#E6E2D3] text-[#5A5A40]"
+          badgeColor="bg-[#F5E6D0] text-[#716053]"
           isCollapsed={collapsedModules.zone_shortage}
           onToggleCollapse={() => handleToggleModuleCollapse('zone_shortage')}
           onHide={() => handleHideModule('zone_shortage')}
@@ -1015,8 +1015,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 onClick={() => setSelectedDateFilter('all')}
                 className={`px-3 py-1 rounded-xl font-bold transition cursor-pointer ${
                   selectedDateFilter === 'all'
-                    ? 'bg-[#5A5A40] text-white shadow-2xs'
-                    : 'bg-[#f5f5f0] text-slate-600 hover:bg-[#E6E2D3]'
+                    ? 'bg-[#716053] text-white shadow-2xs'
+                    : 'bg-[#FAF6EE] text-slate-600 hover:bg-[#F5E6D0]'
                 }`}
               >
                 全部
@@ -1025,8 +1025,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 onClick={() => setSelectedDateFilter('today')}
                 className={`px-3 py-1 rounded-xl font-bold transition cursor-pointer ${
                   selectedDateFilter === 'today'
-                    ? 'bg-[#5A5A40] text-white shadow-2xs'
-                    : 'bg-[#f5f5f0] text-slate-600 hover:bg-[#E6E2D3]'
+                    ? 'bg-[#716053] text-white shadow-2xs'
+                    : 'bg-[#FAF6EE] text-slate-600 hover:bg-[#F5E6D0]'
                 }`}
               >
                 今日
@@ -1035,8 +1035,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 onClick={() => setSelectedDateFilter('upcoming')}
                 className={`px-3 py-1 rounded-xl font-bold transition cursor-pointer ${
                   selectedDateFilter === 'upcoming'
-                    ? 'bg-[#5A5A40] text-white shadow-2xs'
-                    : 'bg-[#f5f5f0] text-slate-600 hover:bg-[#E6E2D3]'
+                    ? 'bg-[#716053] text-white shadow-2xs'
+                    : 'bg-[#FAF6EE] text-slate-600 hover:bg-[#F5E6D0]'
                 }`}
               >
                 未來班次
@@ -1055,17 +1055,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {zoneStats.map(({ config, shifts: zShifts, required, filled, gap, isFull }) => (
           <div
             key={config.id}
-            className={`rounded-[28px] border border-[#5A5A40]/12 bg-white p-6 transition shadow-xs hover:border-[#5A5A40]/30 flex flex-col justify-between space-y-4`}
+            className={`rounded-[28px] border border-[#716053] bg-white p-6 transition shadow-xs hover:border-[#716053] flex flex-col justify-between space-y-4`}
           >
             <div>
               {/* Card Title & Icon */}
               <div className="flex items-start justify-between">
                 <div className="flex items-center space-x-3">
-                  <span className="text-3xl p-2.5 bg-[#f5f5f0] rounded-2xl shadow-2xs border border-[#5A5A40]/10">
+                  <span className="text-3xl p-2.5 bg-[#FAF6EE] rounded-2xl shadow-2xs border border-[#716053]">
                     {config.icon}
                   </span>
                   <div>
-                    <h4 className="font-bold font-serif text-[#5A5A40] text-base">
+                    <h4 className="font-bold font-serif text-[#716053] text-base">
                       {config.name}
                     </h4>
                     <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full inline-block mt-1 ${config.badgeBg}`}>
@@ -1096,12 +1096,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </p>
 
               {/* Progress */}
-              <div className="mt-4 pt-3 border-t border-[#5A5A40]/10">
+              <div className="mt-4 pt-3 border-t border-[#716053]">
                 <div className="flex justify-between text-xs font-medium mb-1.5 text-slate-700">
                   <span className="font-sans text-slate-500">登記入數狀態</span>
-                  <span className="font-bold text-[#5A5A40]">{filled} / {required} 人 ({required > 0 ? Math.round((filled / required) * 100) : 0}%)</span>
+                  <span className="font-bold text-[#716053]">{filled} / {required} 人 ({required > 0 ? Math.round((filled / required) * 100) : 0}%)</span>
                 </div>
-                <div className="w-full bg-[#f5f5f0] rounded-full h-2.5 overflow-hidden">
+                <div className="w-full bg-[#FAF6EE] rounded-full h-2.5 overflow-hidden">
                   <div
                     className="h-2.5 rounded-full transition-all duration-500"
                     style={{
@@ -1114,7 +1114,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
               {/* Shifts in this zone */}
               <div className="mt-4 space-y-2">
-                <p className="text-[11px] font-bold text-[#5A5A40] uppercase tracking-wider">
+                <p className="text-[11px] font-bold text-[#716053] uppercase tracking-wider">
                   本區待補班次 ({zShifts.length})：
                 </p>
                 {zShifts.length === 0 ? (
@@ -1123,7 +1123,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   zShifts.slice(0, 2).map(s => (
                     <div
                       key={s.id}
-                      className="bg-[#fdfdfb] p-3 rounded-2xl border border-[#5A5A40]/10 text-xs flex justify-between items-center"
+                      className="bg-[#FFFDF7] p-3 rounded-2xl border border-[#716053] text-xs flex justify-between items-center"
                     >
                       <div>
                         <p className="font-semibold text-slate-800 line-clamp-1">{s.title}</p>
@@ -1135,7 +1135,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         className={`px-3 py-1 rounded-full text-[11px] font-bold cursor-pointer transition ${
                           s.currentCount >= s.requiredCount
                             ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                            : 'bg-[#5A5A40] hover:bg-[#484833] text-white shadow-2xs'
+                            : 'bg-[#716053] hover:bg-[#5A4A3F] text-white shadow-2xs'
                         }`}
                       >
                         {s.currentCount >= s.requiredCount ? '已滿班' : '報名支援'}
@@ -1146,11 +1146,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </div>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-[#5A5A40]/10 flex justify-between items-center text-xs">
+            <div className="mt-4 pt-3 border-t border-[#716053] flex justify-between items-center text-xs">
               <span className="text-slate-500">自動綁定 Google 地圖據點</span>
               <button
                 onClick={() => onNavigateToTab('positions')}
-                className="font-bold text-[#5A5A40] hover:underline flex items-center gap-0.5 cursor-pointer"
+                className="font-bold text-[#716053] hover:underline flex items-center gap-0.5 cursor-pointer"
               >
                 <span>管理本區班次</span>
                 <ChevronRight className="w-3.5 h-3.5" />
@@ -1161,10 +1161,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </div>
 
       {/* Staffing Gap Immediate Attention List */}
-      <div className="bg-white rounded-[32px] border border-[#5A5A40]/12 p-6 sm:p-8 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-[#5A5A40]/10 gap-2">
+      <div className="bg-white rounded-[32px] border border-[#716053] p-6 sm:p-8 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-[#716053] gap-2">
           <div>
-            <h3 className="text-xl font-bold font-serif italic text-[#5A5A40] flex items-center gap-2">
+            <h3 className="text-xl font-bold font-serif italic text-[#716053] flex items-center gap-2">
               <span>🚨 急缺志工班次清單 (Urgent Shift Gap)</span>
             </h3>
             <p className="text-xs text-slate-500 mt-1">這些班次人力尚缺，需快速透過 LINE 志工群組發布招募推播。</p>
@@ -1180,14 +1180,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
             <button
               onClick={() => onNavigateToTab('positions')}
-              className="text-xs bg-[#f5f5f0] hover:bg-[#E6E2D3] text-[#5A5A40] px-4 py-2 rounded-full font-bold transition cursor-pointer"
+              className="text-xs bg-[#FAF6EE] hover:bg-[#F5E6D0] text-[#716053] px-4 py-2 rounded-full font-bold transition cursor-pointer"
             >
               檢視全部 {shifts.length} 個班次
             </button>
           </div>
         </div>
 
-        <div className="mt-4 divide-y divide-[#5A5A40]/10">
+        <div className="mt-4 divide-y divide-[#716053]/10">
           {filteredShifts
             .filter(s => s.requiredCount > s.currentCount)
             .map(shift => {
@@ -1195,9 +1195,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
               const remaining = shift.requiredCount - shift.currentCount;
 
               return (
-                <div key={shift.id} className="py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-[#f5f5f0]/60 p-3 rounded-2xl transition">
+                <div key={shift.id} className="py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-[#FAF6EE]/60 p-3 rounded-2xl transition">
                   <div className="flex items-start space-x-3">
-                    <span className="text-2xl p-2.5 bg-[#f5f5f0] border border-[#5A5A40]/10 rounded-2xl">
+                    <span className="text-2xl p-2.5 bg-[#FAF6EE] border border-[#716053] rounded-2xl">
                       {zoneConf?.icon || '🐾'}
                     </span>
                     <div>
@@ -1210,7 +1210,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         {shift.title}
                       </h4>
                       <div className="flex items-center space-x-3 text-xs text-slate-500 mt-1">
-                        <span className="flex items-center gap-1 font-bold text-[#5A5A40]">
+                        <span className="flex items-center gap-1 font-bold text-[#716053]">
                           <Calendar className="w-3.5 h-3.5" />
                           {shift.date} ({shift.timeRange})
                         </span>
@@ -1229,7 +1229,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
                     <button
                       onClick={() => onApplyForShift(shift.id)}
-                      className="bg-[#5A5A40] hover:bg-[#484833] text-white font-bold text-xs px-4 py-2.5 rounded-full shadow-xs transition cursor-pointer whitespace-nowrap"
+                      className="bg-[#716053] hover:bg-[#5A4A3F] text-white font-bold text-xs px-4 py-2.5 rounded-full shadow-xs transition cursor-pointer whitespace-nowrap"
                     >
                       手動幫志工報名
                     </button>

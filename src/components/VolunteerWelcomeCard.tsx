@@ -113,7 +113,7 @@ export const VolunteerWelcomeCard: React.FC<VolunteerWelcomeCardProps> = ({
   const overallProgress = Math.min(100, Math.round((currentHours / 80) * 100));
 
   return (
-    <div className="bg-[#5A5A40] rounded-[32px] p-6 sm:p-8 md:p-10 text-white shadow-lg relative overflow-hidden font-sans border border-[#5A5A40]/30">
+    <div className="bg-[#716053] rounded-[32px] p-6 sm:p-8 md:p-10 text-white shadow-lg relative overflow-hidden font-sans border border-[#716053]">
       {/* Subtle Background Decorative Circles */}
       <div className="absolute -right-16 -top-16 w-80 h-80 rounded-full bg-white/5 pointer-events-none blur-2xl" />
       <div className="absolute -left-16 -bottom-16 w-72 h-72 rounded-full bg-amber-400/10 pointer-events-none blur-2xl" />
@@ -124,7 +124,7 @@ export const VolunteerWelcomeCard: React.FC<VolunteerWelcomeCardProps> = ({
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="space-y-2.5 max-w-2xl">
             <div className="flex items-center gap-2.5 flex-wrap">
-              <span className="inline-flex items-center gap-1.5 bg-white/15 backdrop-blur-md px-3.5 py-1 rounded-full text-xs font-bold text-[#E6E2D3] border border-white/10">
+              <span className="inline-flex items-center gap-1.5 bg-white/15 backdrop-blur-md px-3.5 py-1 rounded-full text-xs font-bold text-[#F5E6D0] border border-white/10">
                 <Heart className="w-3.5 h-3.5 text-amber-300 fill-amber-300 animate-pulse" />
                 <span>浪浪家園 志工個人服務專區</span>
               </span>
@@ -145,7 +145,7 @@ export const VolunteerWelcomeCard: React.FC<VolunteerWelcomeCardProps> = ({
               歡迎回來，{volunteerName} 志工夥伴！🐾
             </h2>
 
-            <p className="text-[#E6E2D3] text-xs sm:text-sm leading-relaxed font-sans">
+            <p className="text-[#F5E6D0] text-xs sm:text-sm leading-relaxed font-sans">
               感謝您用愛心與耐心守護園區毛孩。您已累積服務 <strong className="text-white font-bold underline decoration-amber-400 decoration-2">{currentHours} 小時</strong>，每一分秒的陪伴都是浪浪重獲幸福家庭的溫暖力量。
             </p>
           </div>
@@ -186,7 +186,7 @@ export const VolunteerWelcomeCard: React.FC<VolunteerWelcomeCardProps> = ({
                 <Target className="w-5 h-5 text-amber-300" />
               </div>
               <div>
-                <div className="text-xs text-[#E6E2D3] font-medium flex items-center gap-2">
+                <div className="text-xs text-[#F5E6D0] font-medium flex items-center gap-2">
                   <span>累積服務時數進度：</span>
                   <span className="text-white font-extrabold text-sm">{currentHours} 小時</span>
                 </div>
@@ -222,7 +222,7 @@ export const VolunteerWelcomeCard: React.FC<VolunteerWelcomeCardProps> = ({
 
           {/* Animated Progress Bar */}
           <div className="space-y-1.5">
-            <div className="flex justify-between text-[11px] text-[#E6E2D3] font-medium">
+            <div className="flex justify-between text-[11px] text-[#F5E6D0] font-medium">
               <span>{currentTier.emoji} {currentTier.name} ({currentTierMin}h)</span>
               <span>
                 {nextTier ? `晉升達成率 ${stepProgress}% (總里程 ${overallProgress}%)` : '100% 達成'}
@@ -254,7 +254,7 @@ export const VolunteerWelcomeCard: React.FC<VolunteerWelcomeCardProps> = ({
                     isCurrent 
                       ? 'bg-amber-400/25 border-amber-300 text-white shadow-xs' 
                       : isPassed
-                        ? 'bg-white/10 border-white/20 text-[#E6E2D3]'
+                        ? 'bg-white/10 border-white/20 text-[#F5E6D0]'
                         : isNext
                           ? 'bg-white/5 border-amber-400/40 text-amber-200/90'
                           : 'bg-black/20 border-white/10 text-white/50 opacity-60'
@@ -282,7 +282,7 @@ export const VolunteerWelcomeCard: React.FC<VolunteerWelcomeCardProps> = ({
                     )}
                   </div>
 
-                  <p className="text-[10px] text-[#E6E2D3]/80 mt-1 line-clamp-1">
+                  <p className="text-[10px] text-[#F5E6D0]/80 mt-1 line-clamp-1">
                     {tier.perks}
                   </p>
                 </div>

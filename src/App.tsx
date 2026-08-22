@@ -620,12 +620,12 @@ export default function App() {
 
   // 2. IF LOGGED IN -> RENDER INDEPENDENT ROLE INTERFACE
   return (
-    <div className="min-h-screen bg-[#f5f5f0] text-[#333333] font-sans antialiased selection:bg-[#E6E2D3] selection:text-[#5A5A40]">
+    <div className="min-h-screen bg-[#FAF6EE] text-[#716053] font-sans antialiased selection:bg-[#F5E6D0] selection:text-[#716053]">
       
       {/* Toast Alert Notification */}
       {toastMessage && (
-        <div className="fixed top-20 right-4 z-50 bg-[#5A5A40] text-white p-4 rounded-2xl shadow-xl border border-[#E6E2D3]/30 flex items-center space-x-3 max-w-md animate-in slide-in-from-top-5 duration-300">
-          <MessageSquare className="w-5 h-5 text-[#E6E2D3] shrink-0" />
+        <div className="fixed top-20 right-4 z-50 bg-[#716053] text-white p-4 rounded-2xl shadow-xl border border-[#F5E6D0]/30 flex items-center space-x-3 max-w-md animate-in slide-in-from-top-5 duration-300">
+          <MessageSquare className="w-5 h-5 text-[#F5E6D0] shrink-0" />
           <p className="text-xs font-semibold leading-relaxed flex-1">{toastMessage}</p>
           <button
             onClick={() => setToastMessage(null)}
@@ -839,10 +839,10 @@ export default function App() {
       {userRole === 'volunteer' && upcomingApprovedShiftReminder && dismissedReminderShiftId !== upcomingApprovedShiftReminder.shift.id && (
         <div
           id="upcoming-shift-reminder-card"
-          className="fixed bottom-6 right-6 z-50 max-w-sm sm:max-w-md w-[calc(100vw-3rem)] bg-white/95 backdrop-blur-md rounded-3xl border-2 border-[#5A5A40]/30 shadow-2xl overflow-hidden transition-all duration-300 animate-in fade-in slide-in-from-bottom-5"
+          className="fixed bottom-6 right-6 z-50 max-w-sm sm:max-w-md w-[calc(100vw-3rem)] bg-white/95 backdrop-blur-md rounded-3xl border-2 border-[#716053] shadow-2xl overflow-hidden transition-all duration-300 animate-in fade-in slide-in-from-bottom-5"
         >
           {/* Top Banner with pulsating indicator */}
-          <div className="bg-[#5A5A40] text-white px-4 sm:px-5 py-3 flex items-center justify-between">
+          <div className="bg-[#716053] text-white px-4 sm:px-5 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <span className="relative flex h-3 w-3">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
@@ -882,7 +882,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="space-y-2 bg-[#FAF8F5] p-3.5 rounded-2xl border border-[#5A5A40]/10 text-xs text-slate-700">
+            <div className="space-y-2 bg-[#FAF8F5] p-3.5 rounded-2xl border border-[#716053] text-xs text-slate-700">
               {/* Date & Time */}
               <div className="flex items-start gap-2.5">
                 <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
@@ -930,7 +930,7 @@ export default function App() {
 
               <button
                 onClick={() => setVolunteerActiveTab('myshifts')}
-                className="py-2 px-3 bg-[#5A5A40]/10 hover:bg-[#5A5A40]/20 text-[#5A5A40] rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+                className="py-2 px-3 bg-[#716053]/10 hover:bg-[#716053]/20 text-[#716053] rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer"
               >
                 <span>我的排班</span>
               </button>
@@ -940,7 +940,7 @@ export default function App() {
       )}
 
       {/* Footer */}
-      <footer className="bg-[#5A5A40] text-white/80 py-6 text-center text-xs border-t border-[#5A5A40]/20 shadow-xs">
+      <footer className="bg-[#716053] text-white/80 py-6 text-center text-xs border-t border-[#716053] shadow-xs">
         <p className="font-semibold text-white tracking-wide font-serif italic text-sm">
           🐾 浪浪家園 PawRescue &bull; 流浪動物之家 志工招募與人力資源管理系統
         </p>

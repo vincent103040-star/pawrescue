@@ -35,10 +35,10 @@ export const DashboardModuleCard: React.FC<DashboardModuleCardProps> = ({
   return (
     <div
       id={`module-${id}`}
-      className={`bg-white rounded-[32px] border border-[#5A5A40]/15 shadow-xs transition-all duration-300 overflow-hidden ${className}`}
+      className={`bg-white rounded-[32px] border border-[#716053] shadow-xs transition-all duration-300 overflow-hidden ${className}`}
     >
       {/* Module Header Bar */}
-      <div className={`p-5 sm:p-6 transition-colors ${isCollapsed ? 'bg-[#fafaf7] hover:bg-[#f5f5f0]/80' : 'border-b border-[#5A5A40]/10'}`}>
+      <div className={`p-5 sm:p-6 transition-colors ${isCollapsed ? 'bg-[#FAF6EE] hover:bg-[#FAF6EE]/80' : 'border-b border-[#716053]'}`}>
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           
           {/* Left Title & Status Section (Clickable to toggle collapse) */}
@@ -47,13 +47,13 @@ export const DashboardModuleCard: React.FC<DashboardModuleCardProps> = ({
             className="flex items-start sm:items-center gap-3.5 cursor-pointer select-none group flex-1"
           >
             {icon && (
-              <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-[#5A5A40] text-amber-300 flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+              <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-[#716053] text-amber-300 flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
                 {icon}
               </div>
             )}
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-lg sm:text-xl font-bold font-serif italic text-slate-900 group-hover:text-[#5A5A40] transition-colors">
+                <h3 className="text-lg sm:text-xl font-bold font-serif italic text-slate-900 group-hover:text-[#716053] transition-colors">
                   {title}
                 </h3>
                 {badge && (
@@ -89,16 +89,16 @@ export const DashboardModuleCard: React.FC<DashboardModuleCardProps> = ({
               type="button"
               onClick={onToggleCollapse}
               title={isCollapsed ? '展開此模組' : '折疊收合此模組'}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-[#f5f5f0] hover:bg-[#E6E2D3] text-[#5A5A40] border border-[#5A5A40]/15 transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
+              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-[#FAF6EE] hover:bg-[#F5E6D0] text-[#716053] border border-[#716053] transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
             >
               {isCollapsed ? (
                 <>
-                  <ChevronDown className="w-4 h-4 text-[#5A5A40]" />
+                  <ChevronDown className="w-4 h-4 text-[#716053]" />
                   <span>展開</span>
                 </>
               ) : (
                 <>
-                  <ChevronUp className="w-4 h-4 text-[#5A5A40]" />
+                  <ChevronUp className="w-4 h-4 text-[#716053]" />
                   <span>折疊</span>
                 </>
               )}
@@ -124,15 +124,15 @@ export const DashboardModuleCard: React.FC<DashboardModuleCardProps> = ({
         {isCollapsed && (
           <div
             onClick={onToggleCollapse}
-            className="mt-3 pt-3 border-t border-[#5A5A40]/10 flex items-center justify-between text-xs text-slate-600 cursor-pointer"
+            className="mt-3 pt-3 border-t border-[#716053] flex items-center justify-between text-xs text-slate-600 cursor-pointer"
           >
             <div className="flex items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap">
-              <span className="font-bold text-[#5A5A40] shrink-0">📌 模組摘要：</span>
+              <span className="font-bold text-[#716053] shrink-0">📌 模組摘要：</span>
               <span className="text-slate-600 truncate">
                 {collapsedSummary || '點擊展開以檢視此功能之完整互動數據與排班細節'}
               </span>
             </div>
-            <span className="text-[11px] font-bold text-[#5A5A40] hover:underline shrink-0 ml-3 flex items-center gap-0.5">
+            <span className="text-[11px] font-bold text-[#716053] hover:underline shrink-0 ml-3 flex items-center gap-0.5">
               <span>點擊展開檢視</span>
               <ChevronDown className="w-3.5 h-3.5" />
             </span>

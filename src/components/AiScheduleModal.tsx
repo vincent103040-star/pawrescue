@@ -117,18 +117,18 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#5A5A40]/40 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-[32px] max-w-3xl w-full shadow-2xl p-6 sm:p-8 border border-[#5A5A40]/20 my-8 space-y-6 text-slate-800 font-sans">
+    <div className="fixed inset-0 z-50 bg-[#716053]/40 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-[32px] max-w-3xl w-full shadow-2xl p-6 sm:p-8 border border-[#716053] my-8 space-y-6 text-slate-800 font-sans">
         
         {/* Header */}
-        <div className="flex items-start justify-between border-b border-[#5A5A40]/10 pb-5">
+        <div className="flex items-start justify-between border-b border-[#716053] pb-5">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-[#5A5A40] text-[#E6E2D3] flex items-center justify-center shadow-xs shrink-0">
+            <div className="w-12 h-12 rounded-2xl bg-[#716053] text-[#F5E6D0] flex items-center justify-center shadow-xs shrink-0">
               <Sparkles className="w-6 h-6 text-amber-300 animate-pulse" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-xl font-bold font-serif italic text-[#5A5A40]">AI 自動排班建議與推薦</h3>
+                <h3 className="text-xl font-bold font-serif italic text-[#716053]">AI 自動排班建議與推薦</h3>
                 <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1">
                   <Zap className="w-3 h-3 text-amber-600 fill-amber-500" />
                   累積時數與完成班次算力匹配
@@ -149,7 +149,7 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({
         </div>
 
         {/* Selected Shift Target Card */}
-        <div className="bg-[#f5f5f0] border border-[#5A5A40]/15 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="bg-[#FAF6EE] border border-[#716053] rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${zoneConf?.badgeBg}`}>
@@ -165,9 +165,9 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({
             </div>
           </div>
 
-          <div className="bg-white rounded-xl p-3 border border-[#5A5A40]/10 text-center shrink-0 min-w-[140px]">
+          <div className="bg-white rounded-xl p-3 border border-[#716053] text-center shrink-0 min-w-[140px]">
             <span className="text-[11px] font-semibold text-slate-500 block">目前缺額</span>
-            <div className="text-lg font-extrabold text-[#5A5A40]">
+            <div className="text-lg font-extrabold text-[#716053]">
               {shift.requiredCount - shift.currentCount} <span className="text-xs font-normal text-slate-600">/ {shift.requiredCount} 人</span>
             </div>
             <span className="text-[10px] text-emerald-700 bg-emerald-50 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
@@ -177,17 +177,17 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({
         </div>
 
         {/* Filter and Sorting Controls */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#5A5A40]/10 pb-3 text-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#716053] pb-3 text-xs">
           <div className="flex items-center gap-2">
             <span className="font-bold text-slate-700 flex items-center gap-1">
-              <Filter className="w-3.5 h-3.5 text-[#5A5A40]" />
+              <Filter className="w-3.5 h-3.5 text-[#716053]" />
               推薦排序依據：
             </span>
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
               <button
                 onClick={() => setSortBy('ai_score')}
                 className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
-                  sortBy === 'ai_score' ? 'bg-white text-[#5A5A40] shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                  sortBy === 'ai_score' ? 'bg-white text-[#716053] shadow-xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 🧠 AI 契合度綜合權重
@@ -195,7 +195,7 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({
               <button
                 onClick={() => setSortBy('hours_desc')}
                 className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
-                  sortBy === 'hours_desc' ? 'bg-white text-[#5A5A40] shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                  sortBy === 'hours_desc' ? 'bg-white text-[#716053] shadow-xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 ⏱️ 累積服務時數最高
@@ -203,7 +203,7 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({
               <button
                 onClick={() => setSortBy('shifts_desc')}
                 className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
-                  sortBy === 'shifts_desc' ? 'bg-white text-[#5A5A40] shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                  sortBy === 'shifts_desc' ? 'bg-white text-[#716053] shadow-xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 📋 完成班次數量最多
@@ -231,7 +231,7 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({
             return (
               <div
                 key={vol.id}
-                className="bg-white rounded-2xl border border-[#5A5A40]/15 p-4 shadow-xs hover:border-[#5A5A40]/30 transition space-y-3 relative"
+                className="bg-white rounded-2xl border border-[#716053] p-4 shadow-xs hover:border-[#716053] transition space-y-3 relative"
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   
@@ -241,10 +241,10 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({
                       <img
                         src={vol.avatar}
                         alt={vol.name}
-                        className="w-12 h-12 rounded-2xl object-cover border-2 border-[#5A5A40]/20 shadow-xs"
+                        className="w-12 h-12 rounded-2xl object-cover border-2 border-[#716053] shadow-xs"
                       />
                       <span className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full text-[10px] font-extrabold text-white flex items-center justify-center shadow-xs ${
-                        idx === 0 ? 'bg-amber-500' : idx === 1 ? 'bg-slate-400' : idx === 2 ? 'bg-amber-700' : 'bg-[#5A5A40]'
+                        idx === 0 ? 'bg-amber-500' : idx === 1 ? 'bg-slate-400' : idx === 2 ? 'bg-amber-700' : 'bg-[#716053]'
                       }`}>
                         #{idx + 1}
                       </span>
@@ -257,7 +257,7 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({
                           vol.tier === '志工隊長'
                             ? 'bg-amber-100 text-amber-900 border border-amber-300'
                             : vol.tier === '資深志工'
-                            ? 'bg-[#E6E2D3] text-[#5A5A40]'
+                            ? 'bg-[#F5E6D0] text-[#716053]'
                             : 'bg-slate-100 text-slate-700'
                         }`}>
                           {vol.tier}
@@ -266,13 +266,13 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({
 
                       {/* Key Stats Pill: Hours & Completed Shifts */}
                       <div className="flex flex-wrap items-center gap-2 text-xs">
-                        <span className="bg-[#f5f5f0] border border-[#5A5A40]/15 px-2.5 py-0.5 rounded-full text-[#5A5A40] font-bold flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-[#5A5A40]" />
+                        <span className="bg-[#FAF6EE] border border-[#716053] px-2.5 py-0.5 rounded-full text-[#716053] font-bold flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-[#716053]" />
                           累積時數：<strong className="text-slate-900">{vol.totalHours}</strong> 小時
                         </span>
 
-                        <span className="bg-[#f5f5f0] border border-[#5A5A40]/15 px-2.5 py-0.5 rounded-full text-[#5A5A40] font-bold flex items-center gap-1">
-                          <Award className="w-3 h-3 text-[#5A5A40]" />
+                        <span className="bg-[#FAF6EE] border border-[#716053] px-2.5 py-0.5 rounded-full text-[#716053] font-bold flex items-center gap-1">
+                          <Award className="w-3 h-3 text-[#716053]" />
                           完成班次：<strong className="text-slate-900">{vol.completedShiftsCount}</strong> 班
                         </span>
                       </div>
@@ -294,7 +294,7 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({
                 </div>
 
                 {/* AI Reason Box */}
-                <div className="bg-[#fdfdfb] p-3 rounded-xl border border-[#5A5A40]/10 text-xs text-slate-700 space-y-1">
+                <div className="bg-[#FFFDF7] p-3 rounded-xl border border-[#716053] text-xs text-slate-700 space-y-1">
                   <p className="leading-relaxed">{item.aiReason}</p>
                   
                   {/* Skills tags */}
@@ -303,7 +303,7 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({
                     {vol.skills.map((sk, sIdx) => (
                       <span
                         key={sIdx}
-                        className="bg-white border border-[#5A5A40]/15 text-[#5A5A40] font-semibold text-[10px] px-2 py-0.5 rounded-md"
+                        className="bg-white border border-[#716053] text-[#716053] font-semibold text-[10px] px-2 py-0.5 rounded-md"
                       >
                         {sk}
                       </span>
@@ -341,7 +341,7 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({
                     className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                       isAssigned
                         ? 'bg-amber-100 text-amber-800 border border-amber-300 cursor-default'
-                        : 'bg-[#5A5A40] hover:bg-[#484833] text-white shadow-2xs'
+                        : 'bg-[#716053] hover:bg-[#5A4A3F] text-white shadow-2xs'
                     }`}
                   >
                     {isAssigned ? (
@@ -351,7 +351,7 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({
                       </>
                     ) : (
                       <>
-                        <Users className="w-3.5 h-3.5 text-[#E6E2D3]" />
+                        <Users className="w-3.5 h-3.5 text-[#F5E6D0]" />
                         <span>✅ 直接排入此班次</span>
                       </>
                     )}
@@ -363,10 +363,10 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end pt-3 border-t border-[#5A5A40]/10">
+        <div className="flex justify-end pt-3 border-t border-[#716053]">
           <button
             onClick={onClose}
-            className="bg-[#5A5A40] hover:bg-[#484833] text-white font-bold text-xs px-6 py-2.5 rounded-full shadow-xs transition cursor-pointer"
+            className="bg-[#716053] hover:bg-[#5A4A3F] text-white font-bold text-xs px-6 py-2.5 rounded-full shadow-xs transition cursor-pointer"
           >
             完成排班建議檢視
           </button>

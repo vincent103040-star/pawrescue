@@ -158,7 +158,7 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
     // Density mode: Light Beige -> Sage Green -> Deep Forest
     const densityColorScale = d3.scaleLinear<string>()
       .domain([0, 40, 75, 100])
-      .range(['#f5f5f0', '#a7f3d0', '#10b981', '#064e3b']);
+      .range(['#FAF6EE', '#a7f3d0', '#10b981', '#064e3b']);
 
     // X Axis
     chartGroup.append('g')
@@ -292,23 +292,23 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
   return (
     <div
       id="module-heatmap"
-      className="bg-white rounded-[32px] p-6 sm:p-8 shadow-xs border border-[#5A5A40]/15 space-y-6 font-sans transition-all duration-300 overflow-hidden"
+      className="bg-white rounded-[32px] p-6 sm:p-8 shadow-xs border border-[#716053] space-y-6 font-sans transition-all duration-300 overflow-hidden"
     >
       {/* Top Header & Controls */}
-      <div className={`flex flex-col lg:flex-row lg:items-center justify-between gap-4 ${isCollapsed ? '' : 'border-b border-[#5A5A40]/10 pb-5'}`}>
+      <div className={`flex flex-col lg:flex-row lg:items-center justify-between gap-4 ${isCollapsed ? '' : 'border-b border-[#716053] pb-5'}`}>
         <div
           onClick={onToggleCollapse}
           className="flex items-start gap-3 cursor-pointer select-none group"
         >
-          <div className="w-10 h-10 rounded-2xl bg-[#5A5A40] text-[#E6E2D3] flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+          <div className="w-10 h-10 rounded-2xl bg-[#716053] text-[#F5E6D0] flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
             <BarChart2 className="w-5 h-5 text-amber-300" />
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-xl font-bold font-serif italic text-slate-900 group-hover:text-[#5A5A40] transition-colors">
+              <h3 className="text-xl font-bold font-serif italic text-slate-900 group-hover:text-[#716053] transition-colors">
                 2. 志工參與與缺工『D3.js 熱力圖』分析
               </h3>
-              <span className="bg-[#E6E2D3] text-[#5A5A40] text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border border-[#5A5A40]/20">
+              <span className="bg-[#F5E6D0] text-[#716053] text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border border-[#716053]">
                 D3.js Powered
               </span>
               {isCollapsed && (
@@ -361,16 +361,16 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
               type="button"
               onClick={onToggleCollapse}
               title={isCollapsed ? '展開此模組' : '折疊收合此模組'}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-[#f5f5f0] hover:bg-[#E6E2D3] text-[#5A5A40] border border-[#5A5A40]/15 transition flex items-center gap-1 cursor-pointer active:scale-95 shadow-2xs"
+              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-[#FAF6EE] hover:bg-[#F5E6D0] text-[#716053] border border-[#716053] transition flex items-center gap-1 cursor-pointer active:scale-95 shadow-2xs"
             >
               {isCollapsed ? (
                 <>
-                  <ChevronDown className="w-4 h-4 text-[#5A5A40]" />
+                  <ChevronDown className="w-4 h-4 text-[#716053]" />
                   <span>展開</span>
                 </>
               ) : (
                 <>
-                  <ChevronUp className="w-4 h-4 text-[#5A5A40]" />
+                  <ChevronUp className="w-4 h-4 text-[#716053]" />
                   <span>折疊</span>
                 </>
               )}
@@ -396,17 +396,17 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
       {isCollapsed && (
         <div
           onClick={onToggleCollapse}
-          className="pt-2 border-t border-[#5A5A40]/10 flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-600 cursor-pointer gap-2"
+          className="pt-2 border-t border-[#716053] flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-600 cursor-pointer gap-2"
         >
           <div className="flex items-center gap-2 overflow-hidden text-ellipsis">
-            <span className="font-bold text-[#5A5A40] shrink-0">📌 熱力圖摘要：</span>
+            <span className="font-bold text-[#716053] shrink-0">📌 熱力圖摘要：</span>
             <span className="text-slate-600 truncate">
               {topShortagePeaks.length > 0 
                 ? `🚨 尖峰缺工：${topShortagePeaks[0].dayLabel} (${topShortagePeaks[0].timeSlotLabel} 缺 ${topShortagePeaks[0].gap} 人，缺額率 ${topShortagePeaks[0].shortageRate}%)`
                 : '全園區時段人力充足'}
             </span>
           </div>
-          <span className="text-[11px] font-bold text-[#5A5A40] hover:underline shrink-0 flex items-center gap-0.5">
+          <span className="text-[11px] font-bold text-[#716053] hover:underline shrink-0 flex items-center gap-0.5">
             <span>點擊展開完整 D3 互動矩陣</span>
             <ChevronDown className="w-3.5 h-3.5" />
           </span>
@@ -418,11 +418,11 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center animate-fadeIn">
         
         {/* SVG Chart Box */}
-        <div className="lg:col-span-8 bg-[#fafaf7] p-3 rounded-2xl border border-[#5A5A40]/15 relative overflow-x-auto">
+        <div className="lg:col-span-8 bg-[#FAF6EE] p-3 rounded-2xl border border-[#716053] relative overflow-x-auto">
           <svg ref={svgRef} className="w-full h-auto min-w-[540px]"></svg>
 
           {/* Color Scale Legend Bar */}
-          <div className="flex items-center justify-between px-4 pt-2 border-t border-[#5A5A40]/10 text-[11px] text-slate-600">
+          <div className="flex items-center justify-between px-4 pt-2 border-t border-[#716053] text-[11px] text-slate-600">
             <span className="font-bold">圖例熱力指標：</span>
             {metricMode === 'shortage' ? (
               <div className="flex items-center gap-2">
@@ -433,7 +433,7 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
             ) : (
               <div className="flex items-center gap-2">
                 <span>⚪ 低到勤率 (&lt; 30%)</span>
-                <div className="w-24 h-2.5 rounded-full bg-gradient-to-r from-[#f5f5f0] via-emerald-300 to-emerald-800"></div>
+                <div className="w-24 h-2.5 rounded-full bg-gradient-to-r from-[#FAF6EE] via-emerald-300 to-emerald-800"></div>
                 <span className="font-bold text-emerald-800">🟢 高密集到勤 (100%)</span>
               </div>
             )}
@@ -444,10 +444,10 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
         <div className="lg:col-span-4 space-y-4">
           
           {/* Active Hover Cell Card */}
-          <div className="bg-[#f5f5f0] border border-[#5A5A40]/20 p-4 rounded-2xl space-y-2">
-            <div className="text-[11px] font-bold text-[#5A5A40] flex items-center justify-between">
+          <div className="bg-[#FAF6EE] border border-[#716053] p-4 rounded-2xl space-y-2">
+            <div className="text-[11px] font-bold text-[#716053] flex items-center justify-between">
               <span className="flex items-center gap-1">
-                <Info className="w-3.5 h-3.5 text-[#5A5A40]" />
+                <Info className="w-3.5 h-3.5 text-[#716053]" />
                 鼠標焦點指標詳情
               </span>
               <span className="text-[10px] text-slate-400">移至矩陣查看</span>

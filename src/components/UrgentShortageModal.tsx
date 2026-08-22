@@ -132,11 +132,11 @@ export const UrgentShortageModal: React.FC<UrgentShortageModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#5A5A40]/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-[32px] max-w-4xl w-full shadow-2xl p-6 sm:p-8 border border-[#5A5A40]/20 my-8 space-y-6 text-slate-800 font-sans">
+    <div className="fixed inset-0 z-50 bg-[#716053]/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-[32px] max-w-4xl w-full shadow-2xl p-6 sm:p-8 border border-[#716053] my-8 space-y-6 text-slate-800 font-sans">
         
         {/* Modal Header */}
-        <div className="flex items-start justify-between border-b border-[#5A5A40]/10 pb-5">
+        <div className="flex items-start justify-between border-b border-[#716053] pb-5">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-rose-600 text-white flex items-center justify-center shadow-xs shrink-0 animate-pulse">
               <ShieldAlert className="w-6 h-6" />
@@ -218,7 +218,7 @@ export const UrgentShortageModal: React.FC<UrgentShortageModalProps> = ({
             <div className="lg:col-span-6 space-y-4">
               
               {/* Selected Shift Target Card */}
-              <div className="bg-[#f5f5f0] border border-[#5A5A40]/15 p-4 rounded-2xl space-y-2">
+              <div className="bg-[#FAF6EE] border border-[#716053] p-4 rounded-2xl space-y-2">
                 <div className="flex items-center justify-between">
                   <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${zoneConf?.badgeBg}`}>
                     {zoneConf?.icon} {zoneConf?.name}
@@ -231,7 +231,7 @@ export const UrgentShortageModal: React.FC<UrgentShortageModalProps> = ({
                   <span>⏰ 時段：{activeShift.timeRange}</span>
                 </div>
 
-                <div className="pt-2 border-t border-[#5A5A40]/10 flex items-center justify-between text-xs">
+                <div className="pt-2 border-t border-[#716053] flex items-center justify-between text-xs">
                   <span className="text-slate-500 font-semibold">招募進度（缺額超過半數）</span>
                   <span className="font-extrabold text-rose-700">
                     尚缺 {gap} 人 ({activeShift.currentCount} / {activeShift.requiredCount} 人)
@@ -258,7 +258,7 @@ export const UrgentShortageModal: React.FC<UrgentShortageModalProps> = ({
                   <button
                     onClick={() => generateAiPushText(activeShift)}
                     disabled={loading}
-                    className="text-xs text-[#5A5A40] hover:text-slate-900 font-bold flex items-center gap-1 cursor-pointer transition"
+                    className="text-xs text-[#716053] hover:text-slate-900 font-bold flex items-center gap-1 cursor-pointer transition"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
                     <span>重新生成文案</span>
@@ -276,7 +276,7 @@ export const UrgentShortageModal: React.FC<UrgentShortageModalProps> = ({
                       value={pushText}
                       onChange={(e) => setPushText(e.target.value)}
                       rows={8}
-                      className="w-full text-xs text-slate-800 bg-white border border-[#5A5A40]/20 rounded-2xl p-3.5 focus:outline-hidden focus:ring-2 focus:ring-[#5A5A40] font-sans leading-relaxed shadow-xs"
+                      className="w-full text-xs text-slate-800 bg-white border border-[#716053] rounded-2xl p-3.5 focus:outline-hidden focus:ring-2 focus:ring-[#716053] font-sans leading-relaxed shadow-xs"
                       placeholder="文案生成中..."
                     />
                   )}
@@ -383,11 +383,11 @@ export const UrgentShortageModal: React.FC<UrgentShortageModalProps> = ({
                     <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl space-y-1 text-[11px]">
                       <div className="font-bold text-slate-900">{activeShift.title}</div>
                       <div className="text-slate-600 flex items-center gap-1">
-                        <MapPin className="w-3 h-3 text-[#5A5A40]" />
+                        <MapPin className="w-3 h-3 text-[#716053]" />
                         <span>{activeShift.locationDetails} ({zoneConf?.name})</span>
                       </div>
                       <div className="text-slate-600 flex items-center gap-1">
-                        <Calendar className="w-3 h-3 text-[#5A5A40]" />
+                        <Calendar className="w-3 h-3 text-[#716053]" />
                         <span>{activeShift.date} {activeShift.timeRange}</span>
                       </div>
                       <div className="text-rose-700 font-bold pt-1">
@@ -438,14 +438,14 @@ export const UrgentShortageModal: React.FC<UrgentShortageModalProps> = ({
         )}
 
         {/* Modal Footer */}
-        <div className="flex justify-between items-center pt-4 border-t border-[#5A5A40]/10">
+        <div className="flex justify-between items-center pt-4 border-t border-[#716053]">
           <div className="text-xs text-slate-500 font-medium">
             💡 系統建議：缺額超過 50% 之班次，發送 LINE 廣播平均可提升 3 倍補班報名率！
           </div>
 
           <button
             onClick={onClose}
-            className="bg-[#5A5A40] hover:bg-[#484833] text-white font-bold text-xs px-6 py-2.5 rounded-full shadow-xs transition cursor-pointer"
+            className="bg-[#716053] hover:bg-[#5A4A3F] text-white font-bold text-xs px-6 py-2.5 rounded-full shadow-xs transition cursor-pointer"
           >
             關閉缺工發送預覽
           </button>

@@ -74,18 +74,18 @@ export const AiPostModal: React.FC<AiPostModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#5A5A40]/40 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-[32px] max-w-xl w-full shadow-2xl overflow-hidden border border-[#5A5A40]/20 animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 bg-[#716053]/40 backdrop-blur-xs flex items-center justify-center p-4">
+      <div className="bg-white rounded-[32px] max-w-xl w-full shadow-2xl overflow-hidden border border-[#716053] animate-in fade-in zoom-in-95 duration-200">
         
         {/* Modal Header */}
-        <div className="bg-[#5A5A40] p-6 text-white flex justify-between items-center">
+        <div className="bg-[#716053] p-6 text-white flex justify-between items-center">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-2xl bg-white/15 flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-[#E6E2D3]" />
+              <Sparkles className="w-5 h-5 text-[#F5E6D0]" />
             </div>
             <div>
               <h3 className="font-bold font-serif italic text-lg text-white">Gemini AI 志工招募文案產生器</h3>
-              <p className="text-xs text-[#E6E2D3] font-sans">一鍵生成適用於 LINE 社群、FB 粉絲頁與 Google 日曆說明</p>
+              <p className="text-xs text-[#F5E6D0] font-sans">一鍵生成適用於 LINE 社群、FB 粉絲頁與 Google 日曆說明</p>
             </div>
           </div>
 
@@ -98,10 +98,10 @@ export const AiPostModal: React.FC<AiPostModalProps> = ({
         </div>
 
         {/* Shift Summary Box */}
-        <div className="p-4 bg-[#f5f5f0] border-b border-[#5A5A40]/10 flex items-center justify-between text-xs text-slate-700 font-sans">
+        <div className="p-4 bg-[#FAF6EE] border-b border-[#716053] flex items-center justify-between text-xs text-slate-700 font-sans">
           <div>
             <span className="font-bold text-slate-900 font-serif text-sm">{shift.title}</span>
-            <p className="text-[#5A5A40] mt-0.5 font-medium">
+            <p className="text-[#716053] mt-0.5 font-medium">
               📅 {shift.date} ({shift.timeRange}) • 尚缺 {shift.requiredCount - shift.currentCount} 人
             </p>
           </div>
@@ -114,8 +114,8 @@ export const AiPostModal: React.FC<AiPostModalProps> = ({
         <div className="p-6 space-y-4 font-sans">
           {loading ? (
             <div className="py-12 text-center space-y-3">
-              <RefreshCw className="w-8 h-8 text-[#5A5A40] animate-spin mx-auto" />
-              <p className="text-xs font-bold text-[#5A5A40]">
+              <RefreshCw className="w-8 h-8 text-[#716053] animate-spin mx-auto" />
+              <p className="text-xs font-bold text-[#716053]">
                 Gemini 正在撰寫溫暖吸引人的志工招募貼文...
               </p>
               <p className="text-[11px] text-slate-500">將自動嵌入 Google 地圖導航與 LINE 報名連結</p>
@@ -133,10 +133,10 @@ export const AiPostModal: React.FC<AiPostModalProps> = ({
           ) : (
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-[#5A5A40] uppercase tracking-wider">生成之貼文內容預覽：</span>
+                <span className="text-xs font-bold text-[#716053] uppercase tracking-wider">生成之貼文內容預覽：</span>
                 <button
                   onClick={handleGenerate}
-                  className="text-xs text-[#5A5A40] hover:underline font-semibold flex items-center gap-1 cursor-pointer"
+                  className="text-xs text-[#716053] hover:underline font-semibold flex items-center gap-1 cursor-pointer"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                   <span>重新生成</span>
@@ -147,15 +147,15 @@ export const AiPostModal: React.FC<AiPostModalProps> = ({
                 value={postContent}
                 onChange={(e) => setPostContent(e.target.value)}
                 rows={9}
-                className="w-full p-4 border border-[#5A5A40]/15 rounded-2xl bg-[#f5f5f0] text-xs text-slate-800 font-sans focus:outline-none focus:ring-2 focus:ring-[#5A5A40] leading-relaxed"
+                className="w-full p-4 border border-[#716053] rounded-2xl bg-[#FAF6EE] text-xs text-slate-800 font-sans focus:outline-none focus:ring-2 focus:ring-[#716053] leading-relaxed"
               />
             </div>
           )}
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 sm:p-5 bg-[#f5f5f0] border-t border-[#5A5A40]/10 flex flex-wrap items-center justify-between gap-3 font-sans">
-          <div className="text-[11px] text-[#5A5A40] font-medium">
+        <div className="p-4 sm:p-5 bg-[#FAF6EE] border-t border-[#716053] flex flex-wrap items-center justify-between gap-3 font-sans">
+          <div className="text-[11px] text-[#716053] font-medium">
             💡 可複製內容發送至 LINE 志工群組或 FB 粉絲頁
           </div>
 
@@ -163,9 +163,9 @@ export const AiPostModal: React.FC<AiPostModalProps> = ({
             <button
               onClick={handleCopy}
               disabled={!postContent || loading}
-              className="px-4 py-2.5 bg-white border border-[#5A5A40]/15 hover:bg-[#E6E2D3]/30 text-[#5A5A40] rounded-full text-xs font-bold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+              className="px-4 py-2.5 bg-white border border-[#716053] hover:bg-[#F5E6D0]/30 text-[#716053] rounded-full text-xs font-bold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
             >
-              {copied ? <Check className="w-4 h-4 text-[#5A5A40]" /> : <Copy className="w-4 h-4" />}
+              {copied ? <Check className="w-4 h-4 text-[#716053]" /> : <Copy className="w-4 h-4" />}
               <span>{copied ? '已複製！' : '複製貼文'}</span>
             </button>
 
@@ -175,9 +175,9 @@ export const AiPostModal: React.FC<AiPostModalProps> = ({
                 onClose();
               }}
               disabled={!postContent || loading}
-              className="px-5 py-2.5 bg-[#5A5A40] hover:bg-[#484833] text-white rounded-full text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer disabled:opacity-50"
+              className="px-5 py-2.5 bg-[#716053] hover:bg-[#5A4A3F] text-white rounded-full text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer disabled:opacity-50"
             >
-              <MessageSquare className="w-4 h-4 text-[#E6E2D3]" />
+              <MessageSquare className="w-4 h-4 text-[#F5E6D0]" />
               <span>推播至 LINE 模擬器</span>
             </button>
           </div>
