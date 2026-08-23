@@ -39,7 +39,13 @@ export const CheckInPosterModal: React.FC<CheckInPosterModalProps> = ({ onClose 
   // margin 6 rather than the spec minimum of 4: the poster frames the code, and
   // a dark border sitting right on the edge of the quiet zone is a known way to
   // stop a scanner locking on. The extra two modules buy that separation.
-  const svg = useMemo(() => (url ? qrToSvg(url, { modulePx: 10, margin: 6, ec: 'Q' }) : ''), [url]);
+  //
+  // Level M rather than Q. Q survives more damage, but for this URL it costs a
+  // symbol version -- 37 modules across instead of 33 -- and every module gets
+  // smaller for it. On a poster that is read by phone cameras at an angle,
+  // larger modules are worth more than the extra damage tolerance, and M is
+  // what most printed codes use anyway.
+  const svg = useMemo(() => (url ? qrToSvg(url, { modulePx: 12, margin: 6, ec: 'M' }) : ''), [url]);
 
   return (
     <div className="fixed inset-0 z-50 bg-[#716053]/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto print:bg-white print:p-0 print:block">
