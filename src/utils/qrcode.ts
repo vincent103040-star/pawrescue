@@ -319,20 +319,26 @@ function formatBits(ec: EcLevel, maskIndex: number): number {
 
 function placeFormat(m: Matrix, ec: EcLevel, maskIndex: number) {
   const bits = formatBits(ec, maskIndex);
-  const get = (i: number) => (bits >> i) & 1;
 
-  // Copy 1: around the top-left finder.
-  for (let i = 0; i <= 5; i++) set(m, 8, i, get(i));
+  // Most significant bit first. This is the one that bites: write the format
+  // bits in the other order and the symbol still looks perfectly well-formed,
+  // still round-trips through a reader that shares the mistake, and still has
+  // valid Reed-Solomon -- but no real scanner can read it, because the format
+  // string fails its BCH check and the mask and EC level are never recovered.
+  const get = (k: number) => (bits >> (14 - k)) & 1;
+
+  // Copy 1: along row 8, then up column 8 past the top-left finder.
+  for (let k = 0; k <= 5; k++) set(m, 8, k, get(k));
   set(m, 8, 7, get(6));
   set(m, 8, 8, get(7));
   set(m, 7, 8, get(8));
-  for (let i = 9; i <= 14; i++) set(m, 14 - i, 8, get(i));
+  for (let k = 9; k <= 14; k++) set(m, 14 - k, 8, get(k));
 
-  // Copy 2: split between the other two finders. The vertical run is seven
-  // modules, not eight -- (size-8, 8) is the always-dark module and is not
-  // part of the format area. Writing eight here silently overwrote it.
-  for (let i = 0; i <= 6; i++) set(m, m.size - 1 - i, 8, get(i));
-  for (let i = 7; i <= 14; i++) set(m, 8, m.size - 15 + i, get(i));
+  // Copy 2: up column 8 from the bottom edge, then along row 8 to the right.
+  // The vertical run is seven modules, not eight -- (size-8, 8) is the
+  // always-dark module and is not part of the format area.
+  for (let k = 0; k <= 6; k++) set(m, m.size - 1 - k, 8, get(k));
+  for (let k = 7; k <= 14; k++) set(m, 8, m.size - 15 + k, get(k));
 }
 
 function placeVersionInfo(m: Matrix, version: number) {
@@ -409,8 +415,11 @@ function penalty(m: Matrix): number {
 /**
  * Encodes `text` and returns the finished module grid: `true` = dark.
  * Does not include the quiet zone -- add margin when rendering.
+ *
+ * `forceMask` pins the mask pattern instead of picking the best-scoring one.
+ * Only used to compare output against a reference encoder; leave it unset.
  */
-export function encodeQr(text: string, ec: EcLevel = 'M'): boolean[][] {
+export function encodeQr(text: string, ec: EcLevel = 'M', forceMask?: number): boolean[][] {
   const bytes = new TextEncoder().encode(text);
   const version = pickVersion(bytes.length, ec);
   const size = version * 4 + 17;
@@ -431,6 +440,7 @@ export function encodeQr(text: string, ec: EcLevel = 'M'): boolean[][] {
   let best: Matrix | null = null;
   let bestScore = Infinity;
   for (let mask = 0; mask < 8; mask++) {
+    if (forceMask !== undefined && mask !== forceMask) continue;
     const candidate = applyMask(base, mask);
     placeFormat(candidate, ec, mask);
     placeVersionInfo(candidate, version);
