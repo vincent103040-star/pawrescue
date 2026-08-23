@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { PositionShift, ShelterLocation, ZoneCategory } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { buildGoogleCalendarLink } from '../utils/googleCalendar';
+import { authFetch } from '../utils/session';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -85,7 +86,7 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
   const handleSaveLocation = async () => {
     setIsSavingLocation(true);
     try {
-      const res = await fetch('/api/admin/shelter-location', {
+      const res = await authFetch('/api/admin/shelter-location', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(locationDraft)

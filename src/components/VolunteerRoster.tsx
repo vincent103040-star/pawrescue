@@ -3,6 +3,7 @@ import { VolunteerProfile, PromotionRequest } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { Users, Award, Clock, Search, Shield, Phone, Mail, MessageSquare, Star, Plus, Check, X, Trophy, TrendingUp, Medal, Sparkles, ArrowUpDown, Filter, Download, FileText, ChevronLeft, ChevronRight, BellRing, Edit2, Trash2, Save } from 'lucide-react';
 import { CertificateModal } from './CertificateModal';
+import { authFetch } from '../utils/session';
 
 interface VolunteerRosterProps {
   volunteers: VolunteerProfile[];
@@ -55,7 +56,7 @@ export const VolunteerRoster: React.FC<VolunteerRosterProps> = ({
   const handleSaveEdit = async (email: string) => {
     setIsSavingEdit(true);
     try {
-      const res = await fetch(`/api/admin/volunteers/${encodeURIComponent(email)}`, {
+      const res = await authFetch(`/api/admin/volunteers/${encodeURIComponent(email)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -88,7 +89,7 @@ export const VolunteerRoster: React.FC<VolunteerRosterProps> = ({
 
     setDeletingEmail(vol.email);
     try {
-      const res = await fetch(`/api/admin/volunteers/${encodeURIComponent(vol.email)}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/admin/volunteers/${encodeURIComponent(vol.email)}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
         onVolunteersChanged?.();
@@ -127,7 +128,7 @@ export const VolunteerRoster: React.FC<VolunteerRosterProps> = ({
 
   const handleApprovePromotion = (id: string) => {
     setReviewingId(id);
-    fetch(`/api/promotions/${id}/approve`, { method: 'POST' })
+    authFetch(`/api/promotions/${id}/approve`, { method: 'POST' })
       .then(res => res.json())
       .then(() => refreshPromotionRequests())
       .finally(() => setReviewingId(null));
@@ -135,7 +136,7 @@ export const VolunteerRoster: React.FC<VolunteerRosterProps> = ({
 
   const handleRejectPromotion = (id: string) => {
     setReviewingId(id);
-    fetch(`/api/promotions/${id}/reject`, {
+    authFetch(`/api/promotions/${id}/reject`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reviewNote: rejectNote.trim() || undefined })

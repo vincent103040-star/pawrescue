@@ -3,6 +3,7 @@ import { BookOpen, Save, Plus, Trash2, FileText, Video, Upload, Loader2, ShieldA
 import { SopContent, SopSection, SopDocument, SopVideo, ShiftTemplate } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { SopDocumentReader } from './SopDocumentReader';
+import { authFetch } from '../utils/session';
 
 interface AdminSopManagerProps {
   onSendLineToast: (msg: string) => void;
@@ -43,7 +44,7 @@ async function uploadFileRaw(
     headers['X-Upload-Description'] = encodeURIComponent(meta.description);
   }
 
-  const res = await fetch(url, { method: 'POST', headers, body: file });
+  const res = await authFetch(url, { method: 'POST', headers, body: file });
 
   // An oversized upload can be rejected with a non-JSON response; read as text
   // first so we surface a real message instead of a JSON parse error.
@@ -125,7 +126,7 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
 
   const handleDeleteShiftTemplate = async (id: string) => {
     try {
-      await fetch(`/api/admin/shift-templates/${id}`, { method: 'DELETE' });
+      await authFetch(`/api/admin/shift-templates/${id}`, { method: 'DELETE' });
       setShiftTemplates(prev => prev.filter(t => t.id !== id));
       onSendLineToast('🗑️ 已刪除該班次範本卡片。');
     } catch {
@@ -137,7 +138,7 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
     if (!content) return;
     setIsSaving(true);
     try {
-      const res = await fetch('/api/admin/sop-content', {
+      const res = await authFetch('/api/admin/sop-content', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(content)
@@ -231,7 +232,7 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
 
   const handleDeleteDoc = async (id: string) => {
     try {
-      await fetch(`/api/admin/sop-documents/${id}`, { method: 'DELETE' });
+      await authFetch(`/api/admin/sop-documents/${id}`, { method: 'DELETE' });
       setDocuments(prev => prev.filter(d => d.id !== id));
       onSendLineToast('🗑️ 已刪除該份文件與其 AI 參考資料。');
     } catch {
@@ -266,7 +267,7 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
 
   const handleDeleteVideo = async (id: string) => {
     try {
-      await fetch(`/api/admin/sop-videos/${id}`, { method: 'DELETE' });
+      await authFetch(`/api/admin/sop-videos/${id}`, { method: 'DELETE' });
       setVideos(prev => prev.filter(v => v.id !== id));
       onSendLineToast('🗑️ 已刪除該部教學影片。');
     } catch {
