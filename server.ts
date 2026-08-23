@@ -6,7 +6,7 @@ import { gzipSync } from 'zlib';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
-import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, adjustShiftCount, getAllApplications, insertApplication, updateApplicationStatus, deleteApplication, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation } from './db';
+import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, adjustShiftCount, getAllApplications, insertApplication, updateApplicationStatus, deleteApplication, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount } from './db';
 import { PDFParse } from 'pdf-parse';
 import type { SopContent, SopDocument, SopVideo } from './src/types';
 
@@ -2130,6 +2130,36 @@ ${contextText}
     } catch (error: any) {
       console.error('Fetch Shelter Location Error:', error);
       return res.status(500).json({ success: false, error: error.message || '讀取地點失敗' });
+    }
+  });
+
+  // LINE official account shown in the UI for volunteers to add as a friend.
+  // GET is public; PUT is admin-only. Same shape as shelter-location above.
+  app.get('/api/line-official-account', (req, res) => {
+    try {
+      return res.json({ success: true, account: getLineOfficialAccount() });
+    } catch (error: any) {
+      console.error('Fetch LINE Official Account Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '讀取 LINE 官方帳號失敗' });
+    }
+  });
+
+  app.put('/api/admin/line-official-account', (req, res) => {
+    try {
+      const basicId = String(req.body?.basicId || '').trim();
+      const displayName = String(req.body?.displayName || '').trim();
+      const avatarUrl = String(req.body?.avatarUrl || '').trim();
+      if (!basicId || !displayName) {
+        return res.status(400).json({ success: false, error: '缺少 LINE ID 或顯示名稱' });
+      }
+      if (!basicId.startsWith('@')) {
+        return res.status(400).json({ success: false, error: 'LINE ID 需以 @ 開頭，例如 @233bvcuk' });
+      }
+      const updated = updateLineOfficialAccount({ basicId, displayName, avatarUrl });
+      return res.json({ success: true, account: updated });
+    } catch (error: any) {
+      console.error('Update LINE Official Account Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '更新 LINE 官方帳號失敗' });
     }
   });
 

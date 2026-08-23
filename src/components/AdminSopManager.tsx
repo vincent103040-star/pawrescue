@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { BookOpen, Save, Plus, Trash2, FileText, Video, Upload, Loader2, ShieldAlert, CalendarClock, Download } from 'lucide-react';
-import { SopContent, SopSection, SopDocument, SopVideo, ShiftTemplate } from '../types';
+import { BookOpen, Save, Plus, Trash2, FileText, Video, Upload, Loader2, ShieldAlert, CalendarClock, Download, MessageSquare, Edit2, X, Check } from 'lucide-react';
+import { SopContent, SopSection, SopDocument, SopVideo, ShiftTemplate, LineOfficialAccount } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { SopDocumentReader } from './SopDocumentReader';
 import { authFetch } from '../utils/session';
@@ -96,6 +96,51 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
   const docFileInputRef = useRef<HTMLInputElement>(null);
   const videoFileInputRef = useRef<HTMLInputElement>(null);
 
+  // LINE official account shown to volunteers as "add friend" -- same
+  // DB-backed single row as shelter_location, edited inline here rather than
+  // a separate settings page since this is already where the other
+  // admin-maintained-but-rarely-changed config lives.
+  const [lineOfficialAccount, setLineOfficialAccount] = useState<LineOfficialAccount | null>(null);
+  const [isEditingLineOa, setIsEditingLineOa] = useState(false);
+  const [lineOaDraft, setLineOaDraft] = useState({ basicId: '', displayName: '', avatarUrl: '' });
+  const [isSavingLineOa, setIsSavingLineOa] = useState(false);
+
+  const loadLineOfficialAccount = () => {
+    fetch('/api/line-official-account')
+      .then(res => res.json())
+      .then(data => { if (data.success) setLineOfficialAccount(data.account); })
+      .catch(() => { /* best-effort */ });
+  };
+
+  const handleStartEditLineOa = () => {
+    if (!lineOfficialAccount) return;
+    setLineOaDraft({ ...lineOfficialAccount });
+    setIsEditingLineOa(true);
+  };
+
+  const handleSaveLineOa = async () => {
+    setIsSavingLineOa(true);
+    try {
+      const res = await authFetch('/api/admin/line-official-account', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(lineOaDraft)
+      });
+      const data = await res.json();
+      if (data.success) {
+        setLineOfficialAccount(data.account);
+        setIsEditingLineOa(false);
+        onSendLineToast('已更新 LINE 官方帳號設定！');
+      } else {
+        onSendLineToast('更新失敗：' + (data.error || '未知錯誤'));
+      }
+    } catch (err) {
+      onSendLineToast('更新失敗：' + (err && err.message ? err.message : '網路連線異常'));
+    } finally {
+      setIsSavingLineOa(false);
+    }
+  };
+
   const loadContent = () => {
     setIsLoading(true);
     fetch('/api/sop-content')
@@ -121,6 +166,7 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
   useEffect(() => {
     loadContent();
     loadShiftTemplates();
+    loadLineOfficialAccount();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -308,6 +354,100 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
           {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 text-amber-300" />}
           <span>{isSaving ? '儲存並產生向量中...' : '儲存並同步至志工端'}</span>
         </button>
+      </div>
+
+      {/* LINE Official Account */}
+      <div className="bg-white p-6 rounded-[28px] border border-[#716053] shadow-xs space-y-3">
+        <div className="flex items-center justify-between gap-2 border-b border-[#716053] pb-2">
+          <h3 className="font-bold font-serif text-slate-900 text-sm flex items-center gap-2">
+            <MessageSquare className="w-4 h-4 text-[#716053]" />
+            <span>LINE 官方帳號設定</span>
+          </h3>
+          {!isEditingLineOa && lineOfficialAccount && (
+            <button
+              onClick={handleStartEditLineOa}
+              className="text-[#716053] hover:bg-[#FAF6EE] p-1.5 rounded-lg transition cursor-pointer"
+              title="編輯 LINE 官方帳號"
+            >
+              <Edit2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        {!lineOfficialAccount ? (
+          <p className="text-xs text-slate-400">載入中...</p>
+        ) : !isEditingLineOa ? (
+          <div className="flex items-center gap-3 text-xs">
+            {lineOfficialAccount.avatarUrl ? (
+              <img src={lineOfficialAccount.avatarUrl} alt="" className="w-10 h-10 rounded-full object-cover border border-[#716053] shrink-0" />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-[#06C755] text-white flex items-center justify-center shrink-0">
+                <MessageSquare className="w-5 h-5" />
+              </div>
+            )}
+            <div>
+              <p className="font-bold text-slate-900">{lineOfficialAccount.displayName}</p>
+              <p className="text-slate-500">{lineOfficialAccount.basicId}</p>
+            </div>
+            <a
+              href={`https://line.me/R/ti/p/${encodeURIComponent(lineOfficialAccount.basicId)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ml-auto text-[11px] font-bold text-[#06C755] hover:underline"
+            >
+              預覽加入好友連結
+            </a>
+          </div>
+        ) : (
+          <div className="space-y-2 text-xs">
+            <div>
+              <label className="block font-bold text-[#716053] mb-1">LINE ID（@ 開頭，志工搜尋加好友用）</label>
+              <input
+                type="text"
+                value={lineOaDraft.basicId}
+                onChange={e => setLineOaDraft({ ...lineOaDraft, basicId: e.target.value })}
+                placeholder="@233bvcuk"
+                className="w-full p-2.5 bg-[#FAF6EE] border border-[#716053] rounded-xl focus:ring-2 focus:ring-amber-400 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-[#716053] mb-1">顯示名稱</label>
+              <input
+                type="text"
+                value={lineOaDraft.displayName}
+                onChange={e => setLineOaDraft({ ...lineOaDraft, displayName: e.target.value })}
+                className="w-full p-2.5 bg-[#FAF6EE] border border-[#716053] rounded-xl focus:ring-2 focus:ring-amber-400 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-[#716053] mb-1">大頭貼網址（選填）</label>
+              <input
+                type="text"
+                value={lineOaDraft.avatarUrl}
+                onChange={e => setLineOaDraft({ ...lineOaDraft, avatarUrl: e.target.value })}
+                placeholder="https://..."
+                className="w-full p-2.5 bg-[#FAF6EE] border border-[#716053] rounded-xl focus:ring-2 focus:ring-amber-400 focus:outline-none"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                onClick={() => setIsEditingLineOa(false)}
+                className="px-3 py-1.5 rounded-xl font-bold text-slate-500 hover:bg-slate-100 cursor-pointer flex items-center gap-1"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>取消</span>
+              </button>
+              <button
+                onClick={handleSaveLineOa}
+                disabled={isSavingLineOa || !lineOaDraft.basicId.trim() || !lineOaDraft.displayName.trim()}
+                className="px-4 py-1.5 rounded-xl font-bold bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 cursor-pointer flex items-center gap-1"
+              >
+                {isSavingLineOa ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                <span>{isSavingLineOa ? '儲存中...' : '儲存'}</span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Banner Text */}

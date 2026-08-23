@@ -2,9 +2,9 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'fs';
 import path from 'path';
 import { randomUUID, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
-import { VOLUNTEER_PROFILES, INITIAL_ATTENDANCE_RECORDS, INITIAL_SHIFTS, INITIAL_APPLICATIONS, DEFAULT_SHELTER_LOCATION } from './src/data/mockData';
+import { VOLUNTEER_PROFILES, INITIAL_ATTENDANCE_RECORDS, INITIAL_SHIFTS, INITIAL_APPLICATIONS, DEFAULT_SHELTER_LOCATION, DEFAULT_LINE_OFFICIAL_ACCOUNT } from './src/data/mockData';
 import { RULEBOOK_CORPUS } from './src/data/rulebookCorpus';
-import type { VolunteerProfile, AttendanceRecord, PositionShift, VolunteerApplication, SopContent, SopSection, SopDocument, SopVideo, PromotionRequest, ShiftTemplate, ShelterLocation } from './src/types';
+import type { VolunteerProfile, AttendanceRecord, PositionShift, VolunteerApplication, SopContent, SopSection, SopDocument, SopVideo, PromotionRequest, ShiftTemplate, ShelterLocation, LineOfficialAccount } from './src/types';
 
 const dataDir = path.join(process.cwd(), 'data');
 fs.mkdirSync(dataDir, { recursive: true });
@@ -944,6 +944,40 @@ export function updateShelterLocation(updates: {
     WHERE id = 1
   `).run(next.name, next.address, next.openHours, next.googleMapsUrl, next.lat, next.lng, next.geocoded ? 1 : 0);
   return getShelterLocation();
+}
+
+// ============================================================================
+// LINE official account (Messaging API channel volunteers add as a friend)
+// ----------------------------------------------------------------------------
+// Same single-row pattern as shelter_location. Was previously a hardcoded
+// mention in the UI text with no actual account behind it; now admin-editable
+// so the ID shown always matches whichever channel LINE_CHANNEL_ACCESS_TOKEN
+// in .env.local actually points at.
+// ============================================================================
+db.exec(`
+  CREATE TABLE IF NOT EXISTS line_official_account (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    basicId TEXT NOT NULL,
+    displayName TEXT NOT NULL,
+    avatarUrl TEXT NOT NULL DEFAULT ''
+  )
+`);
+
+const lineOaSeedCount = db.prepare('SELECT COUNT(*) AS c FROM line_official_account').get() as { c: number };
+if (lineOaSeedCount.c === 0) {
+  db.prepare('INSERT INTO line_official_account (id, basicId, displayName, avatarUrl) VALUES (1, ?, ?, ?)')
+    .run(DEFAULT_LINE_OFFICIAL_ACCOUNT.basicId, DEFAULT_LINE_OFFICIAL_ACCOUNT.displayName, DEFAULT_LINE_OFFICIAL_ACCOUNT.avatarUrl);
+}
+
+export function getLineOfficialAccount(): LineOfficialAccount {
+  const row = db.prepare('SELECT * FROM line_official_account WHERE id = 1').get() as any;
+  return { basicId: row.basicId, displayName: row.displayName, avatarUrl: row.avatarUrl };
+}
+
+export function updateLineOfficialAccount(updates: { basicId: string; displayName: string; avatarUrl?: string }): LineOfficialAccount {
+  db.prepare('UPDATE line_official_account SET basicId = ?, displayName = ?, avatarUrl = ? WHERE id = 1')
+    .run(updates.basicId, updates.displayName, updates.avatarUrl ?? '');
+  return getLineOfficialAccount();
 }
 
 // ============================================================================

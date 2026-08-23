@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { PositionShift, ShelterLocation, SkillLevel, ZoneCategory, LineNotificationPreferences, VolunteerUserSession, AttendanceRecord, VolunteerApplication, PromotionRequest } from '../types';
+import { PositionShift, ShelterLocation, SkillLevel, ZoneCategory, LineNotificationPreferences, VolunteerUserSession, AttendanceRecord, VolunteerApplication, PromotionRequest, LineOfficialAccount } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { VolunteerWelcomeCard } from './VolunteerWelcomeCard';
 import { ShiftCalendarView } from './ShiftCalendarView';
@@ -103,6 +103,18 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
 }) => {
   const [activePortalTab, setActivePortalTab] = useState<'shifts' | 'growth' | 'settings'>(activeSection);
   const [viewMode, setViewMode] = useState<'calendar' | 'grid'>('calendar');
+
+  // The LINE official account to add as a friend for push notifications --
+  // admin-editable (see AdminSopManager's settings card), so this always
+  // matches whichever channel is actually configured instead of a hardcoded
+  // claim in the JSX.
+  const [lineOfficialAccount, setLineOfficialAccount] = useState<LineOfficialAccount | null>(null);
+  useEffect(() => {
+    fetch('/api/line-official-account')
+      .then(res => res.json())
+      .then(data => { if (data.success) setLineOfficialAccount(data.account); })
+      .catch(() => { /* best-effort */ });
+  }, []);
 
   // Synchronize when activeSection prop changes
   React.useEffect(() => {
@@ -1282,12 +1294,23 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                 <p className="text-[10px] text-slate-400 mt-1">發生意外時，社工督導會依此聯絡資訊通知您的家人。</p>
               </div>
 
-              <div className="bg-[#FFFDF7] p-3 rounded-xl border border-[#716053] text-[11px] text-[#716053] space-y-1">
+              <div className="bg-[#FFFDF7] p-3 rounded-xl border border-[#716053] text-[11px] text-[#716053] space-y-2">
                 <div className="font-bold flex items-center gap-1">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>LINE @浪浪家園 服務號帳號連線</span>
+                  <span>{lineOfficialAccount?.displayName || '浪浪家園'} LINE 官方帳號</span>
                 </div>
                 <p className="text-slate-500">此資料在您報名班次時會自動填入，方便快捷完成線上預約。</p>
+                {lineOfficialAccount && (
+                  <a
+                    href={`https://line.me/R/ti/p/${encodeURIComponent(lineOfficialAccount.basicId)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 bg-[#06C755] hover:brightness-95 text-white font-bold px-3 py-1.5 rounded-full transition"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    <span>加入好友（{lineOfficialAccount.basicId}）</span>
+                  </a>
+                )}
               </div>
 
               {/* Real LINE Login link status */}

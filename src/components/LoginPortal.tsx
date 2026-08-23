@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { PawPrint, Shield, Heart, Sparkles, Calendar, MapPin, MessageSquare, CheckCircle2, ArrowRight, User, Phone, Users, ShieldCheck, Award, QrCode, BookOpen, Clock, HeartHandshake, ChevronRight, Check, Smartphone, KeyRound, Star, Quote, Home, Eye, EyeOff, AlertCircle } from 'lucide-react';
-import { AdminUserSession, VolunteerUserSession } from '../types';
+import { AdminUserSession, VolunteerUserSession, LineOfficialAccount } from '../types';
 import { GooglePhoneAuthModal } from './GooglePhoneAuthModal';
 import { startLineLogin } from '../utils/lineLogin';
 import { setToken } from '../utils/session';
@@ -90,6 +90,17 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
   const [showAdminPassword, setShowAdminPassword] = useState(true);
   const [adminLoginError, setAdminLoginError] = useState('');
 
+  // Same admin-editable account shown in the volunteer settings tab -- see
+  // VolunteerPortal.tsx. Shown here so the header badge is a real, clickable
+  // account instead of a static "connected" claim with nothing behind it.
+  const [lineOfficialAccount, setLineOfficialAccount] = useState<LineOfficialAccount | null>(null);
+  useEffect(() => {
+    fetch('/api/line-official-account')
+      .then(res => res.json())
+      .then(data => { if (data.success) setLineOfficialAccount(data.account); })
+      .catch(() => { /* best-effort */ });
+  }, []);
+
   // Lightweight cursor-follow paw icon, scoped only to the adoption success wall —
   // a single tracked element (not a per-mousemove DOM/canvas trail), so it stays cheap
   // even with real network-loaded photos. Skipped entirely if the user prefers reduced motion.
@@ -178,10 +189,18 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
               <span className="font-semibold text-slate-700">Google 地圖 / 日曆串聯</span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-              <span className="font-semibold text-slate-700">LINE 官方帳號連線中</span>
-            </div>
+            {lineOfficialAccount && (
+              <a
+                href={`https://line.me/R/ti/p/${encodeURIComponent(lineOfficialAccount.basicId)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 hover:underline"
+                title="加入 LINE 好友"
+              >
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                <span className="font-semibold text-slate-700">{lineOfficialAccount.displayName}（{lineOfficialAccount.basicId}）</span>
+              </a>
+            )}
           </div>
         </div>
       </header>

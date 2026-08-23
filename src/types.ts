@@ -15,6 +15,16 @@ export interface ShelterLocation {
   geocoded: boolean; // false if GOOGLE_MAPS_API_KEY isn't set / geocoding hasn't succeeded yet
 }
 
+// The LINE official account (Messaging API channel) volunteers add as a
+// friend for push notifications / rich menu check-in. Admin-editable so the
+// account showing in the UI is never a hardcoded value someone forgot to
+// update after switching channels.
+export interface LineOfficialAccount {
+  basicId: string;       // e.g. "@233bvcuk" -- what people search for in LINE
+  displayName: string;
+  avatarUrl: string;     // '' if not set; UI falls back to a generic icon
+}
+
 export interface ZoneConfig {
   id: ZoneCategory;
   name: string;

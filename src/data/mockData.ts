@@ -1,4 +1,4 @@
-import { ShelterLocation, ZoneConfig, PositionShift, VolunteerApplication, VolunteerProfile, AttendanceRecord } from '../types';
+import { ShelterLocation, ZoneConfig, PositionShift, VolunteerApplication, VolunteerProfile, AttendanceRecord, LineOfficialAccount } from '../types';
 
 // Seed value only -- db.ts writes this into the shelter_location table on
 // first run. After that, the admin-edited + server-geocoded row in the
@@ -12,6 +12,12 @@ export const DEFAULT_SHELTER_LOCATION: ShelterLocation = {
   lat: 24.9620,
   lng: 121.5300,
   geocoded: false
+};
+
+export const DEFAULT_LINE_OFFICIAL_ACCOUNT: LineOfficialAccount = {
+  basicId: '@233bvcuk',
+  displayName: '浪浪家園 PawRescue',
+  avatarUrl: ''
 };
 
 export const ZONE_CONFIGS: Record<string, ZoneConfig> = {
