@@ -146,6 +146,9 @@ export interface AttendanceRecord {
   locationVerified: boolean;
   distanceMeters?: number;
   qrCodeToken: string;
+  /** 'self' = volunteer's own phone, GPS + on-site code verified server-side.
+      'staff' = a coordinator recorded it on their behalf. */
+  checkInMethod?: 'self' | 'staff';
   // Service Feedback Fields
   rating?: number; // 1 - 5 stars
   feedbackComment?: string;

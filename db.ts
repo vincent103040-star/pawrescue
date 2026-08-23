@@ -352,6 +352,12 @@ db.exec(`
   )
 `);
 
+// Migration: how a check-in was actually proved. 'self' = the volunteer's own
+// phone (GPS + on-site code, both verified server-side); 'staff' = a
+// coordinator recorded it for someone without a usable phone. Kept explicit so
+// a record's trustworthiness is visible rather than assumed.
+try { db.exec("ALTER TABLE attendance_records ADD COLUMN checkInMethod TEXT NOT NULL DEFAULT 'staff'"); } catch { /* already added */ }
+
 // Migration: the check-out "notification sent" flag used to be named smsSent from
 // back when this was a simulated SMS feature -- it's now a real LINE push (see
 // server.ts's /api/attendance/:id/check-out), so rename the column to match on any
@@ -369,15 +375,15 @@ const attendanceSeedCount = db.prepare('SELECT COUNT(*) AS c FROM attendance_rec
 if (attendanceSeedCount.c === 0) {
   const insertSeed = db.prepare(`
     INSERT INTO attendance_records
-      (id, applicationId, volunteerName, volunteerPhone, lineId, shiftId, shiftTitle, branchId, zone, date, checkInTime, checkOutTime, status, hoursLogged, locationVerified, distanceMeters, qrCodeToken, rating, feedbackComment, feedbackSubmittedAt, lineReminderSent, photoUrl)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, applicationId, volunteerName, volunteerPhone, lineId, shiftId, shiftTitle, branchId, zone, date, checkInTime, checkOutTime, status, hoursLogged, locationVerified, distanceMeters, qrCodeToken, checkInMethod, rating, feedbackComment, feedbackSubmittedAt, lineReminderSent, photoUrl)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   for (const r of INITIAL_ATTENDANCE_RECORDS) {
     insertSeed.run(
       r.id, r.applicationId || null, r.volunteerName, r.volunteerPhone || null, r.lineId || null,
       r.shiftId, r.shiftTitle, 'shelter', r.zone, r.date, r.checkInTime, r.checkOutTime || null,
       r.status, r.hoursLogged ?? null, r.locationVerified ? 1 : 0, r.distanceMeters ?? null,
-      r.qrCodeToken, r.rating ?? null, r.feedbackComment || null, r.feedbackSubmittedAt || null,
+      r.qrCodeToken, r.checkInMethod || 'staff', r.rating ?? null, r.feedbackComment || null, r.feedbackSubmittedAt || null,
       r.lineReminderSent ? 1 : 0, r.photoUrl || null
     );
   }
@@ -401,6 +407,7 @@ function rowToAttendanceRecord(row: any): AttendanceRecord {
     locationVerified: !!row.locationVerified,
     distanceMeters: row.distanceMeters ?? undefined,
     qrCodeToken: row.qrCodeToken,
+    checkInMethod: row.checkInMethod === 'self' ? 'self' : 'staff',
     rating: row.rating ?? undefined,
     feedbackComment: row.feedbackComment || undefined,
     feedbackSubmittedAt: row.feedbackSubmittedAt || undefined,
@@ -944,6 +951,40 @@ export function updateShelterLocation(updates: {
     WHERE id = 1
   `).run(next.name, next.address, next.openHours, next.googleMapsUrl, next.lat, next.lng, next.geocoded ? 1 : 0);
   return getShelterLocation();
+}
+
+/**
+ * An open (not yet checked out) record for this volunteer on this shift, if any.
+ * Used to reject a duplicate check-in server-side rather than trusting the page
+ * to have noticed.
+ */
+export function getOpenAttendanceFor(volunteerName: string, shiftId: string): AttendanceRecord | null {
+  const row = db.prepare(
+    "SELECT * FROM attendance_records WHERE volunteerName = ? AND shiftId = ? AND status = 'checked_in'"
+  ).get(volunteerName, shiftId);
+  return row ? rowToAttendanceRecord(row) : null;
+}
+
+// ============================================================================
+// Small key/value store for server-side secrets that must survive a restart.
+// ----------------------------------------------------------------------------
+// The on-site check-in code is an HMAC of the current time window, so the
+// secret behind it has to be stable -- otherwise every deploy would invalidate
+// codes people are looking at. Generated once, never leaves the server.
+// ============================================================================
+db.exec(`
+  CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  )
+`);
+
+export function getAppSecret(name: string): string {
+  const row = db.prepare('SELECT value FROM app_settings WHERE key = ?').get(name) as any;
+  if (row) return row.value;
+  const generated = randomBytes(32).toString('hex');
+  db.prepare('INSERT INTO app_settings (key, value) VALUES (?, ?)').run(name, generated);
+  return generated;
 }
 
 // ============================================================================

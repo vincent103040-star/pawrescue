@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AttendanceRecord, PositionShift, VolunteerApplication, VolunteerProfile, ShelterLocation } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { QrCode, Camera, CheckCircle2, Clock, MapPin, AlertCircle, LogOut, LogIn, UserCheck, ShieldCheck, Sparkles, RefreshCw, X, Compass, Navigation, Radio, AlertTriangle, Star, Send, MessageSquare, ThumbsUp, Heart } from 'lucide-react';
+import { authFetch } from '../utils/session';
 
 interface VolunteerCheckInModalProps {
   shifts: PositionShift[];
@@ -10,7 +11,7 @@ interface VolunteerCheckInModalProps {
   shelterLocation: ShelterLocation;
   attendanceRecords: AttendanceRecord[];
   onClose: () => void;
-  onCheckInSubmit: (record: Omit<AttendanceRecord, 'id'>) => void;
+  onCheckInSubmit: (record: AttendanceRecord) => void;
   onCheckOutSubmit: (recordId: string, checkOutTime: string, hoursLogged: number, rating?: number, comment?: string, photo?: { base64: string; mimeType: string }) => void;
   onSendLineToast: (msg: string) => void;
 }
@@ -62,10 +63,8 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
   const [selectedLineId, setSelectedLineId] = useState<string>('');
   const [selectedShiftId, setSelectedShiftId] = useState<string>('');
   
-  // Simulator animation states
-  const [isScanning, setIsScanning] = useState(false);
-  const [scanSuccess, setScanSuccess] = useState(false);
-  const [scannedResult, setScannedResult] = useState<string | null>(null);
+  // Staff-assisted check-in submission state
+  const [isSubmittingCheckIn, setIsSubmittingCheckIn] = useState(false);
 
   // Feedback + LINE reminder state upon check-out
   const [pendingFeedbackRecord, setPendingFeedbackRecord] = useState<AttendanceRecord | null>(null);
@@ -123,12 +122,33 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
     }
   };
 
-  // Geofencing states
-  const [presetLocationMode, setPresetLocationMode] = useState<'on_site' | 'nearby' | 'far'>('on_site');
-  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [isLocatingGPS, setIsLocatingGPS] = useState(false);
 
-  const GEOFENCE_RADIUS_METERS = 500;
+  // The rotating code this station displays. Volunteers standing at the desk
+  // type it into their own phone; the server re-derives and checks it (see
+  // GET /api/admin/attendance/site-code). Nothing here decides anything --
+  // this screen is only a display.
+  const [siteCode, setSiteCode] = useState<{ code: string; expiresInSeconds: number } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const pull = () => {
+      authFetch('/api/admin/attendance/site-code')
+        .then(res => res.json())
+        .then(data => { if (!cancelled && data.success) setSiteCode({ code: data.code, expiresInSeconds: data.expiresInSeconds }); })
+        .catch(() => { /* the countdown below just stalls; next tick retries */ });
+    };
+    pull();
+    // Tick the countdown locally every second, and re-pull when it runs out so
+    // the screen never shows a code the server has already rotated past.
+    const timer = setInterval(() => {
+      setSiteCode(prev => {
+        if (!prev) return prev;
+        if (prev.expiresInSeconds <= 1) { pull(); return prev; }
+        return { ...prev, expiresInSeconds: prev.expiresInSeconds - 1 };
+      });
+    }, 1000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, []);
 
   // Set default selected values when modal opens
   useEffect(() => {
@@ -149,63 +169,6 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
 
   const currentShift = shifts.find(s => s.id === selectedShiftId) || shifts[0];
 
-  // Sync userCoords based on the shelter's single location and preset location mode
-  useEffect(() => {
-    if (presetLocationMode === 'on_site') {
-      setUserCoords({
-        lat: shelterLocation.lat + 0.0006,
-        lng: shelterLocation.lng + 0.0005
-      });
-    } else if (presetLocationMode === 'nearby') {
-      setUserCoords({
-        lat: shelterLocation.lat + 0.0028,
-        lng: shelterLocation.lng + 0.0022
-      });
-    } else if (presetLocationMode === 'far') {
-      setUserCoords({
-        lat: shelterLocation.lat + 0.0145,
-        lng: shelterLocation.lng + 0.0115
-      });
-    }
-  }, [shelterLocation, presetLocationMode]);
-
-  // Calculated distance in meters
-  const currentDistanceMeters = userCoords
-    ? calculateDistanceMeters(userCoords.lat, userCoords.lng, shelterLocation.lat, shelterLocation.lng)
-    : 85;
-
-  const isWithinGeofence = currentDistanceMeters <= GEOFENCE_RADIUS_METERS;
-
-  // Real GPS fetch handler
-  const handleGetRealGPS = () => {
-    if (!navigator.geolocation) {
-      onSendLineToast('⚠️ 您的裝置或瀏覽器不支援 GPS 定位服務');
-      return;
-    }
-    setIsLocatingGPS(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setIsLocatingGPS(false);
-        setUserCoords({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude
-        });
-        const dist = calculateDistanceMeters(
-          pos.coords.latitude,
-          pos.coords.longitude,
-          shelterLocation.lat,
-          shelterLocation.lng
-        );
-        onSendLineToast(`📡 已取得您真實 GPS 定位！距離【${shelterLocation.name}】相距 ${dist} 公尺 (${dist <= GEOFENCE_RADIUS_METERS ? '🟢 圍欄內' : '🔴 超出圍欄'})`);
-      },
-      (err) => {
-        setIsLocatingGPS(false);
-        onSendLineToast(`⚠️ 無法定位 (錯誤: ${err.message})，已為您切換至模擬位置。`);
-      },
-      { enableHighAccuracy: true, timeout: 5000 }
-    );
-  };
-
   // Current checked-in count
   const checkedInCount = attendanceRecords.filter(r => r.status === 'checked_in').length;
   const completedCount = attendanceRecords.filter(r => r.status === 'completed').length;
@@ -218,67 +181,33 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
     return `${dateStr} ${timeStr}`;
   };
 
-  // Simulate scanning QR Code
-  const handleSimulateQRScan = () => {
-    if (!selectedVolunteerName || !selectedShiftId) {
-      onSendLineToast('⚠️ 請選擇或輸入志工姓名與簽到班次');
-      return;
+  // Staff-assisted check-in: a coordinator recording arrival for someone whose
+  // phone is dead or who doesn't have one. It goes through the same server
+  // endpoint as a volunteer's own check-in, which stamps the record 'staff' so
+  // it's never mistaken for a self-verified one. No geofence here on purpose --
+  // this machine's location says nothing about where the volunteer is; the
+  // coordinator standing in front of them is the verification.
+  const handleConfirmCheckIn = async () => {
+    if (!selectedVolunteerName.trim() || !selectedShiftId || isSubmittingCheckIn) return;
+    setIsSubmittingCheckIn(true);
+    try {
+      const res = await authFetch('/api/attendance/check-in', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shiftId: selectedShiftId, onBehalfOfName: selectedVolunteerName.trim() })
+      });
+      const data = await res.json();
+      if (data.success) {
+        onCheckInSubmit(data.record);
+        onSendLineToast(`🟢 已由社工代為完成【${selectedVolunteerName}】的【${data.record.shiftTitle}】抵達簽到。`);
+      } else {
+        onSendLineToast(`⚠️ 簽到失敗：${data.error || '未知錯誤'}`);
+      }
+    } catch {
+      onSendLineToast('⚠️ 簽到失敗：無法連線到伺服器，請稍後再試。');
+    } finally {
+      setIsSubmittingCheckIn(false);
     }
-
-    if (!isWithinGeofence) {
-      onSendLineToast(`🔴 簽到失敗！您當前與據點相距 ${currentDistanceMeters}m，超過 500m 地理圍欄防偽限制！`);
-      return;
-    }
-
-    setIsScanning(true);
-    setScanSuccess(false);
-
-    setTimeout(() => {
-      setIsScanning(false);
-      setScanSuccess(true);
-      const token = `LINE-QR-${Math.floor(10000 + Math.random() * 90000)}`;
-      setScannedResult(`LINE://pawrescue.org/checkin?token=${token}&vol=${encodeURIComponent(selectedVolunteerName)}`);
-    }, 1200);
-  };
-
-  // Confirm Check-In (抵達簽到)
-  const handleConfirmCheckIn = () => {
-    if (!selectedVolunteerName.trim() || !selectedShiftId) return;
-
-    if (!isWithinGeofence) {
-      onSendLineToast(`🔴 簽到失敗！打卡位置距離據點 ${currentDistanceMeters}m (上限 500m)，未在地理圍欄範圍內！`);
-      return;
-    }
-
-    // Check if volunteer is already checked in for this shift
-    const existing = attendanceRecords.find(
-      r => r.volunteerName === selectedVolunteerName && r.shiftId === selectedShiftId && r.status === 'checked_in'
-    );
-    if (existing) {
-      onSendLineToast(`⚠️【${selectedVolunteerName}】已在【${existing.shiftTitle}】簽到中，請勿重複簽到！`);
-      return;
-    }
-
-    const checkInTimeStr = getCurrentDateTimeStr();
-
-    const newRecord: Omit<AttendanceRecord, 'id'> = {
-      applicationId: applications.find(a => a.volunteerName === selectedVolunteerName)?.id,
-      volunteerName: selectedVolunteerName,
-      lineId: selectedLineId || `line_${selectedVolunteerName}`,
-      shiftId: currentShift.id,
-      shiftTitle: currentShift.title,
-      zone: currentShift.zone,
-      date: currentShift.date,
-      checkInTime: checkInTimeStr,
-      status: 'checked_in',
-      locationVerified: isWithinGeofence,
-      distanceMeters: currentDistanceMeters,
-      qrCodeToken: scannedResult || `LINE-QR-${Date.now()}`
-    };
-
-    onCheckInSubmit(newRecord);
-    setScanSuccess(false);
-    onSendLineToast(`🟢 簽到成功！【${selectedVolunteerName}】完成【${currentShift.title}】到場簽到 (距離據點 ${currentDistanceMeters}m，圍欄驗證 OK)。`);
   };
 
   // Open Service Feedback Collection Dialog upon Check-Out
@@ -358,14 +287,14 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
             <div>
               <div className="flex items-center space-x-2">
                 <h3 className="font-bold font-serif text-lg text-white italic">
-                  LINE 掃碼志工簽到與離場核銷系統
+                  現場簽到台與離場核銷系統
                 </h3>
                 <span className="text-[10px] bg-emerald-400 text-slate-900 px-2.5 py-0.5 rounded-full font-extrabold tracking-wide uppercase">
                   LINE LIFF 驗證
                 </span>
               </div>
               <p className="text-xs text-[#F5E6D0] mt-0.5">
-                模擬志工抵達園區後使用 LINE 相機掃描 QR Code 簽到 / 離場核銷時數
+                顯示現場簽到碼供志工用自己的手機簽到，並在此核銷離場時數
               </p>
             </div>
           </div>
@@ -419,229 +348,72 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
           {activeTab === 'scan' ? (
             <div className="space-y-6">
               
-              {/* Geofencing Location Verification Card */}
-              <div className="bg-[#FAF6EE] border border-[#716053] rounded-2xl p-4 text-xs space-y-3 font-sans shadow-2xs">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[#716053]">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-[#716053] text-[#F5E6D0] flex items-center justify-center shrink-0">
-                      <Compass className="w-4 h-4 animate-spin-slow" />
-                    </div>
-                    <div>
-                      <div className="font-bold text-[#716053] text-sm flex items-center gap-1.5">
-                        <span>📡 地理圍欄 (Geofencing) 500m 防偽驗證</span>
-                        {isWithinGeofence ? (
-                          <span className="bg-emerald-100 text-emerald-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-emerald-300 flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
-                            圍欄驗證合格
-                          </span>
-                        ) : (
-                          <span className="bg-rose-100 text-rose-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-rose-300 flex items-center gap-1">
-                            <AlertTriangle className="w-3 h-3 text-rose-600" />
-                            超出圍欄範圍
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-slate-500">
-                        目標據點：<strong className="text-slate-800">{shelterLocation.name}</strong> (座標: {shelterLocation.lat.toFixed(4)}, {shelterLocation.lng.toFixed(4)})
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={handleGetRealGPS}
-                    disabled={isLocatingGPS}
-                    className="bg-sky-600 hover:bg-sky-700 text-white font-bold px-3 py-1.5 rounded-xl transition shadow-2xs flex items-center justify-center gap-1.5 shrink-0 text-[11px] cursor-pointer disabled:opacity-50"
-                  >
-                    <Navigation className={`w-3.5 h-3.5 ${isLocatingGPS ? 'animate-spin' : ''}`} />
-                    <span>{isLocatingGPS ? '定位中...' : '📡 讀取手機實時 GPS'}</span>
-                  </button>
+              {/* How this station works. The geofence gauge that used to live
+                  here measured THIS machine and let you fake the distance with
+                  preset buttons -- it was describing the office, not the
+                  volunteer. The real distance check now happens on the server
+                  against the phone that is actually checking in. */}
+              <div className="bg-[#FAF6EE] border border-[#716053] rounded-2xl p-4 text-xs space-y-2 font-sans shadow-2xs">
+                <div className="flex items-center gap-2 font-bold text-[#716053] text-sm">
+                  <Compass className="w-4 h-4" />
+                  <span>🐾 現場簽到怎麼運作</span>
                 </div>
-
-                {/* Distance Meter Gauge */}
-                <div className="bg-white rounded-xl p-3 border border-[#716053] space-y-2">
-                  <div className="flex justify-between items-center font-bold">
-                    <span className="text-slate-600 flex items-center gap-1">
-                      <MapPin className="w-3.5 h-3.5 text-[#716053]" />
-                      當前測得直線距離：
-                    </span>
-                    <span className={`text-sm ${isWithinGeofence ? 'text-emerald-700' : 'text-rose-600'}`}>
-                      {currentDistanceMeters.toLocaleString()} 公尺
-                      <span className="text-[10px] text-slate-400 font-normal ml-1">(圍欄上限: 500m)</span>
-                    </span>
-                  </div>
-
-                  {/* Meter Progress Bar */}
-                  <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden relative">
-                    {/* 500m threshold indicator marker */}
-                    <div className="absolute top-0 bottom-0 left-[25%] border-r-2 border-slate-400 z-10" title="500m 圍欄邊界"></div>
-                    
-                    <div
-                      className={`h-full transition-all duration-500 ${
-                        isWithinGeofence ? 'bg-gradient-to-r from-emerald-400 to-emerald-600' : 'bg-gradient-to-r from-amber-500 to-rose-600'
-                      }`}
-                      style={{ width: `${Math.min(100, Math.max(5, (currentDistanceMeters / 2000) * 100))}%` }}
-                    ></div>
-                  </div>
-
-                  {/* Geofencing Quick Simulation Selector Buttons */}
-                  <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1 text-[11px]">
-                    <span className="text-slate-400 font-medium">切換地理位置模擬測試：</span>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => setPresetLocationMode('on_site')}
-                        className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer border ${
-                          presetLocationMode === 'on_site'
-                            ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
-                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-200'
-                        }`}
-                      >
-                        📍 現場簽到 (85m)
-                      </button>
-                      <button
-                        onClick={() => setPresetLocationMode('nearby')}
-                        className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer border ${
-                          presetLocationMode === 'nearby'
-                            ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
-                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-200'
-                        }`}
-                      >
-                        🚗 園區週邊 (380m)
-                      </button>
-                      <button
-                        onClick={() => setPresetLocationMode('far')}
-                        className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer border ${
-                          presetLocationMode === 'far'
-                            ? 'bg-rose-600 text-white border-rose-700 shadow-2xs'
-                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-200'
-                        }`}
-                      >
-                        ❌ 遠端打卡 (1,850m)
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {!isWithinGeofence && (
-                  <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 text-rose-800 text-[11px] flex items-start gap-2 animate-in fade-in">
-                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                    <div>
-                      <strong className="font-bold">⚠️ 無法打卡：地理圍欄驗證未通過</strong>
-                      <p className="mt-0.5 text-rose-700">
-                        目前測得距離【{shelterLocation.name}】相距 <strong>{currentDistanceMeters}m</strong>，超過 500 公尺打卡範圍限制。請至現場園區後再進行 LINE 掃碼打卡。
-                      </p>
-                    </div>
-                  </div>
-                )}
+                <ol className="space-y-1 text-slate-600 leading-relaxed list-decimal list-inside">
+                  <li>把這個畫面朝向志工（或放在櫃台），上面的號碼每 60 秒換一次。</li>
+                  <li>志工在自己的手機上開啟「現場簽到」，允許定位並輸入這組號碼。</li>
+                  <li>伺服器核對號碼、GPS 距離（{shelterLocation.name} 500 公尺內）與班次錄取名單，三項都通過才記錄。</li>
+                </ol>
+                <p className="text-[11px] text-slate-500 pt-1 border-t border-[#716053]">
+                  📍 據點座標：{shelterLocation.lat.toFixed(4)}, {shelterLocation.lng.toFixed(4)}
+                  {!shelterLocation.geocoded && <span className="text-amber-600 font-bold ml-1">（此地址尚未定位成功，GPS 比對可能不準，請先到班表頁修正地址）</span>}
+                </p>
               </div>
-
-              {/* QR Scanner Frame Graphic Simulation */}
+              {/* On-site check-in code board. Replaces the old "simulate a QR
+                  scan" graphic, which proved nothing: it measured this
+                  machine's location and invented a token. Volunteers now
+                  check in from their own phone and the server verifies both
+                  this code and their GPS. */}
               <div className="bg-slate-900 rounded-3xl p-6 text-white text-center relative overflow-hidden shadow-inner border-2 border-slate-700">
-                
-                {/* Scanner laser animation */}
-                {isScanning && (
-                  <div className="absolute inset-x-0 h-1 bg-emerald-400 shadow-[0_0_15px_#10B981] animate-pulse z-20 top-1/2 -translate-y-1/2"></div>
-                )}
-
                 <div className="relative z-10 max-w-sm mx-auto space-y-4">
-                  
-                  {/* Camera viewport frame */}
-                  <div className={`relative w-48 h-48 mx-auto border-4 border-dashed rounded-3xl flex flex-col items-center justify-center bg-slate-800/80 p-4 transition-all duration-300 ${
-                    isWithinGeofence ? 'border-emerald-400/70' : 'border-rose-500/70'
-                  }`}>
-                    
-                    <div className="absolute top-2 left-2 text-[10px] font-mono flex items-center gap-1">
-                      {isWithinGeofence ? (
-                        <span className="text-emerald-400">🟢 GEOFENCE OK</span>
-                      ) : (
-                        <span className="text-rose-400">🔴 OUT OF FENCE</span>
-                      )}
-                    </div>
-                    <div className="absolute top-2 right-2 text-[10px] text-[#F5E6D0] font-mono">LINE API</div>
-                    
-                    <QrCode className={`w-24 h-24 transition-transform duration-300 ${
-                      isWithinGeofence ? 'text-emerald-400' : 'text-slate-500 opacity-60'
-                    } ${isScanning ? 'scale-110 animate-pulse' : ''}`} />
-                    
-                    <span className="text-[11px] text-slate-300 font-mono mt-2 bg-slate-900/80 px-2 py-0.5 rounded">
-                      [{shelterLocation.name || '浪浪家園'}]
-                    </span>
-                  </div>
 
                   <div className="space-y-1">
-                    <div className="flex items-center justify-center space-x-2 text-xs font-bold">
-                      {isWithinGeofence ? (
-                        <div className="flex items-center space-x-1.5 text-emerald-300">
-                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                          <span>📍 圍欄驗證成功：距 {shelterLocation.name} {currentDistanceMeters}m (≤ 500m)</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center space-x-1.5 text-rose-400">
-                          <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-                          <span>❌ 距離據點 {currentDistanceMeters}m (已超過 500m 圍欄範圍)</span>
-                        </div>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-slate-400">
-                      LINE 條碼包含：班次 ID、志工辨別 Token 與實時防偽時間戳記
-                    </p>
+                    <p className="text-[11px] text-slate-400 font-mono tracking-widest">ON-SITE CHECK-IN CODE</p>
+                    <p className="text-[11px] text-slate-300">請志工在自己的手機上輸入這組數字</p>
                   </div>
 
-                  {/* Trigger Simulation Button */}
-                  <button
-                    onClick={handleSimulateQRScan}
-                    disabled={isScanning || !isWithinGeofence}
-                    className={`w-full font-extrabold py-3 px-6 rounded-full text-xs transition shadow-lg flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50 ${
-                      isWithinGeofence
-                        ? 'bg-emerald-500 hover:bg-emerald-600 text-slate-950'
-                        : 'bg-slate-700 text-slate-400 cursor-not-allowed'
-                    }`}
-                  >
-                    <RefreshCw className={`w-4 h-4 ${isScanning ? 'animate-spin' : ''}`} />
-                    <span>
-                      {isScanning
-                        ? 'LINE 相機對焦中...'
-                        : isWithinGeofence
-                        ? '一鍵模擬 LINE 手機相機掃描 QR Code'
-                        : '超出 500m 地理圍欄 (無法打卡)'}
-                    </span>
-                  </button>
+                  <div className="bg-slate-800/80 border-4 border-dashed border-emerald-400/70 rounded-3xl py-6 px-4">
+                    <div className="text-4xl sm:text-5xl font-extrabold tracking-[0.25em] text-emerald-300 font-mono">
+                      {siteCode ? siteCode.code : '······'}
+                    </div>
+                  </div>
 
+                  {siteCode && (
+                    <div className="space-y-1.5">
+                      <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-emerald-400 transition-all duration-1000 ease-linear"
+                          style={{ width: `${(siteCode.expiresInSeconds / 60) * 100}%` }}
+                        />
+                      </div>
+                      <p className="text-[11px] text-slate-400">
+                        {siteCode.expiresInSeconds} 秒後更換新號碼
+                      </p>
+                    </div>
+                  )}
+
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    志工開啟「現場簽到」後，系統會核對這組號碼、手機 GPS 與班次錄取名單，三項都通過才會記錄出勤。
+                  </p>
                 </div>
               </div>
-
-              {/* Scanned Result & Check-In Action Form */}
-              {scanSuccess && (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-xs space-y-3 animate-in fade-in slide-in-from-top-2">
-                  <div className="flex items-center space-x-2 text-emerald-800 font-bold text-sm">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                    <span>條碼辨識成功！請核對簽到資訊：</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-slate-700 font-sans">
-                    <div><span className="text-slate-500">志工姓名：</span><strong className="text-slate-900">{selectedVolunteerName}</strong></div>
-                    <div><span className="text-slate-500">LINE ID：</span><strong>@{selectedLineId}</strong></div>
-                    <div><span className="text-slate-500">簽到班次：</span><strong className="text-[#716053]">{currentShift?.title}</strong></div>
-                    <div><span className="text-slate-500">預計時段：</span><strong>{currentShift?.timeRange}</strong></div>
-                  </div>
-                  <div className="pt-2 flex justify-end">
-                    <button
-                      onClick={handleConfirmCheckIn}
-                      className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2.5 px-6 rounded-full text-xs shadow-xs transition flex items-center space-x-1.5 cursor-pointer"
-                    >
-                      <LogIn className="w-4 h-4" />
-                      <span>確認完成【抵達簽到】紀錄</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
               {/* Manual Selection Form (for admins & testing) */}
               <div className="bg-[#FAF6EE] rounded-2xl p-5 border border-[#716053] space-y-4 text-xs font-sans">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-[#716053] flex items-center gap-1">
                     <UserCheck className="w-4 h-4 text-[#716053]" />
-                    <span>手動選擇簽到人員與對應班次 (社工協助備用)</span>
+                    <span>社工代為簽到（志工手機沒電 / 無智慧型手機時）</span>
                   </span>
-                  <span className="text-[11px] text-slate-500">若手機沒電時適用</span>
+                  <span className="text-[11px] text-slate-500">紀錄會標記為「社工代簽」</span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -690,15 +462,11 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                 <div className="flex justify-end pt-2 border-t border-[#716053]">
                   <button
                     onClick={handleConfirmCheckIn}
-                    disabled={!isWithinGeofence}
-                    className={`font-bold py-2 px-5 rounded-full text-xs shadow-xs transition flex items-center space-x-1.5 cursor-pointer disabled:opacity-50 ${
-                      isWithinGeofence
-                        ? 'bg-[#716053] hover:bg-[#5A4A3F] text-white'
-                        : 'bg-rose-700 text-white cursor-not-allowed'
-                    }`}
+                    disabled={isSubmittingCheckIn || !selectedVolunteerName || !selectedShiftId}
+                    className="font-bold py-2 px-5 rounded-full text-xs shadow-xs transition flex items-center space-x-1.5 cursor-pointer disabled:opacity-50 bg-[#716053] hover:bg-[#5A4A3F] text-white"
                   >
                     <LogIn className="w-4 h-4 text-[#F5E6D0]" />
-                    <span>{isWithinGeofence ? '直接進行【抵達簽到】' : '超出 500m 圍欄 (無法簽到)'}</span>
+                    <span>{isSubmittingCheckIn ? '簽到中...' : '代為完成【抵達簽到】'}</span>
                   </button>
                 </div>
               </div>

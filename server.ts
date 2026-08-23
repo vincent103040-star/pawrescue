@@ -6,7 +6,7 @@ import { gzipSync } from 'zlib';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
-import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, adjustShiftCount, getAllApplications, insertApplication, updateApplicationStatus, deleteApplication, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount } from './db';
+import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, adjustShiftCount, getAllApplications, insertApplication, updateApplicationStatus, deleteApplication, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount } from './db';
 import { PDFParse } from 'pdf-parse';
 import type { SopContent, SopDocument, SopVideo } from './src/types';
 
@@ -1446,17 +1446,189 @@ ${contextText}
     }
   });
 
-  app.post('/api/attendance/check-in', (req, res) => {
+  // --------------------------------------------------------------------------
+  // On-site check-in
+  // --------------------------------------------------------------------------
+  // This used to accept whatever the browser posted -- name, shift, distance,
+  // "locationVerified: true" -- and store it. The geofence was computed in the
+  // page, so it proved nothing: anyone could check in from anywhere, for anyone.
+  //
+  // Now the server decides. Two independent proofs, both checked here:
+  //
+  //   1. A rotating 6-digit code shown only on the on-site station screen.
+  //      It's an HMAC of the current 60-second window, so it can't be guessed
+  //      or shared ahead of time, and there's nothing to store or expire.
+  //   2. The phone's GPS, with the distance measured here against the address
+  //      in the database -- not trusted from the request body.
+  //
+  // Plus the boring but important ones: you must be signed in, the shift must
+  // be today and roughly now, you must have an approved application for it,
+  // and you can't already be checked in.
+  const SITE_CODE_WINDOW_SECONDS = 60;
+  const GEOFENCE_RADIUS_METERS = 500;
+
+  function siteCodeForWindow(windowIndex: number): string {
+    const digest = createHmac('sha256', getAppSecret('site_check_in_secret'))
+      .update(String(windowIndex))
+      .digest();
+    // Same truncation idea as TOTP: take 31 bits, mod into 6 digits.
+    const offset = digest[digest.length - 1] & 0x0f;
+    const binary =
+      ((digest[offset] & 0x7f) << 24) |
+      (digest[offset + 1] << 16) |
+      (digest[offset + 2] << 8) |
+      digest[offset + 3];
+    return String(binary % 1000000).padStart(6, '0');
+  }
+
+  function currentWindowIndex(): number {
+    return Math.floor(Date.now() / 1000 / SITE_CODE_WINDOW_SECONDS);
+  }
+
+  /** Accepts the current window and the previous one, so a code doesn't expire
+      out from under someone mid-typing. */
+  function isValidSiteCode(input: string): boolean {
+    const cleaned = String(input || '').replace(/\D/g, '');
+    if (cleaned.length !== 6) return false;
+    const now = currentWindowIndex();
+    return [now, now - 1].some(w => {
+      const expected = Buffer.from(siteCodeForWindow(w));
+      const given = Buffer.from(cleaned);
+      return expected.length === given.length && timingSafeEqual(expected, given);
+    });
+  }
+
+  function distanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371e3;
+    const toRad = (d: number) => (d * Math.PI) / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+    return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+  }
+
+  // The station screen polls this to display the current code. Admin-only --
+  // if any volunteer could fetch it, standing at the gate would stop meaning
+  // anything.
+  app.get('/api/admin/attendance/site-code', (req, res) => {
+    const windowIndex = currentWindowIndex();
+    const elapsed = Math.floor(Date.now() / 1000) % SITE_CODE_WINDOW_SECONDS;
+    return res.json({
+      success: true,
+      code: siteCodeForWindow(windowIndex),
+      expiresInSeconds: SITE_CODE_WINDOW_SECONDS - elapsed,
+      windowSeconds: SITE_CODE_WINDOW_SECONDS
+    });
+  });
+
+  app.post('/api/attendance/check-in', requireAuth, (req: any, res) => {
     try {
-      const record = req.body;
-      if (!record?.id || !record?.volunteerName || !record?.shiftId) {
-        return res.status(400).json({ success: false, error: '缺少必要的簽到欄位' });
+      const { shiftId, siteCode, lat, lng, onBehalfOfName } = req.body || {};
+      const isAdmin = req.session.role === 'admin';
+
+      if (!shiftId) {
+        return res.status(400).json({ success: false, error: '缺少班次 ID' });
       }
-      const saved = insertAttendanceRecord(record);
+
+      const shift = getAllShifts().find(sh => sh.id === shiftId);
+      if (!shift) {
+        return res.status(404).json({ success: false, error: '找不到該班次' });
+      }
+
+      // Who is checking in. A volunteer can only ever check themselves in --
+      // the name comes from their session, never from the request body.
+      let volunteerName: string;
+      let volunteerEmail = '';
+      if (isAdmin) {
+        volunteerName = String(onBehalfOfName || '').trim();
+        if (!volunteerName) {
+          return res.status(400).json({ success: false, error: '代理簽到需指定志工姓名' });
+        }
+      } else {
+        const me = getVolunteerByEmail(req.session.identity);
+        if (!me) {
+          return res.status(404).json({ success: false, error: '找不到您的志工資料，請重新登入' });
+        }
+        volunteerName = me.name;
+        volunteerEmail = me.email;
+      }
+
+      if (getOpenAttendanceFor(volunteerName, shiftId)) {
+        return res.status(409).json({ success: false, error: `【${volunteerName}】已在此班次簽到中，請勿重複簽到` });
+      }
+
+      // Everything below is skipped for a coordinator recording someone else's
+      // arrival -- they're standing next to the person, and the record is
+      // marked 'staff' so the difference is visible later.
+      let verifiedDistance: number | undefined;
+      let locationVerified = false;
+
+      if (!isAdmin) {
+        const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' });
+        if (shift.date !== today) {
+          return res.status(400).json({ success: false, error: `此班次日期為 ${shift.date}，只能在當天簽到` });
+        }
+
+        const application = getAllApplications().find(
+          a => a.shiftId === shiftId &&
+               a.status === 'approved' &&
+               (a.volunteerEmail || '').toLowerCase() === volunteerEmail.toLowerCase()
+        );
+        if (!application) {
+          return res.status(403).json({ success: false, error: '您沒有這個班次的錄取名額，無法簽到' });
+        }
+
+        if (!isValidSiteCode(siteCode)) {
+          return res.status(403).json({
+            success: false,
+            error: '現場簽到碼不正確或已過期，請重新查看櫃台螢幕上的 6 位數字'
+          });
+        }
+
+        // GPS is the second proof. If the phone refused to give it we still
+        // accept the code, but flag the record so a coordinator can review.
+        if (typeof lat === 'number' && typeof lng === 'number') {
+          const shelter = getShelterLocation();
+          verifiedDistance = distanceMeters(lat, lng, shelter.lat, shelter.lng);
+          if (verifiedDistance > GEOFENCE_RADIUS_METERS) {
+            return res.status(403).json({
+              success: false,
+              error: `簽到失敗：您目前距離【${shelter.name}】約 ${verifiedDistance} 公尺，超過 ${GEOFENCE_RADIUS_METERS} 公尺的打卡範圍`
+            });
+          }
+          locationVerified = true;
+        }
+      }
+
+      const now = new Date();
+      const record = insertAttendanceRecord({
+        id: `att-${now.getTime()}-${randomUUID().slice(0, 8)}`,
+        volunteerName,
+        lineId: undefined,
+        shiftId: shift.id,
+        shiftTitle: shift.title,
+        zone: shift.zone as any,
+        date: shift.date,
+        checkInTime: now.toLocaleString('sv-SE', { timeZone: 'Asia/Taipei' }),
+        status: 'checked_in',
+        locationVerified,
+        distanceMeters: verifiedDistance,
+        qrCodeToken: '',
+        checkInMethod: isAdmin ? 'staff' : 'self'
+      } as any);
+
       broadcastChange('attendance');
-      return res.json({ success: true, record: saved });
+      return res.json({
+        success: true,
+        record,
+        note: !isAdmin && !locationVerified
+          ? '已用現場簽到碼完成簽到，但未取得 GPS 定位，這筆紀錄會標記為待督導確認'
+          : undefined
+      });
     } catch (error: any) {
-      console.error('Check-In Persist Error:', error);
+      console.error('Check-In Error:', error);
       return res.status(500).json({ success: false, error: error.message || '儲存簽到紀錄失敗' });
     }
   });

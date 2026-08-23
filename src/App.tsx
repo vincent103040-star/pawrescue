@@ -17,6 +17,7 @@ import { AdminSopManager } from './components/AdminSopManager';
 import { VolunteerRoster } from './components/VolunteerRoster';
 import { AiPostModal } from './components/AiPostModal';
 import { VolunteerCheckInModal } from './components/VolunteerCheckInModal';
+import { VolunteerSelfCheckIn } from './components/VolunteerSelfCheckIn';
 import { RulebookManualModal } from './components/RulebookManualModal';
 
 import {
@@ -420,22 +421,14 @@ export default function App() {
   };
 
   // Attendance Handlers
-  const handleCheckInSubmit = (newRecordData: Omit<AttendanceRecord, 'id'>) => {
-    const newRecord: AttendanceRecord = {
-      ...newRecordData,
-      id: `att-${Date.now()}`
-    };
+  // The record now comes back from the server, which is what created and
+  // verified it (see POST /api/attendance/check-in). This just folds it into
+  // local state; the SSE broadcast handles every other open device.
+  const handleCheckInSubmit = (newRecord: AttendanceRecord) => {
     setAttendanceRecords(prev => [newRecord, ...prev]);
-
     if (newRecord.applicationId) {
       setApplications(prev => prev.map(a => a.id === newRecord.applicationId ? { ...a, status: 'attended' } : a));
     }
-
-    fetch('/api/attendance/check-in', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newRecord)
-    }).catch(() => { /* best-effort backend sync -- local state already has it */ });
   };
 
   const handleCheckOutSubmit = (
@@ -1031,8 +1024,23 @@ export default function App() {
         </div>
       )}
 
-      {/* Volunteer Check-In / Check-Out QR Modal */}
-      {isCheckInModalOpen && (
+      {/* Volunteers check in from their own phone (GPS + on-site code, both
+          verified server-side). The station modal below is the coordinator's
+          view: it shows the rotating code and handles check-outs. */}
+      {isCheckInModalOpen && userRole === 'volunteer' && (
+        <VolunteerSelfCheckIn
+          shifts={shifts}
+          applications={applications}
+          shelterLocation={shelterLocation}
+          currentUser={volunteerSession}
+          onClose={() => setIsCheckInModalOpen(false)}
+          onCheckedIn={refreshAttendance}
+          onSendLineToast={showToast}
+        />
+      )}
+
+      {/* Coordinator station: rotating check-in code + check-out desk */}
+      {isCheckInModalOpen && userRole !== 'volunteer' && (
         <VolunteerCheckInModal
           shifts={shifts}
           applications={applications}
