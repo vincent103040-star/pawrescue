@@ -36,7 +36,10 @@ export const CheckInPosterModal: React.FC<CheckInPosterModalProps> = ({ onClose 
   // squares around 2.5mm, which a phone camera can resolve from arm's length;
   // the earlier 320px-wide version squeezed them to 6.5px and was reported as
   // hard to scan off a screen.
-  const svg = useMemo(() => (url ? qrToSvg(url, { modulePx: 10, margin: 4, ec: 'Q' }) : ''), [url]);
+  // margin 6 rather than the spec minimum of 4: the poster frames the code, and
+  // a dark border sitting right on the edge of the quiet zone is a known way to
+  // stop a scanner locking on. The extra two modules buy that separation.
+  const svg = useMemo(() => (url ? qrToSvg(url, { modulePx: 10, margin: 6, ec: 'Q' }) : ''), [url]);
 
   return (
     <div className="fixed inset-0 z-50 bg-[#716053]/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto print:bg-white print:p-0 print:block">
@@ -75,7 +78,7 @@ export const CheckInPosterModal: React.FC<CheckInPosterModalProps> = ({ onClose 
               </div>
 
               <div
-                className="inline-block border-4 border-[#716053] rounded-3xl p-4 bg-white [&>svg]:w-full [&>svg]:h-auto [&>svg]:max-w-[420px]"
+                className="inline-block bg-white [&>svg]:w-full [&>svg]:h-auto [&>svg]:max-w-[440px]"
                 dangerouslySetInnerHTML={{ __html: svg }}
               />
 
