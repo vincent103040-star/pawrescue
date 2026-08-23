@@ -207,6 +207,10 @@ export interface SopDocument {
   title: string;
   fileUrl: string;
   uploadedAt: string;
+  /** Bytes on disk. Used to label the download before someone taps it on mobile data. */
+  fileSize?: number;
+  /** True when the manual's text was extracted at upload time, so it can be read online. */
+  hasText?: boolean;
 }
 
 export interface SopVideo {

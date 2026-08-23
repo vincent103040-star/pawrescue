@@ -2,10 +2,11 @@ import express from 'express';
 import path from 'path';
 import { createHmac, timingSafeEqual, randomUUID } from 'crypto';
 import { writeFileSync, mkdirSync, createWriteStream, statSync, readFileSync, unlinkSync } from 'fs';
+import { gzipSync } from 'zlib';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
-import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, adjustShiftCount, getAllApplications, insertApplication, updateApplicationStatus, deleteApplication, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation } from './db';
+import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, adjustShiftCount, getAllApplications, insertApplication, updateApplicationStatus, deleteApplication, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation } from './db';
 import { PDFParse } from 'pdf-parse';
 import type { SopContent, SopDocument, SopVideo } from './src/types';
 
@@ -236,7 +237,17 @@ async function startServer() {
 
   const sopDocsDir = path.join(process.cwd(), 'data', 'sop-docs');
   mkdirSync(sopDocsDir, { recursive: true });
-  app.use('/sop-docs', express.static(sopDocsDir));
+  // Filenames embed their upload timestamp and are never rewritten, so a copy a
+  // phone already has can never be stale -- cache it hard. Downloading the
+  // scanned manual is expensive enough that doing it twice should never happen.
+  // express.static also answers Range requests, so a viewer that asks for part
+  // of the file gets only that part.
+  app.use('/sop-docs', express.static(sopDocsDir, {
+    maxAge: '365d',
+    immutable: true,
+    setHeaders: res => res.setHeader('Accept-Ranges', 'bytes')
+  }));
+  backfillSopDocumentSizes(sopDocsDir);
 
   const sopVideosDir = path.join(process.cwd(), 'data', 'sop-videos');
   mkdirSync(sopVideosDir, { recursive: true });
@@ -905,7 +916,7 @@ ${contextText}
         }
       }
 
-      const doc: SopDocument = { id, title, fileUrl: `/sop-docs/${filename}`, uploadedAt: new Date().toISOString() };
+      const doc: SopDocument = { id, title, fileUrl: `/sop-docs/${filename}`, uploadedAt: new Date().toISOString(), fileSize: bytesWritten };
       insertSopDocument(doc);
 
       // Chunk + embed the extracted text (best-effort -- a PDF that fails to
@@ -944,6 +955,42 @@ ${contextText}
       }
       console.error('Upload SOP Document Error:', error);
       return res.status(500).json({ success: false, error: error.message || '上傳文件失敗' });
+    }
+  });
+
+  // The readable text of an uploaded manual, rebuilt from the chunks already
+  // indexed for RAG at upload time.
+  //
+  // The shelter's manual is a stack of scanned pages: 88MB on disk, of which
+  // 85MB is scanned images and only ~31KB is text. Sending the text instead of
+  // the file is what makes the manual usable on a phone -- there is no
+  // compression to be had on the PDF itself (its images are already compressed;
+  // gzip over the whole file saves 0.6%). The original stays downloadable for
+  // anyone who wants the scans.
+  app.get('/api/sop-documents/:id/text', (req, res) => {
+    try {
+      const text = getSopDocumentText(req.params.id);
+      if (text === null) {
+        return res.status(404).json({
+          success: false,
+          error: '這份文件沒有可線上閱讀的文字（可能是純掃描圖檔，或上傳時檔案過大未建立索引）'
+        });
+      }
+
+      const payload = JSON.stringify({ success: true, text });
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Cache-Control', 'public, max-age=300');
+
+      // Text compresses ~2x and there's no compression middleware in front of
+      // us, so do it here when the client accepts it.
+      if (String(req.headers['accept-encoding'] || '').includes('gzip')) {
+        res.setHeader('Content-Encoding', 'gzip');
+        return res.end(gzipSync(Buffer.from(payload, 'utf-8')));
+      }
+      return res.end(payload);
+    } catch (error: any) {
+      console.error('Get SOP Document Text Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '讀取文件文字失敗' });
     }
   });
 

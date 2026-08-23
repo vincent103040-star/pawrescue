@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { BookOpen, Save, Plus, Trash2, FileText, Video, Upload, Loader2, ShieldAlert, CalendarClock } from 'lucide-react';
+import { BookOpen, Save, Plus, Trash2, FileText, Video, Upload, Loader2, ShieldAlert, CalendarClock, Download } from 'lucide-react';
 import { SopContent, SopSection, SopDocument, SopVideo, ShiftTemplate } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
+import { SopDocumentReader } from './SopDocumentReader';
 
 interface AdminSopManagerProps {
   onSendLineToast: (msg: string) => void;
@@ -59,12 +60,22 @@ async function uploadFileRaw(
   }
 }
 
+/** "（88.2 MB）", or "" when the size isn't known (pre-existing uploads). */
+function formatFileSize(bytes?: number): string {
+  if (bytes == null) return '';
+  if (bytes < 1024 * 1024) return `（${Math.max(1, Math.round(bytes / 1024))} KB）`;
+  return `（${(bytes / 1048576).toFixed(1)} MB）`;
+}
+
 export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToast }) => {
   const [content, setContent] = useState<SopContent | null>(null);
   const [documents, setDocuments] = useState<SopDocument[]>([]);
   const [videos, setVideos] = useState<SopVideo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+
+  // The document currently open in the text reader (null = closed).
+  const [readingDoc, setReadingDoc] = useState<SopDocument | null>(null);
 
   // "班次" cards -- auto-synced every time an admin publishes a shift (see
   // App.tsx's handleCreateShift), not authored here. This section is
@@ -527,14 +538,40 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
         {documents.length > 0 && (
           <div className="space-y-2">
             {documents.map(doc => (
-              <div key={doc.id} className="flex items-center justify-between gap-2 bg-[#FFFDF7] p-3 rounded-xl border border-[#716053] text-xs">
-                <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[#716053] font-bold hover:underline truncate">
-                  <FileText className="w-4 h-4 shrink-0" />
-                  <span className="truncate">{doc.title}</span>
-                </a>
-                <button onClick={() => handleDeleteDoc(doc.id)} className="text-rose-500 hover:bg-rose-50 p-1.5 rounded-lg transition cursor-pointer shrink-0">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+              <div key={doc.id} className="bg-[#FFFDF7] p-3 rounded-xl border border-[#716053] text-xs space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-[#716053] font-bold truncate">
+                    <FileText className="w-4 h-4 shrink-0" />
+                    <span className="truncate">{doc.title}</span>
+                  </div>
+                  <button onClick={() => handleDeleteDoc(doc.id)} className="text-rose-500 hover:bg-rose-50 p-1.5 rounded-lg transition cursor-pointer shrink-0">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                {/* Reading beats downloading: the scans are huge, the words in
+                    them are tiny. The download stays available but is labelled
+                    with its real weight so nobody taps it on mobile data. */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => setReadingDoc(doc)}
+                    className="bg-[#716053] hover:bg-[#5A4A3F] text-white font-bold px-3 py-1.5 rounded-xl text-[11px] flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <BookOpen className="w-3.5 h-3.5 text-amber-300" />
+                    <span>線上閱讀</span>
+                  </button>
+                  <a
+                    href={doc.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-slate-600 hover:text-[#716053] font-bold px-3 py-1.5 rounded-xl text-[11px] flex items-center gap-1.5 border border-[#716053]"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>下載原始檔{formatFileSize(doc.fileSize)}</span>
+                  </a>
+                  {doc.fileSize != null && doc.fileSize > 20 * 1024 * 1024 && (
+                    <span className="text-[10px] text-amber-600 font-bold">📶 檔案較大，建議用 Wi-Fi 下載</span>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -603,6 +640,9 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
         )}
       </div>
 
+      {readingDoc && (
+        <SopDocumentReader doc={readingDoc} onClose={() => setReadingDoc(null)} />
+      )}
     </div>
   );
 };

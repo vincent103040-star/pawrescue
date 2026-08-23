@@ -483,6 +483,11 @@ db.exec(`
   )
 `);
 
+// Byte size of the stored file, so the UI can label a download before someone
+// taps it on mobile data. Backfilled from disk below for rows uploaded before
+// this column existed.
+try { db.exec('ALTER TABLE sop_documents ADD COLUMN fileSize INTEGER'); } catch { /* already added */ }
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS sop_videos (
     id TEXT PRIMARY KEY,
@@ -624,8 +629,37 @@ export function getAllSopDocuments(): SopDocument[] {
 }
 
 export function insertSopDocument(doc: SopDocument): void {
-  db.prepare('INSERT INTO sop_documents (id, title, fileUrl, uploadedAt) VALUES (?, ?, ?, ?)')
-    .run(doc.id, doc.title, doc.fileUrl, doc.uploadedAt);
+  db.prepare('INSERT INTO sop_documents (id, title, fileUrl, uploadedAt, fileSize) VALUES (?, ?, ?, ?, ?)')
+    .run(doc.id, doc.title, doc.fileUrl, doc.uploadedAt, doc.fileSize ?? null);
+}
+
+/**
+ * Fills in fileSize for documents stored before the column existed, by
+ * stat-ing the file each row points at. Called once at startup; rows whose
+ * file has since been removed are left null and simply render without a size.
+ */
+export function backfillSopDocumentSizes(sopDocsDir: string): void {
+  const rows = db.prepare('SELECT id, fileUrl FROM sop_documents WHERE fileSize IS NULL').all() as any[];
+  const update = db.prepare('UPDATE sop_documents SET fileSize = ? WHERE id = ?');
+  for (const row of rows) {
+    try {
+      const name = path.basename(String(row.fileUrl));
+      update.run(fs.statSync(path.join(sopDocsDir, name)).size, row.id);
+    } catch { /* file is gone -- leave the size unknown */ }
+  }
+}
+
+/**
+ * Rebuilds a document's readable text from the chunks already indexed for RAG
+ * at upload time. Lets a phone read a scanned 88MB manual as ~31KB of text
+ * instead of downloading the images -- see /api/sop-documents/:id/text.
+ */
+export function getSopDocumentText(id: string): string | null {
+  const rows = db.prepare(
+    "SELECT text FROM rag_chunks WHERE source = 'pdf' AND sourceId = ? ORDER BY id"
+  ).all(id) as any[];
+  if (rows.length === 0) return null;
+  return rows.map(r => String(r.text)).join('\n\n');
 }
 
 export function deleteSopDocument(id: string): void {
