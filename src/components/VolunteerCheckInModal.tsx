@@ -14,6 +14,8 @@ interface VolunteerCheckInModalProps {
   onCheckInSubmit: (record: AttendanceRecord) => void;
   onCheckOutSubmit: (recordId: string, checkOutTime: string, hoursLogged: number, rating?: number, comment?: string, photo?: { base64: string; mimeType: string }) => void;
   onSendLineToast: (msg: string) => void;
+  /** Opens the printable poster, for sites with no screen at the gate. */
+  onOpenPoster?: () => void;
 }
 
 // Parses a shift's "HH:MM - HH:MM" timeRange into a duration in hours, e.g.
@@ -54,7 +56,8 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
   onClose,
   onCheckInSubmit,
   onCheckOutSubmit,
-  onSendLineToast
+  onSendLineToast,
+  onOpenPoster
 }) => {
   const [activeTab, setActiveTab] = useState<'scan' | 'records'>('scan');
   
@@ -404,6 +407,15 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                   <p className="text-[11px] text-slate-400 leading-relaxed">
                     志工開啟「現場簽到」後，系統會核對這組號碼、手機 GPS 與班次錄取名單，三項都通過才會記錄出勤。
                   </p>
+
+                  {onOpenPoster && (
+                    <button
+                      onClick={onOpenPoster}
+                      className="w-full border border-slate-600 hover:bg-slate-800 text-slate-300 font-bold py-2.5 rounded-xl text-[11px] cursor-pointer"
+                    >
+                      🖨️ 沒有螢幕可以放在現場？改用可列印的簽到海報
+                    </button>
+                  )}
                 </div>
               </div>
               {/* Manual Selection Form (for admins & testing) */}

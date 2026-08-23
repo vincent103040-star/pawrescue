@@ -1543,6 +1543,37 @@ ${contextText}
     return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
   }
 
+  // A printed poster carries a static signed token instead of the rotating
+  // code, because paper can't count down. That trade is deliberate and it is
+  // worth being clear about what it costs: a photograph of the poster is as
+  // good as the poster, so the token proves only "this came from us", not
+  // "this person is here". Presence therefore rests entirely on GPS, and
+  // check-in refuses a poster scan without it -- see the handler below.
+  function posterToken(): string {
+    return createHmac('sha256', getAppSecret('site_check_in_secret'))
+      .update('printed-poster-v1')
+      .digest('hex')
+      .slice(0, 32);
+  }
+
+  function isValidPosterToken(input: string): boolean {
+    const given = Buffer.from(String(input || ''));
+    const expected = Buffer.from(posterToken());
+    return given.length === expected.length && timingSafeEqual(given, expected);
+  }
+
+  app.get('/api/admin/attendance/poster', (req, res) => {
+    const shelter = getShelterLocation();
+    return res.json({
+      success: true,
+      token: posterToken(),
+      path: `/?checkin=${posterToken()}`,
+      geocoded: shelter.geocoded,
+      shelterName: shelter.name,
+      radiusMeters: GEOFENCE_RADIUS_METERS
+    });
+  });
+
   // The station screen polls this to display the current code. Admin-only --
   // if any volunteer could fetch it, standing at the gate would stop meaning
   // anything.
@@ -1559,7 +1590,7 @@ ${contextText}
 
   app.post('/api/attendance/check-in', requireAuth, (req: any, res) => {
     try {
-      const { shiftId, siteCode, lat, lng, onBehalfOfName } = req.body || {};
+      const { shiftId, siteCode, posterCode, lat, lng, onBehalfOfName } = req.body || {};
       const isAdmin = req.session.role === 'admin';
 
       if (!shiftId) {
@@ -1614,10 +1645,25 @@ ${contextText}
           return res.status(403).json({ success: false, error: '您沒有這個班次的錄取名額，無法簽到' });
         }
 
-        if (!isValidSiteCode(siteCode)) {
+        // Two ways in: the rotating code from a screen, or a scan of the
+        // printed poster. Posters exist for sites with no screen at the gate.
+        const viaPoster = !siteCode && isValidPosterToken(posterCode);
+        if (!viaPoster && !isValidSiteCode(siteCode)) {
           return res.status(403).json({
             success: false,
-            error: '現場簽到碼不正確或已過期，請重新查看櫃台螢幕上的 6 位數字'
+            error: posterCode
+              ? '簽到連結無效，請重新掃描現場的簽到海報'
+              : '現場簽到碼不正確或已過期，請重新查看櫃台螢幕上的 6 位數字'
+          });
+        }
+
+        // A poster scan carries no proof of presence on its own, so location
+        // is not optional there -- it is the only thing standing between a
+        // real arrival and someone who was sent a photo of the poster.
+        if (viaPoster && (typeof lat !== 'number' || typeof lng !== 'number')) {
+          return res.status(403).json({
+            success: false,
+            error: '用海報 QR 簽到時必須開啟定位權限，請允許取得位置後再試一次'
           });
         }
 

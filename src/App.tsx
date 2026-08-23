@@ -18,6 +18,7 @@ import { VolunteerRoster } from './components/VolunteerRoster';
 import { AiPostModal } from './components/AiPostModal';
 import { VolunteerCheckInModal } from './components/VolunteerCheckInModal';
 import { VolunteerSelfCheckIn } from './components/VolunteerSelfCheckIn';
+import { CheckInPosterModal } from './components/CheckInPosterModal';
 import { RulebookManualModal } from './components/RulebookManualModal';
 
 import {
@@ -301,6 +302,18 @@ export default function App() {
   // Modals state
   const [aiModalShift, setAiModalShift] = useState<PositionShift | null>(null);
   const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
+  const [isPosterModalOpen, setIsPosterModalOpen] = useState(false);
+
+  // Arriving from a scanned check-in poster: /?checkin=<signed token>. Held in
+  // state (and the URL cleaned up) so a refresh mid-sign-in doesn't lose it.
+  const [posterCode, setPosterCode] = useState<string>('');
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get('checkin');
+    if (!token) return;
+    setPosterCode(token);
+    setIsCheckInModalOpen(true);
+    window.history.replaceState({}, '', window.location.pathname);
+  }, []);
   const [isRulebookModalOpen, setIsRulebookModalOpen] = useState(false);
 
   // Toast State
@@ -1038,9 +1051,12 @@ export default function App() {
           shifts={shifts}
           applications={applications}
           shelterLocation={shelterLocation}
+          attendanceRecords={attendanceRecords}
           currentUser={volunteerSession}
           onClose={() => setIsCheckInModalOpen(false)}
           onCheckedIn={refreshAttendance}
+          posterCode={posterCode}
+          onCheckOutSubmit={handleCheckOutSubmit}
           onSendLineToast={showToast}
         />
       )}
@@ -1057,8 +1073,11 @@ export default function App() {
           onCheckInSubmit={handleCheckInSubmit}
           onCheckOutSubmit={handleCheckOutSubmit}
           onSendLineToast={showToast}
+          onOpenPoster={() => setIsPosterModalOpen(true)}
         />
       )}
+
+      {isPosterModalOpen && <CheckInPosterModal onClose={() => setIsPosterModalOpen(false)} />}
 
       {/* AI Post Generation Modal (Admin) */}
       {aiModalShift && (
