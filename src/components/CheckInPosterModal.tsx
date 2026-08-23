@@ -32,8 +32,11 @@ export const CheckInPosterModal: React.FC<CheckInPosterModalProps> = ({ onClose 
   const url = info ? `${window.location.origin}${info.path}` : '';
 
   // Level Q so the code still reads with a coffee ring or a torn corner on it --
-  // a poster lives on a wall for months.
-  const svg = useMemo(() => (url ? qrToSvg(url, { size: 320, margin: 4, ec: 'Q' }) : ''), [url]);
+  // a poster lives on a wall for months. 10px per module keeps the printed
+  // squares around 2.5mm, which a phone camera can resolve from arm's length;
+  // the earlier 320px-wide version squeezed them to 6.5px and was reported as
+  // hard to scan off a screen.
+  const svg = useMemo(() => (url ? qrToSvg(url, { modulePx: 10, margin: 4, ec: 'Q' }) : ''), [url]);
 
   return (
     <div className="fixed inset-0 z-50 bg-[#716053]/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto print:bg-white print:p-0 print:block">
@@ -72,9 +75,15 @@ export const CheckInPosterModal: React.FC<CheckInPosterModalProps> = ({ onClose 
               </div>
 
               <div
-                className="inline-block border-4 border-[#716053] rounded-3xl p-3 bg-white"
+                className="inline-block border-4 border-[#716053] rounded-3xl p-4 bg-white [&>svg]:w-full [&>svg]:h-auto [&>svg]:max-w-[420px]"
                 dangerouslySetInnerHTML={{ __html: svg }}
               />
+
+              {/* If the camera won't cooperate, the address still works typed in. */}
+              <p className="text-[11px] text-slate-500 break-all">
+                掃不到的話，也可以直接在手機瀏覽器輸入：<br />
+                <span className="font-mono font-bold text-[#716053]">{url}</span>
+              </p>
 
               <div className="text-left max-w-xs mx-auto space-y-2 text-sm text-slate-700">
                 <p className="font-bold text-[#716053] text-center pb-1">用手機相機掃描上方 QR Code</p>

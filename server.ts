@@ -1549,11 +1549,16 @@ ${contextText}
   // good as the poster, so the token proves only "this came from us", not
   // "this person is here". Presence therefore rests entirely on GPS, and
   // check-in refuses a poster scan without it -- see the handler below.
+  // 16 hex characters, not 32. The token is unguessable either way -- 64 bits
+  // of HMAC output -- and it is not what proves presence anyway (GPS is). What
+  // the extra 16 characters did cost was QR density: they pushed the poster URL
+  // up a symbol version, shrinking every module and making the code harder for
+  // a phone camera to read across a room.
   function posterToken(): string {
     return createHmac('sha256', getAppSecret('site_check_in_secret'))
       .update('printed-poster-v1')
       .digest('hex')
-      .slice(0, 32);
+      .slice(0, 16);
   }
 
   function isValidPosterToken(input: string): boolean {
@@ -1567,7 +1572,7 @@ ${contextText}
     return res.json({
       success: true,
       token: posterToken(),
-      path: `/?checkin=${posterToken()}`,
+      path: `/?c=${posterToken()}`,
       geocoded: shelter.geocoded,
       shelterName: shelter.name,
       radiusMeters: GEOFENCE_RADIUS_METERS

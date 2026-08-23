@@ -454,11 +454,23 @@ export function encodeQr(text: string, ec: EcLevel = 'M'): boolean[][] {
 /**
  * Renders `text` as an SVG QR code. Self-contained markup with no external
  * references, so it survives being printed or embedded in a page.
+ *
+ * Sized by modules rather than by total pixels: `modulePx` is how many pixels
+ * one module gets, so the result is always an exact integer multiple and every
+ * module is the same size.
  */
-export function qrToSvg(text: string, options: { size?: number; margin?: number; ec?: EcLevel } = {}): string {
-  const { size = 240, margin = 4, ec = 'M' } = options;
+export function qrToSvg(
+  text: string,
+  options: { modulePx?: number; margin?: number; ec?: EcLevel } = {}
+): string {
+  const { modulePx = 8, margin = 4, ec = 'M' } = options;
   const grid = encodeQr(text, ec);
   const count = grid.length + margin * 2;
+  // Size the image as a whole number of pixels per module. At a fractional
+  // scale the renderer distributes the remainder unevenly and modules end up
+  // a pixel wider here than there, which is exactly the kind of distortion a
+  // camera pointed at a screen struggles to threshold.
+  const size = count * modulePx;
 
   // One path for every dark module beats one <rect> each -- printers and
   // browsers both handle the single path far better at poster sizes.

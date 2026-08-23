@@ -308,7 +308,8 @@ export default function App() {
   // state (and the URL cleaned up) so a refresh mid-sign-in doesn't lose it.
   const [posterCode, setPosterCode] = useState<string>('');
   useEffect(() => {
-    const token = new URLSearchParams(window.location.search).get('checkin');
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('c') || params.get('checkin');
     if (!token) return;
     setPosterCode(token);
     setIsCheckInModalOpen(true);
