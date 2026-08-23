@@ -1181,7 +1181,7 @@ export function insertApplication(a: VolunteerApplication): VolunteerApplication
     INSERT INTO volunteer_applications (id, shiftId, volunteerName, volunteerEmail, volunteerPhone, lineId, experienceLevel, appliedZone, status, appliedAt, notes, reviewNotes, reviewedAt, syncToCalendar, syncToLine, situationalQuestion, situationalAnswer, aiReadinessAssessment)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    a.id, a.shiftId, a.volunteerName, a.volunteerEmail || '', a.volunteerPhone || '', a.lineId || '',
+    a.id, a.shiftId, a.volunteerName, (a.volunteerEmail || '').trim().toLowerCase(), a.volunteerPhone || '', a.lineId || '',
     a.experienceLevel, a.appliedZone, a.status, a.appliedAt, a.notes || null, a.reviewNotes || null,
     a.reviewedAt || null, a.syncToCalendar ? 1 : 0, a.syncToLine ? 1 : 0,
     a.situationalQuestion || null, a.situationalAnswer || null,
@@ -1189,6 +1189,13 @@ export function insertApplication(a: VolunteerApplication): VolunteerApplication
   );
   return a;
 }
+
+// Applications used to store whatever the sign-up form put in the email field,
+// verbatim. A leading space or a capital letter was enough to stop the owner
+// from being recognised as the owner, so cancelling their own booking came back
+// 403 -- and the page, which re-fetched afterwards, simply put the row back.
+// Normalise the existing rows once so old bookings behave like new ones.
+db.exec("UPDATE volunteer_applications SET volunteerEmail = LOWER(TRIM(volunteerEmail)) WHERE volunteerEmail <> LOWER(TRIM(volunteerEmail))");
 
 export function updateApplicationStatus(
   id: string,

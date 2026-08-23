@@ -649,31 +649,37 @@ export default function App() {
       .catch(() => showToast('⚠️ 報名未能存到伺服器，請重新整理確認。'));
   };
 
-  const handleCancelVolunteerApplication = (appId: string) => {
+  // Waits for the server before claiming anything. The previous version removed
+  // the row locally, announced success, then re-fetched -- so when the server
+  // refused the delete, the booking silently reappeared under a "已成功取消"
+  // toast, which is exactly as confusing as it sounds.
+  const handleCancelVolunteerApplication = async (appId: string) => {
     const targetApp = applications.find(a => a.id === appId);
     if (!targetApp) return;
 
-    setApplications(prev => prev.filter(a => a.id !== appId));
+    try {
+      const res = await authFetch(`/api/applications/${encodeURIComponent(appId)}`, { method: 'DELETE' });
+      const data = await res.json();
 
-    if (targetApp.status !== 'rejected') {
-      setShifts(sPrev => sPrev.map(s => {
-        if (s.id === targetApp.shiftId) {
+      if (!data.success) {
+        showToast(`⚠️ 取消報名失敗：${data.error || '未知錯誤'}`);
+        return;
+      }
+
+      setApplications(prev => prev.filter(a => a.id !== appId));
+      if (targetApp.status !== 'rejected') {
+        setShifts(sPrev => sPrev.map(s => {
+          if (s.id !== targetApp.shiftId) return s;
           const newCount = Math.max(0, s.currentCount - 1);
-          return {
-            ...s,
-            currentCount: newCount,
-            status: newCount < s.requiredCount ? 'active' : s.status
-          };
-        }
-        return s;
-      }));
+          return { ...s, currentCount: newCount, status: newCount < s.requiredCount ? 'active' : s.status };
+        }));
+      }
+      showToast('🗑️ 已成功取消該班次報名，名額已重新釋出。');
+      refreshApplications();
+      refreshShifts();
+    } catch {
+      showToast('⚠️ 取消報名失敗：無法連線到伺服器，請稍後再試。');
     }
-
-    showToast('🗑️ 已成功取消該班次報名，名額已重新釋出。');
-
-    authFetch(`/api/applications/${encodeURIComponent(appId)}`, { method: 'DELETE' })
-      .then(() => { refreshApplications(); refreshShifts(); })
-      .catch(() => showToast('⚠️ 取消報名未能同步到伺服器，請重新整理確認。'));
   };
 
   const handleUpdateAppStatus = (id: string, newStatus: ApplicationStatus, reviewNotes?: string) => {

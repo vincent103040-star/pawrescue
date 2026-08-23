@@ -1248,7 +1248,17 @@ ${contextText}
       if (!application?.id || !application?.shiftId || !application?.volunteerName) {
         return res.status(400).json({ success: false, error: '缺少報名必要欄位' });
       }
-      const saved = insertApplication(application);
+
+      // Who this booking belongs to comes from the session, never from the
+      // form. It used to be whatever the sign-up field contained, which is how
+      // bookings ended up owned by an address their owner couldn't match --
+      // and therefore couldn't cancel. Admins may still file one for someone
+      // else, since that's a real thing coordinators do over the phone.
+      const owned = (req as any).session.role === 'volunteer'
+        ? { ...application, volunteerEmail: (req as any).session.identity }
+        : application;
+
+      const saved = insertApplication(owned);
       const shift = adjustShiftCount(application.shiftId, 1);
       broadcastChange('applications');
       broadcastChange('shifts');
@@ -1297,9 +1307,33 @@ ${contextText}
       if (!target) {
         return res.status(404).json({ success: false, error: '找不到該筆報名' });
       }
-      const isOwner = req.session.role === 'volunteer'
-        && target.volunteerEmail
-        && target.volunteerEmail.toLowerCase() === req.session.identity.toLowerCase();
+      const norm = (v: unknown) => String(v || '').trim().toLowerCase();
+
+      // The same number is written "+886912345678" on a volunteer record and
+      // "0912-345-678" on a booking form, so compare the digits with the
+      // Taiwan country code folded back into a leading zero.
+      const samePhone = (a: unknown, b: unknown) => {
+        const digits = (v: unknown) => {
+          const d = String(v || '').replace(/\D/g, '');
+          return d.startsWith('886') ? '0' + d.slice(3) : d;
+        };
+        const da = digits(a);
+        return !!da && da === digits(b);
+      };
+
+      const me = req.session.role === 'volunteer' ? getVolunteerByEmail(req.session.identity) : null;
+
+      // Normally the email settles it. Bookings made before the server started
+      // stamping the owner can have a blank email though, and refusing those
+      // forever would leave volunteers unable to cancel their own shift -- so
+      // fall back to name plus phone, which together are specific enough.
+      const isOwner = req.session.role === 'volunteer' && (
+        (target.volunteerEmail && norm(target.volunteerEmail) === norm(req.session.identity)) ||
+        (!norm(target.volunteerEmail) && !!me &&
+          norm(target.volunteerName) === norm(me.name) &&
+          samePhone(target.volunteerPhone, me.phone))
+      );
+
       if (req.session.role !== 'admin' && !isOwner) {
         return res.status(403).json({ success: false, error: '只能取消自己的報名。' });
       }
