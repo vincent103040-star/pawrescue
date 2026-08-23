@@ -167,6 +167,65 @@ async function startServer() {
     return res.json({ success: true });
   });
 
+
+  // ==========================================================================
+  // Live updates (Server-Sent Events)
+  // --------------------------------------------------------------------------
+  // Every screen used to fetch once on mount and then only re-fetch after a
+  // mutation made on that same device -- so a volunteer checking in on their
+  // phone never appeared on the coordinator's dashboard until they reloaded
+  // the page. For a live operations board that made the numbers quietly wrong.
+  //
+  // SSE rather than WebSockets: this is strictly server -> client, it's native
+  // to both Express and the browser, and it needs no new dependency (npm
+  // install has OOM-ed on this 1GB VM before). The client also polls as a
+  // fallback, so a proxy that buffers the stream degrades to slightly-delayed
+  // updates instead of no updates.
+  // ==========================================================================
+  type ChangeKind = 'attendance' | 'shifts' | 'applications' | 'volunteers' | 'promotions';
+  const sseClients = new Set<express.Response>();
+
+  function broadcastChange(kind: ChangeKind) {
+    const payload = `data: ${JSON.stringify({ kind, at: Date.now() })}\n\n`;
+    for (const client of sseClients) {
+      try {
+        client.write(payload);
+      } catch {
+        sseClients.delete(client);
+      }
+    }
+  }
+
+  app.get('/api/events', (req, res) => {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      // Tells nginx-style proxies not to buffer; harmless elsewhere.
+      'X-Accel-Buffering': 'no'
+    });
+    res.write('retry: 5000\n\n');
+    res.write(`data: ${JSON.stringify({ kind: 'connected', at: Date.now() })}\n\n`);
+
+    sseClients.add(res);
+
+    // Proxies and load balancers close idle connections; a periodic comment
+    // keeps the stream alive without the client having to reconnect.
+    const keepAlive = setInterval(() => {
+      try {
+        res.write(': ping\n\n');
+      } catch {
+        clearInterval(keepAlive);
+        sseClients.delete(res);
+      }
+    }, 25000);
+
+    req.on('close', () => {
+      clearInterval(keepAlive);
+      sseClients.delete(res);
+    });
+  });
+
   const photosDir = path.join(process.cwd(), 'data', 'photos');
   mkdirSync(photosDir, { recursive: true });
   app.use('/photos', express.static(photosDir));
@@ -1085,7 +1144,9 @@ ${contextText}
       if (!shift?.id || !shift?.title || !shift?.date) {
         return res.status(400).json({ success: false, error: '缺少班次必要欄位' });
       }
-      return res.json({ success: true, shift: insertShift(shift) });
+      const created = insertShift(shift);
+      broadcastChange('shifts');
+      return res.json({ success: true, shift: created });
     } catch (error: any) {
       console.error('Create Shift Error:', error);
       return res.status(500).json({ success: false, error: error.message || '建立班次失敗' });
@@ -1098,6 +1159,7 @@ ${contextText}
       if (!updated) {
         return res.status(404).json({ success: false, error: '找不到該班次' });
       }
+      broadcastChange('shifts');
       return res.json({ success: true, shift: updated });
     } catch (error: any) {
       console.error('Update Shift Error:', error);
@@ -1111,6 +1173,8 @@ ${contextText}
       if (!removed) {
         return res.status(404).json({ success: false, error: '找不到該班次' });
       }
+      broadcastChange('shifts');
+      broadcastChange('applications'); // its applications went with it
       return res.json({ success: true });
     } catch (error: any) {
       console.error('Delete Shift Error:', error);
@@ -1139,6 +1203,8 @@ ${contextText}
       }
       const saved = insertApplication(application);
       const shift = adjustShiftCount(application.shiftId, 1);
+      broadcastChange('applications');
+      broadcastChange('shifts');
       return res.json({ success: true, application: saved, shift });
     } catch (error: any) {
       console.error('Create Application Error:', error);
@@ -1166,6 +1232,8 @@ ${contextText}
       if (wasHolding && (status === 'rejected' || status === 'absent')) {
         shift = adjustShiftCount(before.shiftId, -1);
       }
+      broadcastChange('applications');
+      broadcastChange('shifts');
       return res.json({ success: true, application: updated, shift });
     } catch (error: any) {
       console.error('Update Application Status Error:', error);
@@ -1194,6 +1262,8 @@ ${contextText}
         return res.status(404).json({ success: false, error: '找不到該筆報名' });
       }
       const shift = adjustShiftCount(removed.shiftId, -1);
+      broadcastChange('applications');
+      broadcastChange('shifts');
       return res.json({ success: true, application: removed, shift });
     } catch (error: any) {
       console.error('Delete Application Error:', error);
@@ -1225,6 +1295,7 @@ ${contextText}
       if (!updated) {
         return res.status(404).json({ success: false, error: '找不到該位志工' });
       }
+      broadcastChange('volunteers');
       return res.json({ success: true, volunteer: updated });
     } catch (error: any) {
       console.error('Update Volunteer Error:', error);
@@ -1241,6 +1312,8 @@ ${contextText}
       if (!removed) {
         return res.status(404).json({ success: false, error: '找不到該位志工' });
       }
+      broadcastChange('volunteers');
+      broadcastChange('promotions'); // their pending requests went too
       return res.json({ success: true });
     } catch (error: any) {
       console.error('Delete Volunteer Error:', error);
@@ -1292,6 +1365,7 @@ ${contextText}
       if (!updated) {
         return res.status(404).json({ success: false, error: '找不到此志工資料，請先完成一次登入同步' });
       }
+      broadcastChange('volunteers');
       return res.json({ success: true, volunteer: updated });
     } catch (error: any) {
       console.error('Update Volunteer Profile Extras Error:', error);
@@ -1332,6 +1406,7 @@ ${contextText}
         return res.status(400).json({ success: false, error: '缺少必要的簽到欄位' });
       }
       const saved = insertAttendanceRecord(record);
+      broadcastChange('attendance');
       return res.json({ success: true, record: saved });
     } catch (error: any) {
       console.error('Check-In Persist Error:', error);
@@ -1386,6 +1461,8 @@ ${contextText}
         }).catch(() => { /* best-effort, ignore failures */ });
       }
 
+      broadcastChange('attendance');
+      broadcastChange('volunteers'); // hours changed
       return res.json({ success: true, record: updated });
     } catch (error: any) {
       console.error('Check-Out Persist Error:', error);
@@ -1410,6 +1487,7 @@ ${contextText}
         requestedTier,
         completedItems: Array.isArray(completedItems) ? completedItems : []
       });
+      broadcastChange('promotions');
       return res.json({ success: true, request });
     } catch (error: any) {
       console.error('Promotion Request Error:', error);
@@ -1422,7 +1500,8 @@ ${contextText}
       const { volunteerEmail } = req.query;
       if (typeof volunteerEmail === 'string' && volunteerEmail) {
         const request = getLatestPromotionRequestForVolunteer(volunteerEmail);
-        return res.json({ success: true, request });
+        broadcastChange('promotions');
+      return res.json({ success: true, request });
       }
       const requests = getAllPromotionRequests();
       return res.json({ success: true, requests });
@@ -1455,6 +1534,8 @@ ${contextText}
         }).catch(() => { /* best-effort, ignore failures */ });
       }
 
+      broadcastChange('promotions');
+      broadcastChange('volunteers'); // tier may have changed
       return res.json({ success: true, request: updated });
     } catch (error: any) {
       console.error('Approve Promotion Error:', error);
@@ -1470,6 +1551,8 @@ ${contextText}
       if (!updated) {
         return res.status(404).json({ success: false, error: '找不到該筆晉升申請' });
       }
+      broadcastChange('promotions');
+      broadcastChange('volunteers'); // tier may have changed
       return res.json({ success: true, request: updated });
     } catch (error: any) {
       console.error('Reject Promotion Error:', error);

@@ -9,12 +9,16 @@ interface VolunteerRosterProps {
   onAddVolunteer?: (vol: VolunteerProfile) => void;
   /** Re-fetches the roster from the backend after an edit or delete. */
   onVolunteersChanged?: () => void;
+  /** Bumped by App when the server reports a promotion change on any device,
+      so the review queue below refreshes without a page reload. */
+  promotionsRevision?: number;
   onSendLineToast?: (msg: string) => void;
 }
 
 export const VolunteerRoster: React.FC<VolunteerRosterProps> = ({
   volunteers,
   onVolunteersChanged,
+  promotionsRevision = 0,
   onSendLineToast = (_msg: string) => {}
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -116,7 +120,8 @@ export const VolunteerRoster: React.FC<VolunteerRosterProps> = ({
 
   useEffect(() => {
     refreshPromotionRequests();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [promotionsRevision]);
 
   const pendingRequests = promotionRequests.filter(r => r.status === 'pending');
 

@@ -34,6 +34,7 @@ import { INITIAL_SHIFTS, INITIAL_APPLICATIONS, VOLUNTEER_PROFILES, INITIAL_ATTEN
 import { MessageSquare, X, Bell, Clock, MapPin, QrCode, ArrowUpRight } from 'lucide-react';
 import { sendLinePush } from './utils/linePush';
 import { setToken, clearToken, authFetch, fetchCurrentSession, logout as serverLogout } from './utils/session';
+import { subscribeToLiveUpdates } from './utils/liveUpdates';
 import { startLineBinding, exchangeLineLoginTicket } from './utils/lineLogin';
 
 export default function App() {
@@ -102,14 +103,8 @@ export default function App() {
   // Load the authoritative volunteer roster from the backend (SQLite) once on mount,
   // replacing whatever was cached in localStorage / seeded from mock data.
   useEffect(() => {
-    fetch('/api/volunteers')
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && Array.isArray(data.volunteers)) {
-          setVolunteers(data.volunteers);
-        }
-      })
-      .catch(() => { /* keep the locally cached roster if the backend is unreachable */ });
+    refreshVolunteers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Shifts and applications now live server-side too. They used to be
@@ -128,11 +123,43 @@ export default function App() {
       .then(data => { if (data.success && Array.isArray(data.applications)) setApplications(data.applications); })
       .catch(() => { /* keep what's on screen if the backend is unreachable */ });
 
+  const refreshVolunteers = () =>
+    fetch('/api/volunteers')
+      .then(res => res.json())
+      .then(data => { if (data.success && Array.isArray(data.volunteers)) setVolunteers(data.volunteers); })
+      .catch(() => { /* keep what's on screen if the backend is unreachable */ });
+
+  const refreshAttendance = () =>
+    fetch('/api/attendance')
+      .then(res => res.json())
+      .then(data => { if (data.success && Array.isArray(data.records)) setAttendanceRecords(data.records); })
+      .catch(() => { /* keep what's on screen if the backend is unreachable */ });
+
   useEffect(() => {
     refreshShifts();
     refreshApplications();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Live updates: the server pushes "this changed" and the page re-fetches just
+  // that slice, so a check-in on someone's phone shows up on the coordinator's
+  // dashboard without anyone reloading. Falls back to polling automatically --
+  // see subscribeToLiveUpdates.
+  useEffect(() => {
+    const stop = subscribeToLiveUpdates(kind => {
+      if (kind === 'attendance') refreshAttendance();
+      else if (kind === 'shifts') refreshShifts();
+      else if (kind === 'applications') refreshApplications();
+      else if (kind === 'volunteers') refreshVolunteers();
+      else if (kind === 'promotions') setPromotionsRevision(n => n + 1);
+    });
+    return stop;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Bumped when the server says a promotion request changed; the roster watches
+  // this to re-pull its review queue (it owns that fetch, not App).
+  const [promotionsRevision, setPromotionsRevision] = useState(0);
 
   // Validate the stored session token against the server on load. The signed-in
   // role used to be believed purely because localStorage said so, which meant it
@@ -174,14 +201,8 @@ export default function App() {
   // localStorage, so a volunteer checking in on their phone (via LIFF) and an admin
   // looking at the dashboard on a desktop never saw each other's data.
   useEffect(() => {
-    fetch('/api/attendance')
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && Array.isArray(data.records)) {
-          setAttendanceRecords(data.records);
-        }
-      })
-      .catch(() => { /* keep the locally cached records if the backend is unreachable */ });
+    refreshAttendance();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Deep-link support for the LINE Rich Menu: tapping a menu tile opens this app
@@ -857,14 +878,8 @@ export default function App() {
               <VolunteerRoster
                 volunteers={volunteers}
                 onSendLineToast={showToast}
-                onVolunteersChanged={() => {
-                  fetch('/api/volunteers')
-                    .then(res => res.json())
-                    .then(data => {
-                      if (data.success && Array.isArray(data.volunteers)) setVolunteers(data.volunteers);
-                    })
-                    .catch(() => { /* keep the current list if the refresh fails */ });
-                }}
+                onVolunteersChanged={refreshVolunteers}
+                promotionsRevision={promotionsRevision}
               />
             )}
 
