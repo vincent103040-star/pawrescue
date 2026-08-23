@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { PositionShift, VolunteerProfile } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { Sparkles, Users, Award, Clock, Send, CheckCircle2, Trophy, Star, Shield, Filter, ArrowRight, Zap, Check, MessageSquare, AlertCircle, X } from 'lucide-react';
+import { sendLinePush } from '../utils/linePush';
 
 interface AiScheduleModalProps {
   shift: PositionShift;
@@ -19,8 +20,10 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({
   onAssignVolunteer
 }) => {
   const [invitedVolIds, setInvitedVolIds] = useState<string[]>([]);
+  const [sendingVolIds, setSendingVolIds] = useState<string[]>([]);
   const [assignedVolIds, setAssignedVolIds] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<'ai_score' | 'hours_desc' | 'shifts_desc'>('ai_score');
+  const [isSendingAll, setIsSendingAll] = useState(false);
 
   const zoneConf = ZONE_CONFIGS[shift.zone];
 
@@ -86,19 +89,54 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({
     return 0;
   });
 
-  // Handle single LINE invitation
-  const handleSendLineInvite = (vol: VolunteerProfile) => {
-    if (invitedVolIds.includes(vol.id)) return;
-    setInvitedVolIds(prev => [...prev, vol.id]);
-    onSendLineToast(`📲【LINE 邀約已送出】成功對志工【${vol.name}】（累積 ${vol.totalHours} 小時）發送【${shift.title}】的智慧排班邀請訊息！`);
+  const buildInviteText = (vol: VolunteerProfile) =>
+    `📲【智慧排班邀請】${vol.name} 您好，系統依您累積 ${vol.totalHours} 小時服務經驗，推薦您支援【${shift.title}】
+📅 ${shift.date}（${shift.timeRange}）
+📍 ${shift.locationDetails}
+若方便請至系統報名，謝謝您的付出 🐾`;
+
+  // Sends a real LINE push (see sendLinePush) -- was previously just a toast with
+  // no network call at all, so "已發送" never actually reached anyone's phone.
+  const handleSendLineInvite = async (vol: VolunteerProfile) => {
+    if (invitedVolIds.includes(vol.id) || sendingVolIds.includes(vol.id)) return;
+    setSendingVolIds(prev => [...prev, vol.id]);
+    try {
+      const result = await sendLinePush(vol.email, buildInviteText(vol), 'shiftChanges');
+      setInvitedVolIds(prev => [...prev, vol.id]);
+      onSendLineToast(
+        result.ok && !result.simulated
+          ? `📲【LINE 邀約已送出】已真的對志工【${vol.name}】（累積 ${vol.totalHours} 小時）發送【${shift.title}】的智慧排班邀請訊息！`
+          : `📲 已排入對志工【${vol.name}】的邀約通知（模擬效果 — 此志工尚未連結真實 LINE 帳號，或系統尚未設定 LINE_CHANNEL_ACCESS_TOKEN）`
+      );
+    } catch {
+      onSendLineToast(`⚠️ 發送邀約失敗：${vol.name} 的通知未能送出，請稍後再試。`);
+    } finally {
+      setSendingVolIds(prev => prev.filter(id => id !== vol.id));
+    }
   };
 
   // Handle one-click invite ALL top candidates
-  const handleSendAllLineInvites = () => {
-    const topCandidates = sortedCandidates.slice(0, Math.max(1, shift.requiredCount - shift.currentCount));
-    const newInvited = topCandidates.map(c => c.volunteer.id);
-    setInvitedVolIds(prev => Array.from(newSet(prev, newInvited)));
-    onSendLineToast(`🚀【AI 批量推播成功】已透過 LINE 官方帳號對前 ${topCandidates.length} 位推薦志工批次發送排班邀請！`);
+  const handleSendAllLineInvites = async () => {
+    const topCandidates = sortedCandidates
+      .slice(0, Math.max(1, shift.requiredCount - shift.currentCount))
+      .filter(c => !invitedVolIds.includes(c.volunteer.id));
+    if (topCandidates.length === 0) return;
+
+    setIsSendingAll(true);
+    try {
+      const results = await Promise.all(
+        topCandidates.map(c => sendLinePush(c.volunteer.email, buildInviteText(c.volunteer), 'shiftChanges'))
+      );
+      setInvitedVolIds(prev => Array.from(newSet(prev, topCandidates.map(c => c.volunteer.id))));
+      const realCount = results.filter(r => r.ok && !r.simulated).length;
+      onSendLineToast(
+        realCount > 0
+          ? `🚀【AI 批量推播】已真的透過 LINE 官方帳號對 ${realCount}/${topCandidates.length} 位推薦志工發送排班邀請！`
+          : `🚀 已排入對 ${topCandidates.length} 位推薦志工的批次邀約（模擬效果 — 志工尚未連結真實 LINE 帳號，或系統尚未設定 LINE_CHANNEL_ACCESS_TOKEN）`
+      );
+    } finally {
+      setIsSendingAll(false);
+    }
   };
 
   // Helper set merger
@@ -214,10 +252,11 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({
           {/* Batch Invite Button */}
           <button
             onClick={handleSendAllLineInvites}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3.5 py-2 rounded-xl text-xs transition shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+            disabled={isSendingAll}
+            className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-bold px-3.5 py-2 rounded-xl text-xs transition shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
           >
             <Send className="w-3.5 h-3.5" />
-            <span>一鍵批次發送 LINE 邀約推播</span>
+            <span>{isSendingAll ? '發送中...' : '一鍵批次發送 LINE 邀約推播'}</span>
           </button>
         </div>
 
@@ -226,6 +265,7 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({
           {sortedCandidates.map((item, idx) => {
             const vol = item.volunteer;
             const isInvited = invitedVolIds.includes(vol.id);
+            const isSending = sendingVolIds.includes(vol.id);
             const isAssigned = assignedVolIds.includes(vol.id);
 
             return (
@@ -315,11 +355,11 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({
                 <div className="flex items-center justify-end gap-2 pt-1">
                   <button
                     onClick={() => handleSendLineInvite(vol)}
-                    disabled={isInvited}
+                    disabled={isInvited || isSending}
                     className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                       isInvited
                         ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-default'
-                        : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs'
+                        : 'bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white shadow-2xs'
                     }`}
                   >
                     {isInvited ? (
@@ -330,7 +370,7 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({
                     ) : (
                       <>
                         <MessageSquare className="w-3.5 h-3.5" />
-                        <span>📲 LINE 發送邀約</span>
+                        <span>{isSending ? '發送中...' : '📲 LINE 發送邀約'}</span>
                       </>
                     )}
                   </button>
