@@ -1,0 +1,572 @@
+<title>收容所智慧開缺</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+TC:wght@400;500;700;900&family=Noto+Serif+TC:wght@400;600&display=swap">
+
+<style>
+  :root {
+    --ground: #F4F6F4;
+    --surface: #FFFFFF;
+    --surface-2: #E8EDE8;
+    --ink: #131A15;
+    --ink-2: #4E5B52;
+    --rule: #D3DBD4;
+
+    --base: #1F5741;      /* 基準層：穩定、提前發布 */
+    --base-soft: #DFEDE6;
+    --delta: #A85826;     /* 增補層：短時效、急召 */
+    --delta-soft: #F7E7DA;
+
+    --ok: #2F6B45;
+    --ok-soft: #DFEDE4;
+    --warn: #8A5C10;
+    --warn-soft: #F7EEDB;
+    --stop: #9E2F26;
+    --stop-soft: #F7E4E2;
+
+    --sans: "Noto Sans TC", ui-sans-serif, system-ui, sans-serif;
+    --serif: "Noto Serif TC", Georgia, serif;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0E1310;
+      --surface: #161D18;
+      --surface-2: #1E2721;
+      --ink: #E6EDE8;
+      --ink-2: #9BAAA0;
+      --rule: #2A352D;
+      --base: #7FC4A5;
+      --base-soft: #14291F;
+      --delta: #E5A472;
+      --delta-soft: #2E1F14;
+      --ok: #7FC79C;
+      --ok-soft: #16301F;
+      --warn: #DFB765;
+      --warn-soft: #302710;
+      --stop: #EF9089;
+      --stop-soft: #351B18;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #0E1310;
+    --surface: #161D18;
+    --surface-2: #1E2721;
+    --ink: #E6EDE8;
+    --ink-2: #9BAAA0;
+    --rule: #2A352D;
+    --base: #7FC4A5;
+    --base-soft: #14291F;
+    --delta: #E5A472;
+    --delta-soft: #2E1F14;
+    --ok: #7FC79C;
+    --ok-soft: #16301F;
+    --warn: #DFB765;
+    --warn-soft: #302710;
+    --stop: #EF9089;
+    --stop-soft: #351B18;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.85;
+  }
+
+  .wrap {
+    max-width: 60rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 4rem) clamp(1.1rem, 4vw, 2.5rem) 6rem;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(2.4rem, 5vw, 3.6rem);
+  }
+
+  .prose { max-width: 40rem; }
+  p { margin: 0; }
+  .prose p + p { margin-top: 0.9rem; }
+
+  /* ---------- masthead ---------- */
+  .masthead { display: flex; flex-direction: column; gap: 1rem; }
+  .kicker {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--base);
+    margin: 0;
+  }
+  h1 {
+    font-family: var(--sans);
+    font-weight: 900;
+    font-size: clamp(2.1rem, 6vw, 3.4rem);
+    line-height: 1.08;
+    letter-spacing: -0.03em;
+    text-wrap: balance;
+    margin: 0;
+  }
+  .thesis {
+    font-family: var(--sans);
+    font-weight: 500;
+    font-size: clamp(1.05rem, 2.6vw, 1.25rem);
+    line-height: 1.65;
+    color: var(--ink-2);
+    max-width: 40rem;
+    margin: 0;
+    border-left: 3px solid var(--base);
+    padding-left: 1rem;
+  }
+  .meta {
+    display: flex; flex-wrap: wrap; gap: 0.3rem 1.5rem;
+    font-family: var(--mono); font-size: 0.73rem; color: var(--ink-2);
+    border-top: 1px solid var(--rule); padding-top: 0.9rem;
+  }
+
+  /* ---------- sections ---------- */
+  section { display: flex; flex-direction: column; gap: 1.3rem; }
+  .sec-head { display: flex; align-items: baseline; gap: 0.8rem; border-bottom: 2px solid var(--ink); padding-bottom: 0.5rem; }
+  .sec-head h2 {
+    font-family: var(--sans); font-weight: 700;
+    font-size: clamp(1.25rem, 3.2vw, 1.6rem);
+    letter-spacing: -0.02em; margin: 0; flex: 1;
+  }
+  .sec-head .n {
+    font-family: var(--mono); font-size: 0.9rem; font-weight: 700;
+    color: var(--base); letter-spacing: 0.05em;
+  }
+  h3 {
+    font-family: var(--sans); font-weight: 700; font-size: 1.05rem;
+    letter-spacing: -0.01em; margin: 0.4rem 0 -0.4rem;
+  }
+
+  code, .mono { font-family: var(--mono); font-size: 0.85em; }
+  code { background: var(--surface-2); padding: 0.08em 0.34em; border-radius: 3px; }
+  ul, ol { margin: 0; padding-left: 1.25rem; display: flex; flex-direction: column; gap: 0.45rem; }
+  li::marker { color: var(--base); }
+  a { color: var(--base); }
+  a:focus-visible { outline: 2px solid var(--base); outline-offset: 3px; }
+
+  /* ---------- the tension ---------- */
+  .tension { display: grid; gap: 0.9rem; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); }
+  .force {
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 5px;
+    padding: 1.1rem 1.2rem; display: flex; flex-direction: column; gap: 0.5rem;
+  }
+  .force .lbl {
+    font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--ink-2);
+  }
+  .force .claim { font-family: var(--sans); font-weight: 700; font-size: 1.02rem; line-height: 1.45; }
+  .force p { font-size: 0.93rem; color: var(--ink-2); line-height: 1.65; }
+  .force.a { border-top: 3px solid var(--base); }
+  .force.b { border-top: 3px solid var(--delta); }
+  .collide {
+    background: var(--stop-soft); border-radius: 5px; padding: 1rem 1.2rem;
+    font-family: var(--sans); font-size: 0.99rem; line-height: 1.7;
+  }
+  .collide b { color: var(--stop); }
+
+  /* ---------- diagram ---------- */
+  figure { margin: 0; display: flex; flex-direction: column; gap: 0.7rem; }
+  .diagram { width: 100%; height: auto; display: block; background: var(--surface); border: 1px solid var(--rule); border-radius: 5px; }
+  figcaption { font-family: var(--mono); font-size: 0.74rem; color: var(--ink-2); line-height: 1.65; }
+  .d-t { font-family: var(--sans); font-weight: 700; font-size: 14px; }
+  .d-s { font-family: var(--mono); font-size: 10.5px; fill: var(--ink-2); }
+  .d-i { font-family: var(--sans); font-size: 12px; fill: var(--ink-2); }
+  .d-ax { stroke: var(--rule); stroke-width: 1; }
+
+  /* ---------- tables ---------- */
+  .scroller { overflow-x: auto; border: 1px solid var(--rule); border-radius: 5px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-family: var(--sans); font-size: 0.91rem; min-width: 36rem; }
+  caption {
+    caption-side: top; text-align: left; font-family: var(--mono); font-size: 0.72rem;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); padding: 0 0 0.5rem;
+  }
+  th, td { text-align: left; padding: 0.6rem 0.9rem; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.6; }
+  thead th {
+    font-weight: 700; font-size: 0.76rem; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--ink-2); background: var(--surface-2); white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.k { font-weight: 700; }
+  .layer-base { color: var(--base); font-weight: 700; }
+  .layer-delta { color: var(--delta); font-weight: 700; }
+
+  .chip {
+    font-family: var(--mono); font-size: 0.65rem; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase; padding: 0.18rem 0.48rem; border-radius: 3px; white-space: nowrap;
+    display: inline-block;
+  }
+  .chip.have { background: var(--ok-soft); color: var(--ok); }
+  .chip.part { background: var(--warn-soft); color: var(--warn); }
+  .chip.none { background: var(--surface-2); color: var(--ink-2); }
+  .chip.later { background: var(--stop-soft); color: var(--stop); }
+
+  .callout {
+    background: var(--base-soft); border-radius: 5px; padding: 1.05rem 1.2rem;
+    display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.98rem; line-height: 1.75;
+  }
+  .callout b { font-family: var(--sans); }
+
+  footer {
+    border-top: 1px solid var(--rule); padding-top: 1.3rem;
+    font-family: var(--mono); font-size: 0.74rem; color: var(--ink-2); line-height: 1.9;
+  }
+
+  @media print {
+    body { background: #fff; color: #000; font-size: 11pt; }
+    .wrap { max-width: none; padding: 0; gap: 1.5rem; }
+    .force, .scroller, .callout, .collide, figure { break-inside: avoid; }
+    .sec-head { break-after: avoid; }
+  }
+
+  @media (max-width: 40rem) {
+    body { font-size: 16px; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="kicker">架構與功能規劃 · 提報用</p>
+    <h1>收容所智慧開缺</h1>
+    <p class="thesis">把「這週要開哪些班、需要幾個人」從收容所人員的腦袋裡搬到系統裡。志工招募不是收容所的額外工作，而是減壓的手段——前提是排班這件事本身不能再花人力。</p>
+    <div class="meta">
+      <span>浪浪家園 PawRescue 志工系統</span>
+      <span>2026-08-24 草案</span>
+      <span>核心功能單一：智慧開缺</span>
+    </div>
+  </header>
+
+  <section>
+    <div class="sec-head"><span class="n">01</span><h2>先講一個必須先解決的矛盾</h2></div>
+    <p class="prose">原本的構想是「依動物狀況調整志工需求」。方向對，但直接這樣做會反過來傷害招募——因為它和排班最基本的一條運作規律互相牴觸。</p>
+
+    <div class="tension">
+      <div class="force a">
+        <span class="lbl">規律一 · 志工端</span>
+        <span class="claim">班表要提前一到兩週發布，才有人報得到</span>
+        <p>志工多半有正職或學業，要先看到班表才能安排自己的時間。太晚公布，班次不是沒人報，就是只剩少數幾位全職志工能來。</p>
+      </div>
+      <div class="force b">
+        <span class="lbl">規律二 · 收容所端</span>
+        <span class="claim">動物狀況是天天在變的</span>
+        <p>今天有狗生病、明天有新入所、後天有送養活動。這些事件的時效以「天」計，不可能在兩週前就知道。</p>
+      </div>
+    </div>
+
+    <div class="collide">
+      <b>兩者直接相接的後果：</b>班表會一直變動。志工報了名卻被通知取消或改期，幾次之後就不再相信這個系統，招募反而更難。<b>而且基準需求其實是穩定的</b>——貓舍每天要清、狗每天要放風，這跟今天有幾隻在治療關係不大。動物狀況真正影響的是少數個案。
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="n">02</span><h2>解法：開缺分兩層</h2></div>
+    <p class="prose">不要讓動物狀況去「調整」班表，而是讓它「疊加」在班表之上。兩層有各自的節奏、各自的發布時機，互不干擾。</p>
+
+    <figure>
+      <svg class="diagram" viewBox="0 0 880 400" role="img" aria-labelledby="layers-title">
+        <title id="layers-title">基準層與增補層的發布時程</title>
+
+        <line class="d-ax" x1="60" y1="330" x2="830" y2="330"/>
+        <text class="d-s" x="60" y="355">兩週前</text>
+        <text class="d-s" x="380" y="355" text-anchor="middle">一週前</text>
+        <text class="d-s" x="650" y="355" text-anchor="middle">三天前</text>
+        <text class="d-s" x="830" y="355" text-anchor="end">當天</text>
+        <line class="d-ax" x1="60" y1="324" x2="60" y2="336"/>
+        <line class="d-ax" x1="380" y1="324" x2="380" y2="336"/>
+        <line class="d-ax" x1="650" y1="324" x2="650" y2="336"/>
+        <line class="d-ax" x1="830" y1="324" x2="830" y2="336"/>
+
+        <rect x="60" y="90" width="770" height="76" rx="4" fill="var(--base-soft)" stroke="var(--base)" stroke-width="1.5"/>
+        <text class="d-t" x="80" y="120" fill="var(--base)">基準層　固定照護需求</text>
+        <text class="d-i" x="80" y="145">來自班次範本與各區日常照護量 · 提前兩週一次發布 · 發布後不動</text>
+        <line x1="60" y1="166" x2="60" y2="324" stroke="var(--base)" stroke-width="1.5" stroke-dasharray="3 4"/>
+        <text class="d-s" x="68" y="184" fill="var(--base)">↑ 這裡就發布，志工開始報名</text>
+
+        <rect x="650" y="200" width="180" height="76" rx="4" fill="var(--delta-soft)" stroke="var(--delta)" stroke-width="1.5"/>
+        <text class="d-t" x="668" y="228" fill="var(--delta)">增補層</text>
+        <text class="d-i" x="668" y="250" font-size="11">動物個案驅動</text>
+        <text class="d-i" x="668" y="266" font-size="11">走急召，不改班表</text>
+        <line x1="650" y1="276" x2="650" y2="324" stroke="var(--delta)" stroke-width="1.5" stroke-dasharray="3 4"/>
+
+        <text class="d-s" x="60" y="42" fill="var(--ink)" font-size="12">發布時機</text>
+        <line class="d-ax" x1="60" y1="52" x2="830" y2="52"/>
+
+        <text class="d-s" x="440" y="300" text-anchor="middle">增補層只加班次，不取消已發布的班次</text>
+      </svg>
+      <figcaption>兩層各有節奏。基準層提前兩週、發布後穩定不動，是志工報名的主體；增補層在三天內因應個案，用急召補人。</figcaption>
+    </figure>
+
+    <div class="scroller">
+      <table>
+        <caption>表一 — 兩層的分工</caption>
+        <thead><tr><th>　</th><th class="layer-base">基準層</th><th class="layer-delta">增補層</th></tr></thead>
+        <tbody>
+          <tr><td class="k">需求來源</td><td>班次範本＋各區固定照護量（清潔、放風、餵食）</td><td>動物個案事件（醫療、新入所、送養活動）</td></tr>
+          <tr><td class="k">發布時機</td><td>提前 2 週，一次發布整期</td><td>提前 2–3 天，隨事件發生</td></tr>
+          <tr><td class="k">變動性</td><td>發布後不動</td><td>隨時可能新增</td></tr>
+          <tr><td class="k">招募方式</td><td>班表公開，志工自行報名搶班</td><td>急召推播，指定條件的志工優先</td></tr>
+          <tr><td class="k">需要動物資料嗎</td><td><strong>不需要</strong></td><td>需要（來自收容所 CRM）</td></tr>
+          <tr><td class="k">佔全部人力</td><td>約八成</td><td>約兩成</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <b>一條不能破的規則：增補層只加，不減。</b>
+      <p>已經發布、已經有人報名的班次，不因為動物狀況變化而取消或改期。志工的信任一旦破了，後面所有招募都會變難，而那正是這整套系統想解決的問題。人力真的過剩時，讓多出來的志工做別的事，不要退掉他們的班。</p>
+    </div>
+
+    <div class="callout" style="background: var(--surface-2)">
+      <b>這帶來一個很實際的好處：基準層完全不需要跟 CRM 整合。</b>
+      <p>八成的人力需求，靠班次範本和各區固定照護量就算得出來。也就是說第一階段可以完全獨立上線、獨立驗證，不必等兩套系統對接完成。整合是增補層才需要的東西，不是起跑條件。</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="n">03</span><h2>系統架構</h2></div>
+    <p class="prose">志工系統是一個獨立服務，不是 CRM 的一個頁面。它自己有資料庫、自己有登入、自己面對志工；跟 CRM 之間只有一條窄的、單向的資料通道，而且只有增補層會用到。</p>
+
+    <figure>
+      <svg class="diagram" viewBox="0 0 880 360" role="img" aria-labelledby="arch-title">
+        <title id="arch-title">志工系統與收容所 CRM 的關係</title>
+
+        <rect x="30" y="60" width="300" height="230" rx="5" fill="var(--surface-2)" stroke="var(--base)" stroke-width="1.5"/>
+        <text class="d-t" x="52" y="92" fill="var(--base)">志工系統（本專案）</text>
+        <text class="d-s" x="52" y="112">獨立服務 · 自有資料庫</text>
+        <text class="d-i" x="52" y="146">班次範本與週期排班</text>
+        <text class="d-i" x="52" y="172">缺口盤點與一鍵開缺</text>
+        <text class="d-i" x="52" y="198">報名、搶班、衝突檢查</text>
+        <text class="d-i" x="52" y="224">現場簽到、簽退、時數</text>
+        <text class="d-i" x="52" y="250">LINE 通知與急召推播</text>
+        <text class="d-s" x="52" y="276">面對：志工、招募社工</text>
+
+        <rect x="550" y="60" width="300" height="230" rx="5" fill="var(--surface-2)" stroke="var(--delta)" stroke-width="1.5"/>
+        <text class="d-t" x="572" y="92" fill="var(--delta)">收容所 CRM</text>
+        <text class="d-s" x="572" y="112">動物與照護的權威紀錄</text>
+        <text class="d-i" x="572" y="146">動物名冊與所在區域</text>
+        <text class="d-i" x="572" y="172">每日照護回報</text>
+        <text class="d-i" x="572" y="198">醫療紀錄與提醒</text>
+        <text class="d-i" x="572" y="224">新入所、送養活動</text>
+        <text class="d-s" x="572" y="276">面對：獸醫、照護人員</text>
+
+        <line x1="546" y1="146" x2="336" y2="146" stroke="var(--delta)" stroke-width="2" marker-end="url(#arIn)"/>
+        <text class="d-s" x="441" y="136" text-anchor="middle" fill="var(--delta)">動物事件</text>
+        <text class="d-s" x="441" y="166" text-anchor="middle">增補層才需要 · 可延後到第二階段</text>
+
+        <line x1="336" y1="216" x2="546" y2="216" stroke="var(--base)" stroke-width="2" marker-end="url(#arOut)"/>
+        <text class="d-s" x="441" y="206" text-anchor="middle" fill="var(--base)">統計 CSV</text>
+        <text class="d-s" x="441" y="236" text-anchor="middle">排程產出 · 只有數字，不含個資</text>
+
+        <text class="d-s" x="441" y="272" text-anchor="middle">基準層兩條線都不經過</text>
+        <text class="d-s" x="441" y="290" text-anchor="middle">第一階段可完全獨立運作</text>
+
+        <defs>
+          <marker id="arIn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--delta)"/>
+          </marker>
+          <marker id="arOut" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--base)"/>
+          </marker>
+        </defs>
+      </svg>
+      <figcaption>兩個系統各自面對不同的人、各自有自己的資料庫。中間只有兩條窄通道：動物事件進來（增補層用，可延後），統計數字出去（給主系統，不含個資）。第一階段兩條都用不到。</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="n">04</span><h2>功能表</h2></div>
+    <p class="prose">依照「智慧開缺為最重要、其他先不放」的原則排的。右欄是目前這套系統的現況——多數零件已經在了，缺的是把它們串成一條完整的開缺流程。</p>
+
+    <div class="scroller">
+      <table>
+        <caption>表二 — 第一階段：智慧開缺主線</caption>
+        <thead><tr><th>功能</th><th>做什麼</th><th>層</th><th>現況</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="k">照護量設定</td>
+            <td>各區登記固定照護工作與所需人力（貓舍清潔 2 人／日、大狗放風 3 人／日…）。這是整套推算的輸入。</td>
+            <td><span class="layer-base">基準</span></td>
+            <td><span class="chip none">要新做</span></td>
+          </tr>
+          <tr>
+            <td class="k">班次範本</td>
+            <td>把重複的班次存成範本，避免每期從零填表。</td>
+            <td><span class="layer-base">基準</span></td>
+            <td><span class="chip have">已有</span></td>
+          </tr>
+          <tr>
+            <td class="k">整期自動產生班表</td>
+            <td>照護量 × 範本 × 兩週日曆，一次產生整期草稿，人員只需確認或微調。<strong>這是減壓的主要來源。</strong></td>
+            <td><span class="layer-base">基準</span></td>
+            <td><span class="chip none">要新做</span></td>
+          </tr>
+          <tr>
+            <td class="k">缺口盤點看板</td>
+            <td>整期班表的人力達成率、哪些時段報名不足、哪一區最缺。</td>
+            <td><span class="layer-base">基準</span></td>
+            <td><span class="chip part">部分已有</span></td>
+          </tr>
+          <tr>
+            <td class="k">一鍵開缺／補開</td>
+            <td>看板上點一下就把缺的班次開出去或加開名額。</td>
+            <td><span class="layer-base">基準</span></td>
+            <td><span class="chip part">部分已有</span></td>
+          </tr>
+          <tr>
+            <td class="k">發布與報名</td>
+            <td>整期一次公開，志工瀏覽、搶班、時段衝突即時提醒。</td>
+            <td><span class="layer-base">基準</span></td>
+            <td><span class="chip have">已有</span></td>
+          </tr>
+          <tr>
+            <td class="k">急召</td>
+            <td>臨時缺人時發推播；第一階段先讓人員手動觸發並填原因。</td>
+            <td><span class="layer-delta">增補</span></td>
+            <td><span class="chip have">已有</span></td>
+          </tr>
+          <tr>
+            <td class="k">簽到與時數</td>
+            <td>現場簽到（定位＋簽到碼）、簽退、時數自動累計。</td>
+            <td>—</td>
+            <td><span class="chip have">已有</span></td>
+          </tr>
+          <tr>
+            <td class="k">LINE 通知</td>
+            <td>班表發布、錄取、班次提醒。志工可自選要收哪幾類。</td>
+            <td>—</td>
+            <td><span class="chip have">已有</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="scroller">
+      <table>
+        <caption>表三 — 明確不放進第一階段</caption>
+        <thead><tr><th>項目</th><th>為什麼先不做</th></tr></thead>
+        <tbody>
+          <tr><td class="k">AI 預測人力需求</td><td>沒有足夠歷史資料可預測，見下一節。</td></tr>
+          <tr><td class="k">動物狀況自動驅動開缺</td><td>需要 CRM 整合；且屬增補層，只佔兩成人力。第一階段先由人員手動觸發急召。</td></tr>
+          <tr><td class="k">自動配對志工</td><td>要先有足夠的報名與出勤紀錄，配對才有依據。志工人數不多時，公開搶班已經夠用。</td></tr>
+          <tr><td class="k">志工分級與晉升</td><td>與開缺無關，屬營運榮譽制。</td></tr>
+          <tr><td class="k">SOP 教材與問答</td><td>與開缺無關。</td></tr>
+          <tr><td class="k">AI 招募文案生成</td><td>與開缺無關，且不是收容所壓力的來源。</td></tr>
+          <tr><td class="k">月報與匯出</td><td>等真實資料累積幾個月再談。</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="n">05</span><h2>關於「智慧」：初期建議不要用 AI</h2></div>
+    <p class="prose">這一節可能和「智慧開缺」的字面期待相反，但值得先講清楚，避免第一版就交出看起來聰明、實際上沒有根據的東西。</p>
+    <p class="prose">預測需要歷史樣本。目前系統裡累積的是 16 位志工、11 筆出勤紀錄——不足以支撐任何有意義的預測。若現在就接 AI，模型只能靠推測產生數字，而那些數字會以很有說服力的方式呈現出來。現有的缺工預測畫面就是這樣：在沒有資料的情況下，它會回傳「園區共 434 隻浪浪、下週缺 22 人次」這種寫死的示範值。</p>
+
+    <div class="callout">
+      <b>建議：第一階段用規則，不用模型。</b>
+      <p>「貓舍每日需 2 人 × 14 天 = 28 人次，目前報名 19，缺 9」——這種算法可解釋、可調整、人員一看就知道數字從哪來，錯了也知道去改哪個設定。累積三到六個月真實出勤之後，再談用歷史資料預測季節性與流失率，那時候 AI 才有東西可學。</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="n">06</span><h2>部署與成本</h2></div>
+    <p class="prose">主要有兩個問題要回答：多間收容所怎麼分攤成本，以及資料放哪裡才不會不見。第二個問題比第一個急，因為它有一種會安靜出錯的失敗方式。</p>
+
+    <h3>多間收容所：各自架設是可行的</h3>
+    <p class="prose">Google Cloud 的免費額度是以帳戶為單位計算的。不同的收容所是不同的機構、各自持有自己的 Google 帳戶，也就各自是獨立客戶，各自享有自己的免費額度——五間收容所、五個帳戶、五台免費的 e2-micro，完全站得住腳。（不成立的是同一個人開多個帳戶去累加額度，那違反使用條款。）</p>
+    <p class="prose">所以成本不是障礙。真正要衡量的是另一件事。</p>
+
+    <div class="scroller">
+      <table>
+        <caption>表四 — 集中一套 vs 各自架設</caption>
+        <thead><tr><th>　</th><th>集中一套（開發者維運）</th><th>各收容所自行架設</th></tr></thead>
+        <tbody>
+          <tr><td class="k">機器費用</td><td>一份</td><td>各自的免費額度，同樣是零</td></tr>
+          <tr><td class="k">部署更新</td><td>改一次，部署一次</td><td>改一次，要部署 N 次，由 N 個人執行</td></tr>
+          <tr><td class="k">故障排除</td><td>開發者處理</td><td>各自想辦法，或還是回來找開發者</td></tr>
+          <tr><td class="k">前置設定</td><td>做一次</td><td>每間都要自備 Google OAuth 用戶端、LINE 三個頻道、AI 金鑰、網域與憑證</td></tr>
+          <tr><td class="k">個資責任</td><td>開發者保管所有收容所的志工個資</td><td><strong>各收容所自行保管自己的</strong></td></tr>
+          <tr><td class="k">對收容所的負擔</td><td>零</td><td>要有人顧一台機器</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <b>這是取捨，不是對錯，而決定性的問題只有一個：誰來維護？</b>
+      <p>只有一位技術人員時，集中一套省下的工遠多於分散。每間收容所都有能顧機器的人時，分散反而更健康——尤其是個資這一項：各自保管自己志工的資料，在個資法上是實質差別，不只是方便與否。</p>
+      <p>建議先不要決定。第一間跑順之後，維運實際花掉多少時間會是個具體數字，那時候再選才不是用猜的。</p>
+    </div>
+
+    <h3>資料放哪裡：這一項有標準答案</h3>
+    <p class="prose">目前所有資料存在一個 SQLite 檔案裡（<code>data/volunteers.db</code>）。這個選擇本身沒問題，但它決定了能用哪一種機器。</p>
+
+    <div class="scroller">
+      <table>
+        <caption>表五 — 機器選擇與資料存續</caption>
+        <thead><tr><th>方式</th><th>資料會不會留著</th><th>說明</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="k">Compute Engine e2-micro</td>
+            <td><span class="chip have">會留著</span></td>
+            <td>有永久磁碟，SQLite 直接可用，程式不用改。每個帳戶一台免費。<strong>目前階段建議這個。</strong></td>
+          </tr>
+          <tr>
+            <td class="k">Cloud Run</td>
+            <td><span class="chip later">會消失</span></td>
+            <td>檔案系統是臨時的。容器一重啟，寫進去的檔案就沒了——包含整個資料庫。要用 Cloud Run，資料層必須先改成 Cloud SQL 或 Firestore。</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="collide">
+      <b>一個看似可行、實際上會失效的做法：</b>「重啟前先把資料匯出兩份」。Cloud Run 的重啟不是使用者能決定的時機——閒置回收、冷啟動、自動擴縮、平台維護都會觸發，而且都不會事先通知。沒有「重啟前」這個時間點可以掛勾，等發現的時候資料已經不在了。<b>這個問題只能靠換資料層解決，不能靠匯出。</b>選 e2-micro 則完全不會遇到。
+    </div>
+
+    <h3>備份</h3>
+    <p class="prose">系統每天會自動產生一份資料庫快照，保留最近 14 份。但快照目前和資料庫在<strong>同一台機器上</strong>——機器壞掉就一起沒了。需要補的是異地：把快照定期上傳到雲端硬碟或物件儲存即可，這一步做完，備份才算真的成立。</p>
+    <p class="prose">附帶一提，雲端硬碟適合當備份的目的地，不適合當資料庫本身：它沒有交易、沒有並行控制、有 API 配額，撐不住多位志工同時簽到。</p>
+
+    <h3>給主系統的資料</h3>
+    <p class="prose">主系統只需要 CSV，這讓兩邊的介面單純很多——不需要即時介接，也不需要任何常駐的連線。目前的月報匯出已經是正確的形狀：園區名稱、統計月份、班次數、需求人數、已報名人數、缺工人數、缺工率、總服務時數。<strong>全部是統計數字，沒有任何一欄是個資。</strong>這個原則值得維持：給主系統的是數字，不是名冊。</p>
+    <p class="prose">唯一要改的是產出方式。現在必須有人記得去按匯出，而需要人記得的步驟遲早會被忘記，忘記的時候也不會有人發現。改成排程自動產出，這個問題就消失了。</p>
+
+    <p class="prose">Google Cloud 的免費方案條款會調整，正式規劃前請以官方 Free Tier 頁面為準。</p>
+  </section>
+
+
+  <section>
+    <div class="sec-head"><span class="n">07</span><h2>第一階段要交出什麼</h2></div>
+    <p class="prose">一句話：<strong>收容所人員花十分鐘設定各區照護量，系統產出未來兩週的完整班表草稿，確認後一次發布，志工在 LINE 收到通知開始報名。</strong></p>
+    <p class="prose">這條路徑走通，「排班」這件事就從每期數小時的人工作業，變成十分鐘的確認。那才是「減輕收容所壓力」實際兌現的地方；其他功能再好，都不是這句話的答案。</p>
+
+    <div class="scroller">
+      <table>
+        <caption>表六 — 需要收容所回答的問題</caption>
+        <thead><tr><th>問題</th><th>為什麼需要</th></tr></thead>
+        <tbody>
+          <tr><td class="k">園區分成哪幾區？各區每日固定要做哪些照護工作？</td><td>這是基準層推算的唯一輸入。沒有它，自動產生班表就無從算起。</td></tr>
+          <tr><td class="k">每項工作需要幾個人、多久？</td><td>決定班次時長與名額。</td></tr>
+          <tr><td class="k">班表習慣提前多久發布？一次發幾週？</td><td>本文假設兩週，需要確認是否符合實際作業。</td></tr>
+          <tr><td class="k">哪些工作新志工不能單獨做？</td><td>決定班次的技能門檻，避免開出沒人能接的班。</td></tr>
+          <tr><td class="k">目前排一期班表要花多少時間？</td><td>作為驗收基準——第一階段成功與否，就看這個數字降了多少。</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    浪浪家園 PawRescue 志工招募與排班管理系統<br>
+    本文為草案，供內部討論；表二「現況」欄依 2026-08-24 的程式碼實況標註。
+  </footer>
+
+</div>
