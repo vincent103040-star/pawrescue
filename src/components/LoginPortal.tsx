@@ -80,14 +80,17 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
   totalServiceHours,
   shelterLocationName
 }) => {
-  // Admin username/password login state. The credentials are now verified by the
-  // server against a scrypt hash and exchanged for a session token. The password
-  // still defaults to a visible "0000" so the demo walkthrough keeps working and
-  // the placeholder stays obviously temporary -- set ADMIN_PASSWORD on the server,
-  // or use the change-password endpoint, before any real deployment.
+  // Admin username/password login state. Credentials are verified by the server
+  // against a scrypt hash and exchanged for a session token.
+  //
+  // The password field used to be pre-filled with "0000" and shown in clear
+  // text, with the same value printed under the form. There is no default
+  // password any more -- the server generates one on first run and prints it to
+  // its console, or takes ADMIN_PASSWORD -- so there is nothing to pre-fill,
+  // and a password box should start hidden anyway.
   const [adminUsername, setAdminUsername] = useState('Admin');
-  const [adminPassword, setAdminPassword] = useState('0000');
-  const [showAdminPassword, setShowAdminPassword] = useState(true);
+  const [adminPassword, setAdminPassword] = useState('');
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [adminLoginError, setAdminLoginError] = useState('');
 
   // Same admin-editable account shown in the volunteer settings tab -- see
@@ -431,7 +434,7 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
                     type={showAdminPassword ? 'text' : 'password'}
                     value={adminPassword}
                     onChange={e => setAdminPassword(e.target.value)}
-                    placeholder="0000"
+                    placeholder="請輸入管理者密碼"
                     className="w-full pl-9 pr-9 py-2.5 bg-[#FAF6EE] border border-[#716053] rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#716053] focus:outline-none"
                   />
                   <button
@@ -443,7 +446,7 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
                     {showAdminPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
-                <p className="text-[10px] text-slate-400 mt-1">預設帳號 Admin、密碼 0000，僅供示範使用，正式上線前請務必更改。</p>
+                <p className="text-[10px] text-slate-400 mt-1">帳號預設為 Admin。密碼由伺服器首次啟動時產生並印在主控台，或於 .env.local 以 ADMIN_PASSWORD 指定。</p>
               </div>
 
               {adminLoginError && (

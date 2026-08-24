@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { PositionShift } from '../types';
+import { authFetch } from '../utils/session';
 import {
   Bot,
   Sparkles,
@@ -82,7 +83,7 @@ export const ResourceWarningMap: React.FC<ResourceWarningMapProps> = ({
     };
 
     try {
-      const res = await fetch('/api/ai/predict-resource-gaps', {
+      const res = await authFetch('/api/ai/predict-resource-gaps', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ shelterData })

@@ -7,6 +7,7 @@ import { Plus, Sparkles, MapPin, Calendar, Clock, Users, FileText, Check, AlertC
 import { AiScheduleModal } from './AiScheduleModal';
 import { ShiftCalendarView } from './ShiftCalendarView';
 
+import { authFetch } from '../utils/session';
 interface PositionManagerProps {
   shifts: PositionShift[];
   volunteers: VolunteerProfile[];
@@ -45,7 +46,7 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
 
   useEffect(() => {
-    fetch('/api/shift-templates')
+    authFetch('/api/shift-templates')
       .then(res => res.json())
       .then(data => { if (data.success) setShiftTemplates(data.templates || []); })
       .catch(() => { /* best-effort */ });

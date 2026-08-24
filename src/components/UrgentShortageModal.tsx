@@ -4,6 +4,7 @@ import { ZONE_CONFIGS } from '../data/mockData';
 import { Sparkles, AlertTriangle, Send, CheckCircle2, Copy, RefreshCw, X, MessageSquare, ArrowRight, ShieldAlert, Zap, MapPin, Calendar, Clock, Check } from 'lucide-react';
 import { sendLineBroadcast } from '../utils/linePush';
 
+import { authFetch } from '../utils/session';
 interface UrgentShortageModalProps {
   shifts: PositionShift[];
   shelterLocation: ShelterLocation;
@@ -56,7 +57,7 @@ export const UrgentShortageModal: React.FC<UrgentShortageModalProps> = ({
     const shiftRate = Math.round((shiftGap / shiftObj.requiredCount) * 100);
 
     try {
-      const response = await fetch('/api/ai/generate-urgent-push', {
+      const response = await authFetch('/api/ai/generate-urgent-push', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -34,6 +34,11 @@ export const GooglePhoneAuthModal: React.FC<GooglePhoneAuthModalProps> = ({
 }) => {
   // Step state: 1 = Real Google OAuth, 2 = Manual phone entry, 3 = Success
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
+  // The Google access token from the authorization popup. The server verifies
+  // it against Google on sign-in -- it is the only thing that establishes which
+  // account this is, so it has to travel with the request rather than the
+  // browser just reporting the email it read.
+  const [googleAccessToken, setGoogleAccessToken] = useState('');
   const [googleEmail, setGoogleEmail] = useState('');
   const [googleName, setGoogleName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState(initialPhone);
@@ -78,6 +83,8 @@ export const GooglePhoneAuthModal: React.FC<GooglePhoneAuthModalProps> = ({
           `[Google] 授權成功，取得 access token，向後台查詢帳號基本資料...`
         ]);
 
+        setGoogleAccessToken(tokenResponse.access_token);
+
         try {
           const res = await fetch('/api/auth/google-userinfo', {
             method: 'POST',
@@ -104,7 +111,7 @@ export const GooglePhoneAuthModal: React.FC<GooglePhoneAuthModalProps> = ({
               ...prev,
               `[自建資料庫] 這個 Google 帳號先前已登記過聯絡電話 (${data.existingPhone})，自動跳過填寫步驟`
             ]);
-            await persistLoginAndAdvance(data.existingPhone, data.email, data.name);
+            await persistLoginAndAdvance(data.existingPhone, data.email, data.name, tokenResponse.access_token);
           } else {
             setIsLoading(false);
             setCurrentStep(2);
@@ -120,7 +127,7 @@ export const GooglePhoneAuthModal: React.FC<GooglePhoneAuthModalProps> = ({
   };
 
   // Persist the (email, name, phone) to the backend volunteer DB and advance to the success step
-  const persistLoginAndAdvance = async (phone: string, email: string, name: string) => {
+  const persistLoginAndAdvance = async (phone: string, email: string, name: string, accessToken?: string) => {
     setIsLoading(true);
     setErrorMsg('');
     setBackendSyncLog(prev => [
@@ -133,12 +140,10 @@ export const GooglePhoneAuthModal: React.FC<GooglePhoneAuthModalProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          idToken: 'google-oauth-verified',
-          googleProfile: {
-            uid: `google-uid-${email.replace(/[@.]/g, '_')}`,
-            email,
-            name
-          },
+          // The server derives the account from this token, not from the
+          // profile below -- which is now only a display-name hint.
+          accessToken: accessToken || googleAccessToken,
+          googleProfile: { name },
           phoneNumber: phone,
           lineId: `${email.split('@')[0]}_line`,
           tier: '新進志工',

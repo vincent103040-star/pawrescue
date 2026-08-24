@@ -3,6 +3,7 @@ import { PositionShift } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { Sparkles, Copy, Check, X, RefreshCw, Share2, MessageSquare } from 'lucide-react';
 
+import { authFetch } from '../utils/session';
 interface AiPostModalProps {
   shift: PositionShift;
   locationName: string;
@@ -27,7 +28,7 @@ export const AiPostModal: React.FC<AiPostModalProps> = ({
     setLoading(true);
     setErrorMsg('');
     try {
-      const res = await fetch('/api/ai/generate-post', {
+      const res = await authFetch('/api/ai/generate-post', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BookOpen, ShieldAlert, Phone, FileText, Sparkles, MessageCircleQuestion, Loader2, CheckCircle2 } from 'lucide-react';
 import { SopContent } from '../types';
 
+import { authFetch } from '../utils/session';
 interface VolunteerSopGuideProps {
   onOpenRulebookModal: () => void;
 }
@@ -27,7 +28,7 @@ export const VolunteerSopGuide: React.FC<VolunteerSopGuideProps> = ({
   const [content, setContent] = useState<SopContent | null>(null);
 
   useEffect(() => {
-    fetch('/api/sop-content')
+    authFetch('/api/sop-content')
       .then(res => res.json())
       .then(data => {
         if (data.success && data.content) setContent(data.content);
@@ -41,7 +42,7 @@ export const VolunteerSopGuide: React.FC<VolunteerSopGuideProps> = ({
     setRagLoading(true);
     setRagAnswer(null);
     try {
-      const res = await fetch('/api/ai/rag-ask', {
+      const res = await authFetch('/api/ai/rag-ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: ragQuestion })

@@ -8,6 +8,7 @@ import { buildGoogleCalendarLink } from '../utils/googleCalendar';
 import { startLineBinding } from '../utils/lineLogin';
 import { getLiffVolunteerIdentity } from '../utils/liff';
 
+import { authFetch } from '../utils/session';
 export interface GrowthChecklistItem {
   id: string;
   title: string;
@@ -186,7 +187,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
   // (not just this browser's localStorage) whenever we know their email.
   React.useEffect(() => {
     if (!profileEmail) return;
-    fetch(`/api/volunteers/profile?email=${encodeURIComponent(profileEmail)}`)
+    authFetch(`/api/volunteers/profile?email=${encodeURIComponent(profileEmail)}`)
       .then(res => res.json())
       .then(data => {
         if (data.success && data.volunteer) {
@@ -230,7 +231,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
 
   const refreshLineLinkStatus = React.useCallback(() => {
     if (!profileEmail) return;
-    fetch(`/api/volunteers/line-status?email=${encodeURIComponent(profileEmail)}`)
+    authFetch(`/api/volunteers/line-status?email=${encodeURIComponent(profileEmail)}`)
       .then(res => res.json())
       .then(data => {
         if (data.success) {
@@ -302,7 +303,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
 
   useEffect(() => {
     if (!profileEmail) return;
-    fetch(`/api/promotions?volunteerEmail=${encodeURIComponent(profileEmail)}`)
+    authFetch(`/api/promotions?volunteerEmail=${encodeURIComponent(profileEmail)}`)
       .then(res => res.json())
       .then(data => {
         if (data.success && data.request) {
@@ -320,7 +321,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
       onSendLineToast(`🚨 [通知管理員] 志工【${profileName}】向管理員送出【資深志工】晉升審核！`);
       return;
     }
-    fetch('/api/promotions/request', {
+    authFetch('/api/promotions/request', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -402,7 +403,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
     setSituationalAnswer('');
     setAiAssessment(null);
     try {
-      const res = await fetch('/api/ai/generate-situational-question', {
+      const res = await authFetch('/api/ai/generate-situational-question', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ zone: shift.zone, experienceLevel: tierToExperienceLevel(currentUser?.tier) })
@@ -421,7 +422,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
     if (!situationalAnswer.trim()) return;
     setIsAssessing(true);
     try {
-      const res = await fetch('/api/ai/assess-situational-answer', {
+      const res = await authFetch('/api/ai/assess-situational-answer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -514,16 +515,15 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
     // call it once the volunteer has entered one -- an empty phone just means the
     // name/lineId edits above stay local until they fill it in.
     if (profilePhone) {
-      fetch('/api/auth/google-phone-login', {
+      // authFetch, not fetch: this is a signed-in volunteer editing their own
+      // contact details, and the session is what tells the server whose record
+      // to write. It used to send the email in the body, which meant the same
+      // call could have rewritten anybody's.
+      authFetch('/api/auth/google-phone-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          idToken: 'volunteer-self-update',
-          googleProfile: {
-            uid: `google-uid-${profileEmail.replace(/[@.]/g, '_')}`,
-            email: profileEmail,
-            name: profileName
-          },
+          googleProfile: { name: profileName },
           phoneNumber: profilePhone,
           lineId: profileLineId,
           tier: currentUser?.tier || '新進志工',
@@ -541,7 +541,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
     // deliberately never touches) via the dedicated extras endpoint.
     if (profileEmail && (profileEmergencyContact || pendingAvatar)) {
       setIsUploadingAvatar(!!pendingAvatar);
-      fetch('/api/volunteers/profile-extras', {
+      authFetch('/api/volunteers/profile-extras', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -584,7 +584,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
     const text = messages[type];
 
     try {
-      const res = await fetch('/api/line/push', {
+      const res = await authFetch('/api/line/push', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: profileEmail, message: text, notificationType: type })
