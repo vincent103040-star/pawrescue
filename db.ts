@@ -1,13 +1,13 @@
-// Must come first: this module reads ADMIN_PASSWORD while deciding what to
-// migrate, and it has to be in process.env by then.
+// Must come first: this module reads ADMIN_PASSWORD and ORGANIZATION_ID while
+// deciding what to migrate, and both have to be in process.env by then.
 import './env';
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'fs';
 import path from 'path';
 import { randomUUID, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
-import { VOLUNTEER_PROFILES, INITIAL_ATTENDANCE_RECORDS, INITIAL_SHIFTS, INITIAL_APPLICATIONS, DEFAULT_SHELTER_LOCATION, DEFAULT_LINE_OFFICIAL_ACCOUNT } from './src/data/mockData';
+import { VOLUNTEER_PROFILES, INITIAL_ATTENDANCE_RECORDS, INITIAL_SHIFTS, INITIAL_SHIFT_SIGNUPS, DEFAULT_SHELTER_LOCATION, DEFAULT_LINE_OFFICIAL_ACCOUNT } from './src/data/mockData';
 import { RULEBOOK_CORPUS } from './src/data/rulebookCorpus';
-import type { VolunteerProfile, AttendanceRecord, PositionShift, VolunteerApplication, SopContent, SopSection, SopDocument, SopVideo, PromotionRequest, ShiftTemplate, ShelterLocation, LineOfficialAccount } from './src/types';
+import type { VolunteerProfile, AttendanceRecord, PositionShift, ShiftSignup, SopContent, SopSection, SopDocument, SopVideo, PromotionRequest, ShiftTemplate, ShelterLocation, LineOfficialAccount } from './src/types';
 
 const dataDir = path.join(process.cwd(), 'data');
 fs.mkdirSync(dataDir, { recursive: true });
@@ -32,6 +32,24 @@ db.exec('PRAGMA busy_timeout = 5000');
 // WAL trades a little durability for speed by default; FULL puts it back, so a
 // power cut can't lose an already-answered check-in.
 db.exec('PRAGMA synchronous = FULL');
+
+/**
+ * Which shelter this deployment belongs to.
+ *
+ * The StrayHub CRM is multi-tenant: every row there carries an organization and
+ * PostgreSQL enforces the separation. This system has no such concept -- one
+ * shelter, one database, every query global. That asymmetry is fine as long as
+ * the deployment boundary is the tenant boundary: one instance per shelter,
+ * named here.
+ *
+ * Rows are stamped with it from now on. Not because anything filters on it yet
+ * -- with a single value there would be nothing to filter -- but because the
+ * moment data starts arriving from a tenant-scoped CRM, "which shelter is this
+ * row about" has to be an answer the data already carries.
+ */
+export function currentOrganizationId(): string {
+  return (process.env.ORGANIZATION_ID || 'pawrescue-local').trim();
+}
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS volunteers (
@@ -67,9 +85,68 @@ try {
 } catch {
   // column already exists
 }
+
+// ============================================================================
+// Identity: a key that is not the person's email address
+// ----------------------------------------------------------------------------
+// Two problems, both of which only get more expensive the longer they wait.
+//
+// First, email is the primary key here, and `id` -- the column that ought to be
+// the stable handle -- was being filled in with the email as well for anyone who
+// arrived through Google login. So the same fact was the identity twice over: a
+// volunteer who changes their address becomes a different person, and every
+// cross-system message has to carry a personal detail just to say who it means.
+//
+// Second, the CRM identifies people by a UUID of its own. That mapping needs
+// somewhere to live before the two systems can talk, and it must be a column
+// this system can leave empty -- nobody is mapped yet, and the pairing will be
+// a deliberate act by each volunteer rather than a guess made by matching
+// addresses. Matching on email would quietly connect two different people who
+// share a mailbox, and that mistake is invisible afterwards.
+// ============================================================================
+try {
+  db.exec(`ALTER TABLE volunteers ADD COLUMN strayhubUserId TEXT NOT NULL DEFAULT ''`);
+} catch {
+  // column already exists
+}
+try {
+  db.exec(`ALTER TABLE volunteers ADD COLUMN organizationId TEXT NOT NULL DEFAULT ''`);
+} catch {
+  // column already exists
+}
+
+// One CRM user maps to at most one volunteer here. A partial index so the many
+// rows that are legitimately unmapped don't all collide on the empty string.
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_volunteers_strayhub_user
+  ON volunteers (strayhubUserId) WHERE strayhubUserId <> ''
+`);
+
+// Backfill: replace any id that is really an email address, and stamp the
+// shelter on rows that predate the column. Seeded ids like "vol-001" are left
+// alone -- they are already opaque, already unique, and rewriting them would
+// churn rows for nothing.
+{
+  const contaminated = db
+    .prepare(`SELECT email FROM volunteers WHERE id LIKE '%@%'`)
+    .all() as Array<{ email: string }>;
+  for (const row of contaminated) {
+    db.prepare('UPDATE volunteers SET id = ? WHERE email = ?').run(randomUUID(), row.email);
+  }
+  if (contaminated.length > 0) {
+    console.log(`SQLite: 已為 ${contaminated.length} 位志工改用不含個資的識別碼`);
+  }
+
+  const stamped = db
+    .prepare(`UPDATE volunteers SET organizationId = ? WHERE organizationId = ''`)
+    .run(currentOrganizationId());
+  if (stamped.changes > 0) {
+    console.log(`SQLite: 已為 ${stamped.changes} 位志工標記所屬收容所`);
+  }
+}
 // Migration: LINE notification preference toggles. These used to live only in the
 // volunteer's own browser localStorage — which meant an admin's browser (editing a
-// shift, approving an application) had no way to know a given volunteer had turned a
+// shift, approving a signup) had no way to know a given volunteer had turned a
 // notification type off. Storing them here lets the backend enforce them for real.
 try {
   db.exec(`ALTER TABLE volunteers ADD COLUMN linePreferences TEXT NOT NULL DEFAULT ''`);
@@ -124,7 +201,12 @@ function rowToProfile(row: any): VolunteerProfile {
     joinedDate: row.joinedDate,
     emergencyContact: row.emergencyContact,
     lineLinked: !!row.lineUserId,
-    lineDisplayName: row.lineDisplayName || undefined
+    lineDisplayName: row.lineDisplayName || undefined,
+    // Empty until this volunteer pairs their account with the CRM. Kept out of
+    // the shape entirely rather than sent as '' so a caller cannot mistake
+    // "not linked yet" for a real id.
+    strayhubUserId: row.strayhubUserId || undefined,
+    organizationId: row.organizationId || undefined
   };
 }
 
@@ -157,11 +239,15 @@ export function upsertVolunteerFromLogin(params: {
       WHERE email = ?
     `).run(params.name, params.phone, params.lineId, JSON.stringify(['google.com']), nowIso, email);
   } else {
+    // The id is generated, not derived. It used to be the email address, which
+    // made the address the identity -- so changing it would have made someone a
+    // different person, and every reference to them had to carry their personal
+    // details along with it.
     db.prepare(`
       INSERT INTO volunteers
-        (email, id, name, phone, lineId, avatar, skills, preferredZones, totalHours, completedShiftsCount, tier, joinedDate, emergencyContact, providers, status, lastLoginAt)
-      VALUES (?, ?, ?, ?, ?, '', '[]', '[]', 0, 0, '新進志工', ?, '', ?, 1, ?)
-    `).run(email, email, params.name, params.phone, params.lineId, nowIso.split('T')[0], JSON.stringify(['google.com']), nowIso);
+        (email, id, organizationId, name, phone, lineId, avatar, skills, preferredZones, totalHours, completedShiftsCount, tier, joinedDate, emergencyContact, providers, status, lastLoginAt)
+      VALUES (?, ?, ?, ?, ?, ?, '', '[]', '[]', 0, 0, '新進志工', ?, '', ?, 1, ?)
+    `).run(email, randomUUID(), currentOrganizationId(), params.name, params.phone, params.lineId, nowIso.split('T')[0], JSON.stringify(['google.com']), nowIso);
   }
 
   return getVolunteerByEmail(email)!;
@@ -350,7 +436,7 @@ export function getLinePreferences(email: string): StoredLinePreferences {
 db.exec(`
   CREATE TABLE IF NOT EXISTS attendance_records (
     id TEXT PRIMARY KEY,
-    applicationId TEXT,
+    signupId TEXT,
     volunteerName TEXT NOT NULL,
     volunteerPhone TEXT,
     lineId TEXT,
@@ -361,6 +447,9 @@ db.exec(`
     date TEXT NOT NULL,
     checkInTime TEXT NOT NULL,
     checkOutTime TEXT,
+    checkInAt TEXT NOT NULL DEFAULT '',
+    checkOutAt TEXT NOT NULL DEFAULT '',
+    organizationId TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL,
     hoursLogged REAL,
     locationVerified INTEGER NOT NULL DEFAULT 0,
@@ -391,18 +480,99 @@ try {
   // already renamed, or this is a fresh install that never had the old column
 }
 
+// ============================================================================
+// Attendance: an unambiguous instant alongside the readable local time
+// ----------------------------------------------------------------------------
+// checkInTime and checkOutTime are Taipei wall-clock strings ("2026-08-24
+// 21:34:23") with nothing recording that they are Taipei. They read well and
+// they are what the screens show, so they stay -- but they cannot be compared,
+// subtracted, or handed to another system, because there is no way to know what
+// instant they mean without already knowing the convention.
+//
+// checkInAt and checkOutAt hold the same moments as UTC instants. The CRM
+// stores UTC and keeps a timezone per organization; when attendance starts
+// crossing that boundary this is the column that can make the trip.
+//
+// Backfilling the existing rows is exact rather than approximate: Taiwan has
+// observed no daylight saving since 1979, so its offset has been a flat +08:00
+// for every row this database could hold. A country with DST would need the
+// original date to decide, and some of those conversions would be ambiguous.
+// ============================================================================
+try {
+  db.exec(`ALTER TABLE attendance_records ADD COLUMN checkInAt TEXT NOT NULL DEFAULT ''`);
+} catch {
+  // column already exists
+}
+try {
+  db.exec(`ALTER TABLE attendance_records ADD COLUMN checkOutAt TEXT NOT NULL DEFAULT ''`);
+} catch {
+  // column already exists
+}
+try {
+  db.exec(`ALTER TABLE attendance_records ADD COLUMN organizationId TEXT NOT NULL DEFAULT ''`);
+} catch {
+  // column already exists
+}
+
+/**
+ * "2026-08-24 21:34:23" (Taipei) -> "2026-08-24T13:34:23.000Z".
+ * Returns '' for anything that isn't in that shape, so a malformed old row is
+ * left without an instant rather than given a wrong one.
+ */
+function taipeiLocalToUtcIso(local: string): string {
+  const match = String(local || '').match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (!match) return '';
+  const [, y, mo, d, h, mi, sec] = match;
+  const parsed = new Date(`${y}-${mo}-${d}T${h}:${mi}:${sec || '00'}+08:00`);
+  return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString();
+}
+
+{
+  const pending = db
+    .prepare(`SELECT id, checkInTime, checkOutTime FROM attendance_records WHERE checkInAt = ''`)
+    .all() as Array<{ id: string; checkInTime: string; checkOutTime: string | null }>;
+  let converted = 0;
+  for (const row of pending) {
+    const inAt = taipeiLocalToUtcIso(row.checkInTime);
+    if (!inAt) continue;
+    db.prepare('UPDATE attendance_records SET checkInAt = ?, checkOutAt = ? WHERE id = ?')
+      .run(inAt, taipeiLocalToUtcIso(row.checkOutTime || ''), row.id);
+    converted++;
+  }
+  if (converted > 0) {
+    console.log(`SQLite: 已為 ${converted} 筆出勤紀錄補上 UTC 時間戳`);
+  }
+
+  const stamped = db
+    .prepare(`UPDATE attendance_records SET organizationId = ? WHERE organizationId = ''`)
+    .run(currentOrganizationId());
+  if (stamped.changes > 0) {
+    console.log(`SQLite: 已為 ${stamped.changes} 筆出勤紀錄標記所屬收容所`);
+  }
+}
+
+// Migration: applicationId -> signupId, following volunteer_applications ->
+// shift_signups. This one is easy to forget because nothing type-checks it: the
+// column name only ever appears inside SQL strings, so the code and the schema
+// can disagree silently until a query fails at runtime.
+try {
+  db.exec(`ALTER TABLE attendance_records RENAME COLUMN applicationId TO signupId`);
+} catch {
+  // already renamed, or this is a fresh install that never had the old column
+}
+
 // Seed with the original mock attendance history on first run only, same pattern as
 // the volunteers table above.
 const attendanceSeedCount = db.prepare('SELECT COUNT(*) AS c FROM attendance_records').get() as { c: number };
 if (attendanceSeedCount.c === 0) {
   const insertSeed = db.prepare(`
     INSERT INTO attendance_records
-      (id, applicationId, volunteerName, volunteerPhone, lineId, shiftId, shiftTitle, branchId, zone, date, checkInTime, checkOutTime, status, hoursLogged, locationVerified, distanceMeters, qrCodeToken, checkInMethod, rating, feedbackComment, feedbackSubmittedAt, lineReminderSent, photoUrl)
+      (id, signupId, volunteerName, volunteerPhone, lineId, shiftId, shiftTitle, branchId, zone, date, checkInTime, checkOutTime, status, hoursLogged, locationVerified, distanceMeters, qrCodeToken, checkInMethod, rating, feedbackComment, feedbackSubmittedAt, lineReminderSent, photoUrl)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   for (const r of INITIAL_ATTENDANCE_RECORDS) {
     insertSeed.run(
-      r.id, r.applicationId || null, r.volunteerName, r.volunteerPhone || null, r.lineId || null,
+      r.id, r.signupId || null, r.volunteerName, r.volunteerPhone || null, r.lineId || null,
       r.shiftId, r.shiftTitle, 'shelter', r.zone, r.date, r.checkInTime, r.checkOutTime || null,
       r.status, r.hoursLogged ?? null, r.locationVerified ? 1 : 0, r.distanceMeters ?? null,
       r.qrCodeToken, r.checkInMethod || 'staff', r.rating ?? null, r.feedbackComment || null, r.feedbackSubmittedAt || null,
@@ -414,7 +584,9 @@ if (attendanceSeedCount.c === 0) {
 function rowToAttendanceRecord(row: any): AttendanceRecord {
   return {
     id: row.id,
-    applicationId: row.applicationId || undefined,
+    signupId: row.signupId || undefined,
+    checkInAt: row.checkInAt || undefined,
+    checkOutAt: row.checkOutAt || undefined,
     volunteerName: row.volunteerName,
     volunteerPhone: row.volunteerPhone || undefined,
     lineId: row.lineId || undefined,
@@ -446,11 +618,12 @@ export function getAllAttendanceRecords(): AttendanceRecord[] {
 export function insertAttendanceRecord(r: AttendanceRecord): AttendanceRecord {
   db.prepare(`
     INSERT INTO attendance_records
-      (id, applicationId, volunteerName, volunteerPhone, lineId, shiftId, shiftTitle, branchId, zone, date, checkInTime, checkOutTime, status, hoursLogged, locationVerified, distanceMeters, qrCodeToken, rating, feedbackComment, feedbackSubmittedAt, lineReminderSent, photoUrl)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, signupId, volunteerName, volunteerPhone, lineId, shiftId, shiftTitle, branchId, zone, date, checkInTime, checkOutTime, checkInAt, checkOutAt, organizationId, status, hoursLogged, locationVerified, distanceMeters, qrCodeToken, rating, feedbackComment, feedbackSubmittedAt, lineReminderSent, photoUrl)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    r.id, r.applicationId || null, r.volunteerName, r.volunteerPhone || null, r.lineId || null,
+    r.id, r.signupId || null, r.volunteerName, r.volunteerPhone || null, r.lineId || null,
     r.shiftId, r.shiftTitle, 'shelter', r.zone, r.date, r.checkInTime, r.checkOutTime || null,
+    r.checkInAt || '', r.checkOutAt || '', currentOrganizationId(),
     r.status, r.hoursLogged ?? null, r.locationVerified ? 1 : 0, r.distanceMeters ?? null,
     r.qrCodeToken, r.rating ?? null, r.feedbackComment || null, r.feedbackSubmittedAt || null,
     r.lineReminderSent ? 1 : 0, r.photoUrl || null
@@ -460,14 +633,14 @@ export function insertAttendanceRecord(r: AttendanceRecord): AttendanceRecord {
 
 export function updateAttendanceCheckout(
   id: string,
-  updates: { checkOutTime: string; hoursLogged: number; rating?: number; feedbackComment?: string; feedbackSubmittedAt: string; lineReminderSent: boolean; photoUrl?: string }
+  updates: { checkOutTime: string; checkOutAt: string; hoursLogged: number; rating?: number; feedbackComment?: string; feedbackSubmittedAt: string; lineReminderSent: boolean; photoUrl?: string }
 ): AttendanceRecord | null {
   db.prepare(`
     UPDATE attendance_records
-    SET checkOutTime = ?, hoursLogged = ?, status = 'completed', rating = ?, feedbackComment = ?, feedbackSubmittedAt = ?, lineReminderSent = ?, photoUrl = COALESCE(?, photoUrl)
+    SET checkOutTime = ?, checkOutAt = ?, hoursLogged = ?, status = 'completed', rating = ?, feedbackComment = ?, feedbackSubmittedAt = ?, lineReminderSent = ?, photoUrl = COALESCE(?, photoUrl)
     WHERE id = ?
   `).run(
-    updates.checkOutTime, updates.hoursLogged, updates.rating ?? null, updates.feedbackComment || null,
+    updates.checkOutTime, updates.checkOutAt, updates.hoursLogged, updates.rating ?? null, updates.feedbackComment || null,
     updates.feedbackSubmittedAt, updates.lineReminderSent ? 1 : 0, updates.photoUrl || null, id
   );
   const row = db.prepare('SELECT * FROM attendance_records WHERE id = ?').get(id);
@@ -1044,7 +1217,7 @@ export function updateLineOfficialAccount(updates: { basicId: string; displayNam
 }
 
 // ============================================================================
-// Shifts & volunteer applications
+// Shifts & shift signups
 // ----------------------------------------------------------------------------
 // These two lived in the browser's localStorage until now, which meant a shift
 // published on the coordinator's desktop simply did not exist for a volunteer
@@ -1072,8 +1245,31 @@ db.exec(`
   )
 `);
 
+// Migration: volunteer_applications -> shift_signups.
+//
+// This table records "X signed up for shift Y". The StrayHub CRM has a table of
+// its own called volunteer_applications, and there it means "X applied to
+// become a volunteer at this shelter" -- an approval that grants access, valid
+// for a fixed period. Two tables, the same name, opposite meanings, about to
+// exchange data with each other. Renaming ours is much cheaper now than
+// untangling a mix-up later.
+//
+// Runs before the CREATE below: the other order would leave CREATE IF NOT
+// EXISTS making an empty shift_signups, and the rename would then fail with
+// every real signup still stranded in the old table.
+{
+  const tableNames = db
+    .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('volunteer_applications', 'shift_signups')`)
+    .all()
+    .map((row: any) => row.name);
+  if (tableNames.includes('volunteer_applications') && !tableNames.includes('shift_signups')) {
+    db.exec('ALTER TABLE volunteer_applications RENAME TO shift_signups');
+    console.log('SQLite: volunteer_applications 已更名為 shift_signups');
+  }
+}
+
 db.exec(`
-  CREATE TABLE IF NOT EXISTS volunteer_applications (
+  CREATE TABLE IF NOT EXISTS shift_signups (
     id TEXT PRIMARY KEY,
     shiftId TEXT NOT NULL,
     volunteerName TEXT NOT NULL,
@@ -1115,7 +1311,7 @@ function rowToShift(row: any): PositionShift {
   };
 }
 
-function rowToApplication(row: any): VolunteerApplication {
+function rowToShiftSignup(row: any): ShiftSignup {
   return {
     id: row.id,
     shiftId: row.shiftId,
@@ -1171,12 +1367,12 @@ export function updateShift(s: PositionShift): PositionShift | null {
   return row ? rowToShift(row) : null;
 }
 
-// Deleting a shift takes its applications with it -- an application pointing at
+// Deleting a shift takes its signups with it -- a signup pointing at
 // a shift that no longer exists would surface as a blank row in the review queue.
 export function deleteShift(id: string): boolean {
   const existing = db.prepare('SELECT id FROM shifts WHERE id = ?').get(id);
   if (!existing) return false;
-  db.prepare('DELETE FROM volunteer_applications WHERE shiftId = ?').run(id);
+  db.prepare('DELETE FROM shift_signups WHERE shiftId = ?').run(id);
   db.prepare('DELETE FROM shifts WHERE id = ?').run(id);
   return true;
 }
@@ -1193,14 +1389,14 @@ export function adjustShiftCount(shiftId: string, delta: number): PositionShift 
   return updated ? rowToShift(updated) : null;
 }
 
-export function getAllApplications(): VolunteerApplication[] {
-  const rows = db.prepare('SELECT * FROM volunteer_applications ORDER BY appliedAt DESC').all();
-  return rows.map(rowToApplication);
+export function getAllShiftSignups(): ShiftSignup[] {
+  const rows = db.prepare('SELECT * FROM shift_signups ORDER BY appliedAt DESC').all();
+  return rows.map(rowToShiftSignup);
 }
 
-export function insertApplication(a: VolunteerApplication): VolunteerApplication {
+export function insertShiftSignup(a: ShiftSignup): ShiftSignup {
   db.prepare(`
-    INSERT INTO volunteer_applications (id, shiftId, volunteerName, volunteerEmail, volunteerPhone, lineId, experienceLevel, appliedZone, status, appliedAt, notes, reviewNotes, reviewedAt, syncToCalendar, syncToLine, situationalQuestion, situationalAnswer, aiReadinessAssessment)
+    INSERT INTO shift_signups (id, shiftId, volunteerName, volunteerEmail, volunteerPhone, lineId, experienceLevel, appliedZone, status, appliedAt, notes, reviewNotes, reviewedAt, syncToCalendar, syncToLine, situationalQuestion, situationalAnswer, aiReadinessAssessment)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     a.id, a.shiftId, a.volunteerName, (a.volunteerEmail || '').trim().toLowerCase(), a.volunteerPhone || '', a.lineId || '',
@@ -1217,26 +1413,26 @@ export function insertApplication(a: VolunteerApplication): VolunteerApplication
 // from being recognised as the owner, so cancelling their own booking came back
 // 403 -- and the page, which re-fetched afterwards, simply put the row back.
 // Normalise the existing rows once so old bookings behave like new ones.
-db.exec("UPDATE volunteer_applications SET volunteerEmail = LOWER(TRIM(volunteerEmail)) WHERE volunteerEmail <> LOWER(TRIM(volunteerEmail))");
+db.exec("UPDATE shift_signups SET volunteerEmail = LOWER(TRIM(volunteerEmail)) WHERE volunteerEmail <> LOWER(TRIM(volunteerEmail))");
 
-export function updateApplicationStatus(
+export function updateShiftSignupStatus(
   id: string,
   status: string,
   reviewNotes?: string
-): VolunteerApplication | null {
-  const existing = db.prepare('SELECT id FROM volunteer_applications WHERE id = ?').get(id);
+): ShiftSignup | null {
+  const existing = db.prepare('SELECT id FROM shift_signups WHERE id = ?').get(id);
   if (!existing) return null;
-  db.prepare('UPDATE volunteer_applications SET status = ?, reviewNotes = ?, reviewedAt = ? WHERE id = ?')
+  db.prepare('UPDATE shift_signups SET status = ?, reviewNotes = ?, reviewedAt = ? WHERE id = ?')
     .run(status, reviewNotes || null, new Date().toLocaleString('zh-TW', { hour12: false }), id);
-  const row = db.prepare('SELECT * FROM volunteer_applications WHERE id = ?').get(id);
-  return row ? rowToApplication(row) : null;
+  const row = db.prepare('SELECT * FROM shift_signups WHERE id = ?').get(id);
+  return row ? rowToShiftSignup(row) : null;
 }
 
-export function deleteApplication(id: string): VolunteerApplication | null {
-  const row = db.prepare('SELECT * FROM volunteer_applications WHERE id = ?').get(id);
+export function deleteShiftSignup(id: string): ShiftSignup | null {
+  const row = db.prepare('SELECT * FROM shift_signups WHERE id = ?').get(id);
   if (!row) return null;
-  db.prepare('DELETE FROM volunteer_applications WHERE id = ?').run(id);
-  return rowToApplication(row);
+  db.prepare('DELETE FROM shift_signups WHERE id = ?').run(id);
+  return rowToShiftSignup(row);
 }
 
 // Seeded from the original mock data on first run only, same pattern as the
@@ -1246,9 +1442,9 @@ const shiftSeedCount = db.prepare('SELECT COUNT(*) AS c FROM shifts').get() as {
 if (shiftSeedCount.c === 0) {
   for (const s of INITIAL_SHIFTS) insertShift(s);
 }
-const applicationSeedCount = db.prepare('SELECT COUNT(*) AS c FROM volunteer_applications').get() as { c: number };
-if (applicationSeedCount.c === 0) {
-  for (const a of INITIAL_APPLICATIONS) insertApplication(a);
+const signupSeedCount = db.prepare('SELECT COUNT(*) AS c FROM shift_signups').get() as { c: number };
+if (signupSeedCount.c === 0) {
+  for (const a of INITIAL_SHIFT_SIGNUPS) insertShiftSignup(a);
 }
 
 // ============================================================================

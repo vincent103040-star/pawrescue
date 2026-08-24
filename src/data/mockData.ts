@@ -1,4 +1,4 @@
-import { ShelterLocation, ZoneConfig, PositionShift, VolunteerApplication, VolunteerProfile, AttendanceRecord, LineOfficialAccount } from '../types';
+import { ShelterLocation, ZoneConfig, PositionShift, ShiftSignup, VolunteerProfile, AttendanceRecord, LineOfficialAccount } from '../types';
 
 // Seed value only -- db.ts writes this into the shelter_location table on
 // first run. After that, the admin-edited + server-geocoded row in the
@@ -208,7 +208,7 @@ export const INITIAL_SHIFTS: PositionShift[] = [
   }
 ];
 
-export const INITIAL_APPLICATIONS: VolunteerApplication[] = [
+export const INITIAL_SHIFT_SIGNUPS: ShiftSignup[] = [
   {
     id: 'app-101',
     shiftId: 'shift-01',
@@ -355,7 +355,7 @@ export const VOLUNTEER_PROFILES: VolunteerProfile[] = [
 export const INITIAL_ATTENDANCE_RECORDS: AttendanceRecord[] = [
   {
     id: 'att-201',
-    applicationId: 'app-104',
+    signupId: 'app-104',
     volunteerName: '黃秀玲',
     volunteerPhone: '0955-112-233',
     lineId: 'xiuling_h',
@@ -370,7 +370,7 @@ export const INITIAL_ATTENDANCE_RECORDS: AttendanceRecord[] = [
   },
   {
     id: 'att-200',
-    applicationId: 'app-105',
+    signupId: 'app-105',
     volunteerName: '王嘉偉',
     volunteerPhone: '0922-888-999',
     lineId: 'wang_cw',
@@ -391,7 +391,7 @@ export const INITIAL_ATTENDANCE_RECORDS: AttendanceRecord[] = [
   },
   {
     id: 'att-199',
-    applicationId: 'app-102',
+    signupId: 'app-102',
     volunteerName: '張志豪',
     volunteerPhone: '0933-221-100',
     lineId: 'hao_volunteer',
@@ -412,7 +412,7 @@ export const INITIAL_ATTENDANCE_RECORDS: AttendanceRecord[] = [
   },
   {
     id: 'att-198',
-    applicationId: 'app-101',
+    signupId: 'app-101',
     volunteerName: '陳美玲',
     volunteerPhone: '0912-345-678',
     lineId: 'meiling_c',
@@ -433,7 +433,7 @@ export const INITIAL_ATTENDANCE_RECORDS: AttendanceRecord[] = [
   },
   {
     id: 'att-197',
-    applicationId: 'app-103',
+    signupId: 'app-103',
     volunteerName: '林哲銘',
     volunteerPhone: '0988-776-655',
     lineId: 'zheming_l',

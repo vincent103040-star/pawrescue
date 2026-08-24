@@ -10,7 +10,7 @@ interface VolunteerNavbarProps {
   openCheckInModal?: () => void;
   openRulebookModal?: () => void;
   currentUser: VolunteerUserSession | null;
-  myApplicationsCount: number;
+  mySignupsCount: number;
   onLogout: () => void;
 }
 
@@ -20,7 +20,7 @@ export const VolunteerNavbar: React.FC<VolunteerNavbarProps> = ({
   openCheckInModal,
   openRulebookModal,
   currentUser,
-  myApplicationsCount,
+  mySignupsCount,
   onLogout
 }) => {
   return (
@@ -131,9 +131,9 @@ export const VolunteerNavbar: React.FC<VolunteerNavbarProps> = ({
           >
             <Calendar className="w-4 h-4 text-sky-300" />
             <span>2. 我的排班與出勤紀錄</span>
-            {myApplicationsCount > 0 && (
+            {mySignupsCount > 0 && (
               <span className="ml-1 px-2 py-0.5 text-[10px] bg-[#716053] text-white rounded-full font-bold">
-                {myApplicationsCount}
+                {mySignupsCount}
               </span>
             )}
           </button>

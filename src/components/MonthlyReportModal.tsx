@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { ShelterLocation, PositionShift, VolunteerApplication } from '../types';
+import { ShelterLocation, PositionShift, ShiftSignup } from '../types';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Download, X, FileSpreadsheet, FileText, Printer, CheckCircle2, ShieldCheck, Sparkles, Building2, Users, Clock, AlertTriangle, Loader2 } from 'lucide-react';
@@ -8,7 +8,7 @@ interface MonthlyReportModalProps {
   month: string; // e.g., '2026-08'
   shelterLocation: ShelterLocation;
   shifts: PositionShift[];
-  applications: VolunteerApplication[];
+  shiftSignups: ShiftSignup[];
   onClose: () => void;
   onSendLineToast?: (msg: string) => void;
 }
@@ -51,7 +51,7 @@ export const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({
   month,
   shelterLocation,
   shifts,
-  applications,
+  shiftSignups,
   onClose,
   onSendLineToast = (_msg?: string) => {}
 }) => {
@@ -73,7 +73,7 @@ export const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({
 
     // Calculate unique volunteers
     const monthShiftIds = new Set(monthShifts.map(s => s.id));
-    const monthApps = applications.filter(a => monthShiftIds.has(a.shiftId));
+    const monthApps = shiftSignups.filter(a => monthShiftIds.has(a.shiftId));
     const uniqueVols = new Set(monthApps.map(a => a.volunteerName || a.lineId)).size;
     const totalVolunteers = Math.max(uniqueVols, filledCount);
 

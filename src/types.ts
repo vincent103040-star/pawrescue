@@ -58,9 +58,9 @@ export interface PositionShift {
   createdAt: string;
 }
 
-export type ApplicationStatus = 'pending' | 'approved' | 'rejected' | 'attended' | 'absent';
+export type SignupStatus = 'pending' | 'approved' | 'rejected' | 'attended' | 'absent';
 
-export interface VolunteerApplication {
+export interface ShiftSignup {
   id: string;
   shiftId: string;
   volunteerName: string;
@@ -69,7 +69,7 @@ export interface VolunteerApplication {
   lineId: string;
   experienceLevel: SkillLevel;
   appliedZone: ZoneCategory;
-  status: ApplicationStatus;
+  status: SignupStatus;
   appliedAt: string;
   notes?: string;
   reviewNotes?: string;
@@ -110,6 +110,15 @@ export interface VolunteerProfile {
   linePreferences?: LineNotificationPreferences;
   lineLinked?: boolean;
   lineDisplayName?: string;
+  /**
+   * This volunteer's user id in the StrayHub CRM, once the two accounts have
+   * been paired. Absent until then -- and it stays absent unless the volunteer
+   * pairs deliberately. Matching on email instead would silently join two
+   * people who share a mailbox, and nothing downstream could tell.
+   */
+  strayhubUserId?: string;
+  /** Which shelter this record belongs to. See currentOrganizationId in db.ts. */
+  organizationId?: string;
 }
 
 export interface ServiceFeedback {
@@ -131,7 +140,7 @@ export interface ServiceFeedback {
 
 export interface AttendanceRecord {
   id: string;
-  applicationId?: string;
+  signupId?: string;
   volunteerName: string;
   volunteerPhone?: string;
   lineId?: string;
@@ -139,8 +148,15 @@ export interface AttendanceRecord {
   shiftTitle: string;
   zone: ZoneCategory;
   date: string; // YYYY-MM-DD
-  checkInTime: string; // e.g., "2026-08-05 09:58:20"
-  checkOutTime?: string; // e.g., "2026-08-05 13:02:15"
+  checkInTime: string; // Taipei wall clock, for display -- e.g. "2026-08-05 09:58:20"
+  checkOutTime?: string; // Taipei wall clock, for display -- e.g. "2026-08-05 13:02:15"
+  /**
+   * The same two moments as UTC instants. The strings above read well but carry
+   * no timezone, so they cannot be compared, subtracted or handed to another
+   * system; these can. Absent on rows too malformed to convert.
+   */
+  checkInAt?: string;  // ISO-8601 UTC, e.g. "2026-08-05T01:58:20.000Z"
+  checkOutAt?: string; // ISO-8601 UTC
   status: 'checked_in' | 'completed';
   hoursLogged?: number;
   locationVerified: boolean;

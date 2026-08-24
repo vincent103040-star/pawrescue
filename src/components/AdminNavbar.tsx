@@ -3,8 +3,8 @@ import { PawPrint, Calendar, Shield, UserCheck, PlusCircle, Sparkles, QrCode, Bo
 import { AdminUserSession } from '../types';
 
 interface AdminNavbarProps {
-  activeTab: 'dashboard' | 'positions' | 'applications' | 'roster' | 'sopManager';
-  setActiveTab: (tab: 'dashboard' | 'positions' | 'applications' | 'roster' | 'sopManager') => void;
+  activeTab: 'dashboard' | 'positions' | 'signups' | 'roster' | 'sopManager';
+  setActiveTab: (tab: 'dashboard' | 'positions' | 'signups' | 'roster' | 'sopManager') => void;
   pendingCount: number;
   openCreateModal: () => void;
   openCheckInModal?: () => void;
@@ -138,9 +138,9 @@ export const AdminNavbar: React.FC<AdminNavbarProps> = ({
           </button>
 
           <button
-            onClick={() => setActiveTab('applications')}
+            onClick={() => setActiveTab('signups')}
             className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap flex items-center space-x-1.5 transition relative cursor-pointer ${
-              activeTab === 'applications'
+              activeTab === 'signups'
                 ? 'bg-[#716053] text-white shadow-xs'
                 : 'text-slate-600 hover:bg-[#F5E6D0]/40 hover:text-[#716053]'
             }`}

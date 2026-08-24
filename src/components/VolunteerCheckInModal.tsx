@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { AttendanceRecord, PositionShift, VolunteerApplication, VolunteerProfile, ShelterLocation } from '../types';
+import { AttendanceRecord, PositionShift, ShiftSignup, VolunteerProfile, ShelterLocation } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { QrCode, Camera, CheckCircle2, Clock, MapPin, AlertCircle, LogOut, LogIn, UserCheck, ShieldCheck, Sparkles, RefreshCw, X, Compass, Navigation, Radio, AlertTriangle, Star, Send, MessageSquare, ThumbsUp, Heart } from 'lucide-react';
 import { authFetch } from '../utils/session';
 
 interface VolunteerCheckInModalProps {
   shifts: PositionShift[];
-  applications: VolunteerApplication[];
+  shiftSignups: ShiftSignup[];
   volunteers: VolunteerProfile[];
   shelterLocation: ShelterLocation;
   attendanceRecords: AttendanceRecord[];
@@ -49,7 +49,7 @@ function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2:
 
 export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
   shifts,
-  applications,
+  shiftSignups,
   volunteers,
   shelterLocation,
   attendanceRecords,
@@ -160,7 +160,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
       setSelectedShiftId(shifts[0].id);
     }
     // Default volunteer: from approved apps or profiles
-    const approvedApp = applications.find(a => a.status === 'approved' || a.status === 'pending');
+    const approvedApp = shiftSignups.find(a => a.status === 'approved' || a.status === 'pending');
     if (approvedApp) {
       setSelectedVolunteerName(approvedApp.volunteerName);
       setSelectedLineId(approvedApp.lineId || 'line_vol_01');
@@ -168,7 +168,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
       setSelectedVolunteerName(volunteers[0].name);
       setSelectedLineId(volunteers[0].lineId);
     }
-  }, [shifts, applications, volunteers]);
+  }, [shifts, shiftSignups, volunteers]);
 
   const currentShift = shifts.find(s => s.id === selectedShiftId) || shifts[0];
 
@@ -436,12 +436,12 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                       value={selectedVolunteerName}
                       onChange={e => {
                         setSelectedVolunteerName(e.target.value);
-                        const app = applications.find(a => a.volunteerName === e.target.value);
+                        const app = shiftSignups.find(a => a.volunteerName === e.target.value);
                         if (app?.lineId) setSelectedLineId(app.lineId);
                       }}
                       className="w-full p-2.5 bg-white border border-[#716053] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#716053]"
                     >
-                      {applications.map(app => (
+                      {shiftSignups.map(app => (
                         <option key={app.id} value={app.volunteerName}>
                           {app.volunteerName} (LINE: {app.lineId || '已連接'}) - {app.appliedZone}
                         </option>

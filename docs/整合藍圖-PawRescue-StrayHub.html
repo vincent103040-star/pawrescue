@@ -1,0 +1,804 @@
+<title>PawRescue × StrayHub 整合藍圖</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+
+<style>
+  :root {
+    --ground: #F2F4F6;
+    --surface: #FFFFFF;
+    --surface-2: #E9ECF1;
+    --ink: #14171F;
+    --ink-2: #4A5162;
+    --rule: #D6DAE2;
+    --main: #27407A;
+    --main-soft: #E4E9F5;
+    --sub: #A85C2B;
+    --sub-soft: #F6E9DE;
+    --crit: #A32A21;
+    --crit-soft: #F7E3E1;
+    --warn: #8A5A00;
+    --warn-soft: #F7EEDC;
+    --ok: #2C6A47;
+    --ok-soft: #E1EFE6;
+
+    --sans: "IBM Plex Sans", ui-sans-serif, system-ui, "Noto Sans TC", sans-serif;
+    --serif: "Source Serif 4", Georgia, "Noto Serif TC", serif;
+    --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #10131A;
+      --surface: #171B23;
+      --surface-2: #1F242E;
+      --ink: #E6E9F0;
+      --ink-2: #98A1B3;
+      --rule: #2A303C;
+      --main: #93AAE8;
+      --main-soft: #1C2440;
+      --sub: #E3A16C;
+      --sub-soft: #33251A;
+      --crit: #F08A80;
+      --crit-soft: #3A1D1A;
+      --warn: #E0B45F;
+      --warn-soft: #33290F;
+      --ok: #7FC79C;
+      --ok-soft: #16301F;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #10131A;
+    --surface: #171B23;
+    --surface-2: #1F242E;
+    --ink: #E6E9F0;
+    --ink-2: #98A1B3;
+    --rule: #2A303C;
+    --main: #93AAE8;
+    --main-soft: #1C2440;
+    --sub: #E3A16C;
+    --sub-soft: #33251A;
+    --crit: #F08A80;
+    --crit-soft: #3A1D1A;
+    --warn: #E0B45F;
+    --warn-soft: #33290F;
+    --ok: #7FC79C;
+    --ok-soft: #16301F;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.72;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 62rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 4.5rem) clamp(1.1rem, 4vw, 2.5rem) 6rem;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(2.5rem, 5vw, 4rem);
+  }
+
+  .prose { max-width: 40rem; }
+
+  /* ---------- masthead ---------- */
+  .masthead {
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+    padding-bottom: 2rem;
+    border-bottom: 2px solid var(--ink);
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    margin: 0;
+  }
+  h1 {
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: clamp(2rem, 5.5vw, 3.1rem);
+    line-height: 1.1;
+    letter-spacing: -0.022em;
+    text-wrap: balance;
+    margin: 0;
+  }
+  .standfirst {
+    margin: 0;
+    max-width: 42rem;
+    font-size: 1.12rem;
+    color: var(--ink-2);
+  }
+  .sourced {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.4rem;
+    font-family: var(--mono);
+    font-size: 0.74rem;
+    color: var(--ink-2);
+    line-height: 1.5;
+  }
+  .sourced span::before { content: "▸ "; color: var(--main); }
+
+  /* ---------- sections ---------- */
+  section { display: flex; flex-direction: column; gap: 1.35rem; }
+
+  .sec-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.85rem;
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 0.6rem;
+  }
+  .sec-head h2 {
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: clamp(1.3rem, 3vw, 1.65rem);
+    letter-spacing: -0.015em;
+    margin: 0;
+    flex: 1;
+  }
+  .sec-head .tag {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    white-space: nowrap;
+  }
+
+  h3 {
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 1.04rem;
+    letter-spacing: -0.005em;
+    margin: 0.6rem 0 -0.5rem;
+  }
+
+  p { margin: 0; }
+  .prose p + p { margin-top: 0.85rem; }
+
+  a { color: var(--main); text-underline-offset: 0.18em; }
+  a:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--main);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  code, .mono { font-family: var(--mono); font-size: 0.87em; }
+  code {
+    background: var(--surface-2);
+    padding: 0.08em 0.34em;
+    border-radius: 3px;
+    color: var(--ink);
+  }
+
+  ul, ol { margin: 0; padding-left: 1.3rem; display: flex; flex-direction: column; gap: 0.4rem; }
+  li::marker { color: var(--ink-2); }
+
+  /* ---------- verdict cards ---------- */
+  .verdicts { display: grid; gap: 0.9rem; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); }
+  .verdict {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--main);
+    border-radius: 4px;
+    padding: 1.05rem 1.15rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .verdict .k {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
+  .verdict .v {
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 1.02rem;
+    line-height: 1.4;
+  }
+  .verdict p { font-size: 0.94rem; color: var(--ink-2); line-height: 1.6; }
+  .verdict.is-stop { border-left-color: var(--crit); }
+  .verdict.is-go { border-left-color: var(--ok); }
+
+  /* ---------- tables ---------- */
+  .scroller { overflow-x: auto; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-family: var(--sans); font-size: 0.9rem; min-width: 34rem; }
+  caption {
+    caption-side: top;
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    padding: 0 0 0.5rem;
+  }
+  th, td { text-align: left; padding: 0.62rem 0.9rem; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.55; }
+  thead th {
+    font-weight: 600;
+    font-size: 0.78rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    background: var(--surface-2);
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num, th.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.rowkey { font-weight: 600; white-space: nowrap; }
+  .c-sub { color: var(--sub); }
+  .c-main { color: var(--main); }
+
+  /* ---------- risk list ---------- */
+  .risks { display: flex; flex-direction: column; gap: 0.9rem; }
+  .risk {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 1.1rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .risk-top { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+  .risk-top h3 {
+    margin: 0;
+    font-size: 1.05rem;
+    flex: 1 1 18rem;
+  }
+  .chip {
+    font-family: var(--mono);
+    font-size: 0.66rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.5rem;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  .chip.crit { background: var(--crit-soft); color: var(--crit); }
+  .chip.warn { background: var(--warn-soft); color: var(--warn); }
+  .chip.info { background: var(--main-soft); color: var(--main); }
+  .chip.ok { background: var(--ok-soft); color: var(--ok); }
+  .risk p, .risk li { font-size: 0.96rem; }
+  .risk .fix {
+    border-top: 1px dashed var(--rule);
+    padding-top: 0.6rem;
+    font-size: 0.94rem;
+  }
+  .risk .fix b { font-family: var(--sans); font-weight: 600; color: var(--ink); }
+
+  .evidence {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    line-height: 1.9;
+    background: var(--surface-2);
+    border-radius: 3px;
+    padding: 0.7rem 0.9rem;
+    overflow-x: auto;
+    white-space: pre;
+    color: var(--ink);
+  }
+
+  /* ---------- diagram ---------- */
+  figure { margin: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+  .diagram { width: 100%; height: auto; display: block; background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; }
+  figcaption { font-family: var(--mono); font-size: 0.74rem; color: var(--ink-2); line-height: 1.6; }
+  .d-box { fill: var(--surface-2); stroke: var(--rule); }
+  .d-title { font-family: var(--sans); font-weight: 600; font-size: 14px; fill: var(--ink); }
+  .d-sub { font-family: var(--mono); font-size: 10.5px; fill: var(--ink-2); }
+  .d-item { font-family: var(--sans); font-size: 11.5px; fill: var(--ink-2); }
+  .d-flow { font-family: var(--mono); font-size: 10.5px; fill: var(--ink); }
+  .d-line { stroke: var(--rule); }
+
+  /* ---------- steps ---------- */
+  .steps { display: flex; flex-direction: column; gap: 1rem; counter-reset: phase; list-style: none; padding: 0; }
+  .steps > li {
+    display: grid;
+    grid-template-columns: 3.4rem 1fr;
+    gap: 0 1rem;
+    align-items: start;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 1rem 1.2rem;
+  }
+  .steps > li::before {
+    counter-increment: phase;
+    content: "P" counter(phase, decimal-leading-zero);
+    font-family: var(--mono);
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--main);
+    padding-top: 0.1rem;
+  }
+  .steps h3 { margin: 0 0 0.35rem; }
+  .steps .body { font-size: 0.96rem; display: flex; flex-direction: column; gap: 0.5rem; }
+  .steps .gate {
+    font-family: var(--mono);
+    font-size: 0.76rem;
+    color: var(--ink-2);
+    border-top: 1px dashed var(--rule);
+    padding-top: 0.5rem;
+  }
+  .steps .gate b { color: var(--ink); font-weight: 600; }
+
+  .callout {
+    background: var(--main-soft);
+    border-radius: 4px;
+    padding: 1rem 1.2rem;
+    font-size: 0.98rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .callout b { font-family: var(--sans); }
+
+  footer {
+    border-top: 1px solid var(--rule);
+    padding-top: 1.4rem;
+    font-family: var(--mono);
+    font-size: 0.76rem;
+    color: var(--ink-2);
+    line-height: 1.8;
+  }
+
+  @media print {
+    body { background: #fff; color: #000; font-size: 11pt; }
+    .wrap { max-width: none; padding: 0; gap: 1.6rem; }
+    .verdict, .risk, .steps > li, .scroller, .callout { break-inside: avoid; }
+    .sec-head { break-after: avoid; }
+    a { color: #000; }
+  }
+
+  @media (max-width: 40rem) {
+    body { font-size: 16px; }
+    .steps > li { grid-template-columns: 1fr; gap: 0.5rem; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">架構分析 · 2026-08-24</p>
+    <h1>PawRescue × StrayHub 整合藍圖</h1>
+    <p class="standfirst">志工排班子系統要接上浪浪森友會 CRM 主後台。這份文件盤點兩邊實際的程式碼落差、按嚴重度排出會咬人的問題，並給出一套可以分階段落地的資料交換設計。</p>
+    <div class="sourced">
+      <span>子系統：React 19 + Express + node:sqlite，約 2,480 行 server.ts</span>
+      <span>主後台：FastAPI + PostgreSQL(RLS) + Worker + MinIO，29 個 migration</span>
+      <span>依據：兩邊 repo 原始碼，非文件推測</span>
+    </div>
+  </header>
+
+  <section>
+    <div class="sec-head"><h2>先講結論</h2><span class="tag">四個決策</span></div>
+    <div class="verdicts">
+      <div class="verdict is-stop">
+        <span class="k">不要做</span>
+        <span class="v">共用資料庫，或讓任一邊直連對方的 DB</span>
+        <p>主後台的租戶隔離是 PostgreSQL <code>FORCE ROW LEVEL SECURITY</code>，靠每個交易開頭的 <code>set_config('app.current_org_id', …)</code> 生效。Node 端直連會整套繞過 RLS、樂觀鎖版本號、稽核寫入與授權到期判斷。</p>
+      </div>
+      <div class="verdict is-stop">
+        <span class="k">先擋住</span>
+        <span class="v">子系統目前有十來個無授權檢查的 API</span>
+        <p>包含全志工名冊、出勤紀錄、LINE 推播與「自己核准自己升級」。整合會讓主後台的信任邊界延伸到這裡——這是 Phase 0，不是 backlog。</p>
+      </div>
+      <div class="verdict">
+        <span class="k">先定義</span>
+        <span class="v">誰擁有哪塊資料，再談同步</span>
+        <p>兩邊都有 <code>volunteer_applications</code>，但一個是「入所志工資格審核」、一個是「單一班次報名」。名字撞在一起而語義相反，是整合最容易埋出資料錯亂的地方。</p>
+      </div>
+      <div class="verdict is-go">
+        <span class="k">主鍵改成</span>
+        <span class="v">StrayHub 的 user UUID</span>
+        <p>子系統目前以 <code>email</code> 當志工主鍵。跨系統穩定識別、改信箱、LINE 綁定、刪除傳播全都需要一個不會變的 ID。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>兩邊的實際落差</h2><span class="tag">現況對照</span></div>
+    <p class="prose">落差本身不是問題，問題是<strong>落差不對稱</strong>：主後台在每一層都有明確的不變量（租戶、版本、稽核、冪等），子系統多半沒有。資料一旦流動，弱的一邊會決定整體的強度。</p>
+    <div class="scroller">
+      <table>
+        <caption>Table 1 — 逐層對照</caption>
+        <thead>
+          <tr><th>層面</th><th class="c-sub">PawRescue 子系統</th><th class="c-main">StrayHub 主後台</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="rowkey">資料庫</td><td>SQLite 單檔（<code>node:sqlite</code>，同步 API）</td><td>PostgreSQL + asyncpg，Alembic 管理</td></tr>
+          <tr><td class="rowkey">租戶模型</td><td>無。單一 <code>shelter_location</code> 資料列，查詢一律全域</td><td>多租戶，13 張表 <code>FORCE RLS</code>，含 platform / support 兩種特權範圍</td></tr>
+          <tr><td class="rowkey">志工主鍵</td><td><code>email</code>（TEXT PRIMARY KEY）</td><td><code>users.id</code>（UUID）＋ <code>organization_memberships</code></td></tr>
+          <tr><td class="rowkey">認證</td><td>不透明 token 存 SQLite <code>sessions</code>，Bearer 帶入；管理員 scrypt 雜湊</td><td>RS256 JWT（900 秒）＋ 伺服器 session ＋ refresh token 輪替與家族撤銷；Argon2</td></tr>
+          <tr><td class="rowkey">授權粒度</td><td>三段：無 / <code>requireAuth</code> / <code>requireAdmin</code></td><td>角色 × 組織 × 期效 × <code>medical_care_access</code> 旗標，並在 DB 層再擋一次</td></tr>
+          <tr><td class="rowkey">志工資格</td><td><code>status</code> 布林值，無到期概念</td><td><code>volunteer_access_grants</code> 有 <code>valid_from/expires_at</code>，DB CHECK 強制志工必須是有限期，Worker 每分鐘掃過期</td></tr>
+          <tr><td class="rowkey">稽核</td><td><code>console.error</code></td><td><code>audit_records</code>：before/after、operation_id、actor_type（user/system）、source_channel</td></tr>
+          <tr><td class="rowkey">非同步／重試</td><td>無。全部同步在請求內完成</td><td>已具 outbox 型態：<code>idempotency_key</code> 唯一、<code>claim_token</code>、<code>available_at</code>、<code>attempt_count</code>、失敗清單與重送批次</td></tr>
+          <tr><td class="rowkey">冪等</td><td>無</td><td><code>client_request_id</code> 部分唯一索引、<code>operation_id</code>、<code>request_fingerprint</code>、版本號樂觀鎖</td></tr>
+          <tr><td class="rowkey">檔案</td><td>寫本機磁碟（<code>photos/</code>、<code>avatars/</code>），靜態路徑公開</td><td>MinIO / GCS 私有桶＋簽名下載 URL＋媒體淨化</td></tr>
+          <tr><td class="rowkey">時間</td><td><code>'YYYY-MM-DD'</code> 與 <code>'HH:MM'</code> 字串，時數用 number 存</td><td>全 UTC aware，每個組織帶 <code>timezone</code> 與 <code>timezone_version</code></td></tr>
+          <tr><td class="rowkey">契約</td><td>手寫 fetch，前後端靠人記</td><td>OpenAPI 為準，產生 TS 型別，CI 檢查漂移</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>職責邊界</h2><span class="tag">誰是真相來源</span></div>
+    <p class="prose">好消息是兩邊的核心領域幾乎不重疊，而且主後台在規格裡<strong>明確把排班排除在外</strong>（spec 001 FR-004：「不得擴大成完整班次排班系統」）。這代表子系統不是重複造輪子，而是補上主後台刻意不做的那塊。邊界因此可以切得很乾淨。</p>
+
+    <figure>
+      <svg class="diagram" viewBox="0 0 880 430" role="img" aria-labelledby="diagram-title">
+        <title id="diagram-title">兩系統職責邊界與三條資料流</title>
+
+        <rect class="d-box" x="24" y="70" width="290" height="250" rx="5" stroke-width="1"/>
+        <text class="d-title" x="44" y="100">PawRescue 子系統</text>
+        <text class="d-sub" x="44" y="119">現場作業層</text>
+        <text class="d-item" x="44" y="150">班次與班表</text>
+        <text class="d-item" x="44" y="174">報名、搶班、衝突檢查</text>
+        <text class="d-item" x="44" y="198">現場簽到／簽退、工時</text>
+        <text class="d-item" x="44" y="222">SOP 教材與測驗</text>
+        <text class="d-item" x="44" y="246">志工分級（tier）</text>
+        <text class="d-item" x="44" y="270">招募文案與 AI 輔助</text>
+        <line class="d-line" x1="44" y1="288" x2="294" y2="288" stroke-width="1"/>
+        <text class="d-sub" x="44" y="307">可重建；掉了不致命</text>
+
+        <rect class="d-box" x="566" y="70" width="290" height="250" rx="5" stroke-width="1"/>
+        <text class="d-title" x="586" y="100">StrayHub 主後台</text>
+        <text class="d-sub" x="586" y="119">權威紀錄層</text>
+        <text class="d-item" x="586" y="150">收容所（組織）與租戶隔離</text>
+        <text class="d-item" x="586" y="174">人的身分與 LINE 綁定</text>
+        <text class="d-item" x="586" y="198">志工資格與期效授權</text>
+        <text class="d-item" x="586" y="222">動物、照護回報、時間軸</text>
+        <text class="d-item" x="586" y="246">醫療紀錄與提醒</text>
+        <text class="d-item" x="586" y="270">稽核軌跡</text>
+        <line class="d-line" x1="586" y1="288" x2="836" y2="288" stroke-width="1"/>
+        <text class="d-sub" x="586" y="307">不可重建；必須正確</text>
+
+        <line x1="440" y1="40" x2="440" y2="400" stroke="var(--ink-2)" stroke-width="1" stroke-dasharray="3 5"/>
+        <text class="d-sub" x="440" y="30" text-anchor="middle">信任邊界</text>
+
+        <g>
+          <line x1="560" y1="140" x2="322" y2="140" stroke="var(--main)" stroke-width="1.6" marker-end="url(#arrowMain)"/>
+          <text class="d-flow" x="441" y="132" text-anchor="middle" fill="var(--main)">A 已核准志工名冊（快照）</text>
+        </g>
+        <g>
+          <line x1="322" y1="200" x2="560" y2="200" stroke="var(--sub)" stroke-width="1.6" marker-end="url(#arrowSub)"/>
+          <text class="d-flow" x="441" y="192" text-anchor="middle" fill="var(--sub)">B 到勤事實（outbox）</text>
+        </g>
+        <g>
+          <line x1="560" y1="260" x2="322" y2="260" stroke="var(--crit)" stroke-width="1.6" marker-end="url(#arrowCrit)"/>
+          <text class="d-flow" x="441" y="252" text-anchor="middle" fill="var(--crit)">C 撤銷／到期（webhook）</text>
+        </g>
+
+        <text class="d-sub" x="440" y="360" text-anchor="middle">唯一通道：HTTPS ＋ 服務帳號短效 Token</text>
+        <text class="d-sub" x="440" y="380" text-anchor="middle">沒有共用資料庫，沒有共用檔案系統</text>
+
+        <defs>
+          <marker id="arrowMain" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--main)"/>
+          </marker>
+          <marker id="arrowSub" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--sub)"/>
+          </marker>
+          <marker id="arrowCrit" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--crit)"/>
+          </marker>
+        </defs>
+      </svg>
+      <figcaption>三條流，方向固定，不做雙向同步。雙向同步等於承諾要解衝突，而現階段沒有任何一個欄位值得付這個成本。</figcaption>
+    </figure>
+
+    <h3>兩個必須先處理的語義撞名</h3>
+    <div class="scroller">
+      <table>
+        <caption>Table 2 — 撞名與消歧</caption>
+        <thead><tr><th>名稱</th><th>子系統的意思</th><th>主後台的意思</th><th>建議</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="rowkey"><code>volunteer_applications</code></td>
+            <td>某人報名某一個班次</td>
+            <td>某人申請成為這間收容所的志工</td>
+            <td>子系統改名 <code>shift_signups</code>；「資格申請」整條讓給主後台</td>
+          </tr>
+          <tr>
+            <td class="rowkey">志工「等級」</td>
+            <td><code>tier</code>＋<code>promotion_requests</code>，看時數與訓練</td>
+            <td><code>role</code>＋<code>medical_care_access</code>，決定能看哪些資料</td>
+            <td>tier 留在子系統（純營運榮譽制）；凡是會改變<strong>資料存取權</strong>的一律回主後台決定</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>風險清冊</h2><span class="tag">依整合前必須處理的順序</span></div>
+
+    <div class="risks">
+
+      <article class="risk">
+        <div class="risk-top">
+          <h3>R1　子系統有一批完全沒有授權檢查的端點</h3>
+          <span class="chip ok">已修復 · 2026-08-24</span>
+        </div>
+        <p><code>app.use('/api/admin', requireAdmin)</code> 只蓋住 <code>/api/admin/*</code>。不在這個前綴、也沒有各自加檢查的端點，任何知道網址的人都能呼叫：</p>
+        <div class="evidence">GET  /api/volunteers            → 全體志工名冊，含電話、Email、LINE ID
+GET  /api/volunteers/profile    → 任意 email 的完整個資
+POST /api/volunteers/profile-extras → 改任意人的緊急聯絡人與頭像
+POST /api/volunteers/log-hours  → 以姓名替任意人加服務時數
+GET  /api/attendance            → 全部出勤紀錄
+POST /api/attendance/:id/check-out → 替任意簽到紀錄簽退並填時數
+POST /api/promotions/:id/approve   → 核准升級（可自審自核）
+POST /api/line/push /broadcast  → 用收容所官方帳號對所有好友發訊
+POST /api/ai/*                  → 消耗 Gemini 額度</div>
+        <p>另外預設管理員密碼是 <code>'0000'</code>（未設 <code>ADMIN_PASSWORD</code> 時 seed 進 DB）。</p>
+        <p class="fix"><b>已完成：</b>「預設拒絕」翻過來了——先 <code>app.use('/api', requireAuth)</code>，再明列真正的公開端點（登入、LINE webhook、健康檢查）。寫入類一律加 <code>requireAdmin</code> 或「只能操作自己」的擁有者檢查；<code>/api/line/*</code> 只允許管理員；<code>/api/ai/*</code> 加上速率限制。這件事跟整合無關也該做，但整合之後它的影響會從「這個小系統被亂改」升級成「CRM 信任了一個誰都能操作的服務」。</p>
+      </article>
+
+      <article class="risk">
+        <div class="risk-top">
+          <h3>R2　同一個人，三套互不相通的鑰匙</h3>
+          <span class="chip crit">整合阻斷</span>
+        </div>
+        <p>子系統用 <code>email</code> 當主鍵，主後台用 <code>users.id</code>（UUID）＋<code>line_user_bindings.line_user_id</code>。目前沒有任何欄位能把同一個人在兩邊對起來。用 email 當關聯鍵有三個具體問題：改信箱等於換人、Google 登入的 email 與志工申請時填的可能不同、以及 email 是個資，會被迫在每一次 API 呼叫裡傳來傳去。</p>
+        <p class="fix"><b>要做的事：</b>子系統 <code>volunteers</code> 加 <code>strayhub_user_id</code>（UUID，唯一）與 <code>organization_id</code>，並讓它成為對外唯一的識別。email 降級成一般聯絡欄位。首次配對用一次性綁定流程（志工在主後台的 LIFF 裡確認），不要用 email 自動比對——自動比對會在同名同姓或共用信箱時把兩個人接錯，而這種錯誤在稽核紀錄裡幾乎看不出來。</p>
+      </article>
+
+      <article class="risk">
+        <div class="risk-top">
+          <h3>R3　LINE 通道會互相擋路</h3>
+          <span class="chip crit">整合阻斷</span>
+        </div>
+        <p>兩邊各自有一套 LINE：子系統有自己的 Messaging API channel、Login channel 與 LIFF；主後台有 <code>line_channel_*</code> 設定、webhook 去重表、綁定表、rich menu context 與通知外送佇列。兩個硬限制會直接撞上：</p>
+        <ul>
+          <li><strong>一個 Messaging channel 只能設定一個 webhook URL。</strong>兩邊不可能同時收同一個 channel 的事件，除非其中一邊當轉發器。</li>
+          <li><strong>userId 只在同一個 Provider 底下才一致。</strong>不同 Provider 的兩套綁定資料無法互相對應——你在 HANDOFF 裡已經記過這件事。</li>
+        </ul>
+        <p>再加上使用者體驗問題：志工要加兩個官方帳號、收兩份提醒、在兩個 rich menu 之間猜哪個能簽到。</p>
+        <p class="fix"><b>要做的事：</b>短期把兩個 channel 移到<strong>同一個 Provider</strong>，userId 立刻可對應，改動最小。目標態是<strong>單一 channel 由主後台持有</strong>：它已經有 webhook 去重（<code>line_webhook_events.webhook_event_id</code> 唯一）、綁定、以及帶重試與失敗清單的通知佇列——子系統改成呼叫主後台的通知 API，而不是自己打 LINE。順帶解掉一個現有 bug：子系統的通知偏好只有 <code>/api/line/push</code> 會檢查，broadcast 繞過它。</p>
+      </article>
+
+      <article class="risk">
+        <div class="risk-top">
+          <h3>R4　租戶模型不對稱</h3>
+          <span class="chip warn">高</span>
+        </div>
+        <p>主後台從資料庫層就假設「每一列都屬於某個組織」，子系統則假設「只有一間收容所」。一旦子系統開始快取來自主後台的租戶資料，它就變成一個租戶無感的副本；第二間收容所出現的那天，就是資料互相看見的那天。</p>
+        <p class="fix"><b>要做的事：</b>務實的選擇是<strong>一個收容所一套部署</strong>，<code>ORGANIZATION_ID</code> 放環境變數，服務帳號的 token 也只綁這一個組織——主後台側自然擋掉越權。同時現在就把 <code>organization_id</code> 欄位加進子系統各表（即使只有一個值），未來要走多租戶時不必動 schema，只要把常數換成請求範圍。反過來做（先多租戶再補隔離）的成本高一個數量級。</p>
+      </article>
+
+      <article class="risk">
+        <div class="risk-top">
+          <h3>R5　主後台目前沒有機器對機器認證</h3>
+          <span class="chip warn">高</span>
+        </div>
+        <p>OpenAPI 只有一種 <code>bearerAuth</code>，簽發途徑是帳密登入與 LIFF 交換，全部針對「人」。最容易的做法——幫子系統開一個管理員帳號、把帳密塞進 <code>.env</code>——會同時失去三件事：稽核裡分不出是人還是系統、無法只給部分權限、以及那組帳密會長期有效且散落在部署環境。</p>
+        <p class="fix"><b>要做的事：</b>加一組獨立的服務帳號（client credentials），細節見下一節。好消息是主後台已經留好接口：<code>audit_records</code> 的 CHECK 明確支援 <code>actor_type='system'</code> ＋ <code>actor_reference</code>（migration 0026），JWT 簽發也已抽象成 <code>AccessTokenPort</code>，不用重寫。</p>
+      </article>
+
+      <article class="risk">
+        <div class="risk-top">
+          <h3>R6　時間表示法不一致</h3>
+          <span class="chip warn">中</span>
+        </div>
+        <p>主後台存 UTC aware 時間並讓每個組織帶自己的 <code>timezone</code>；子系統存 <code>'2026-08-24'</code> 與 <code>'09:00 - 12:00'</code> 這類本地字串，時數是前端算完再送上來的 number。跨系統之後會出現三種錯：跨午夜的班次時數算錯、日期字串比較在時區邊界失準、以及「今天的班表」在兩邊指的不是同一天。</p>
+        <p class="fix"><b>要做的事：</b>凡是要跨邊界的時間，一律用 UTC ISO-8601 instant 傳輸，本地日期只保留給顯示。工時由伺服器從簽到／簽退 instant 計算，不接受客戶端送來的 <code>hoursLogged</code>——這同時修掉 R1 裡那個能任意灌時數的端點。</p>
+      </article>
+
+      <article class="risk">
+        <div class="risk-top">
+          <h3>R7　SQLite 同步 I/O 會在同步作業時卡住現場</h3>
+          <span class="chip warn">中</span>
+        </div>
+        <p><code>node:sqlite</code> 的 <code>DatabaseSync</code> 是同步 API，直接跑在事件迴圈上。目前只有互動流量所以沒事，但加上定期同步、outbox 排空、批次 upsert 之後，一次幾百列的寫入會讓同一時間的簽到請求與 SSE 推送一起停住。<code>data/volunteers.db</code> 也還沒有備份。</p>
+        <p class="fix"><b>要做的事：</b>開 WAL（<code>PRAGMA journal_mode=WAL</code>）並設 <code>busy_timeout</code>；同步作業切成小批次（每批 ≤100 列）並用 <code>setImmediate</code> 讓出迴圈；備份就是定時複製一份 <code>.db</code> 檔到別的地方。若之後子系統要跟主後台一起上雲，改用同一台 Postgres 的獨立 database（<strong>不是</strong>同一個 schema）會一次解掉並行、備份與交易語義三件事。</p>
+      </article>
+
+      <article class="risk">
+        <div class="risk-top">
+          <h3>R8　檔案儲存不對稱</h3>
+          <span class="chip info">中</span>
+        </div>
+        <p>子系統把簽退照片與頭像用 base64 收進來、寫本機磁碟，再用 <code>express.static</code> 公開；主後台用私有物件儲存加簽名 URL 與媒體淨化。若哪天簽退照片要進到動物時間軸，等於把一批本來就公開可讀的檔案接進一個嚴格控管的系統。</p>
+        <p class="fix"><b>要做的事：</b>照片不要跨系統搬。真的需要時，改成子系統向主後台要一組上傳用簽名 URL、直接上傳到物件儲存，子系統只留 media id。順帶把 30MB 的 base64 JSON 從請求路徑上拿掉。</p>
+      </article>
+
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>架構選項</h2><span class="tag">三選一</span></div>
+    <div class="scroller">
+      <table>
+        <caption>Table 3 — 為什麼是 HTTP ＋ 本地 outbox</caption>
+        <thead><tr><th>方案</th><th>優點</th><th>致命處</th><th>判定</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="rowkey">共用資料庫<br><span class="d-sub mono">子系統直連 Postgres</span></td>
+            <td>最快，沒有序列化成本，交易一致</td>
+            <td>整套繞過 RLS、版本樂觀鎖、稽核與授權到期判斷。主後台所有安全設計都建立在「經過應用層」這個前提上</td>
+            <td><span class="chip crit">否決</span></td>
+          </tr>
+          <tr>
+            <td class="rowkey">前端各打各的<br><span class="d-sub mono">瀏覽器同時持兩邊 token</span></td>
+            <td>後端不用改</td>
+            <td>兩份 session 生命週期不同步、CORS 與 token 外洩面擴大、伺服器端無法稽核跨系統操作、離線完全不可用</td>
+            <td><span class="chip crit">否決</span></td>
+          </tr>
+          <tr>
+            <td class="rowkey">HTTP API ＋ 本地 outbox ＋ webhook</td>
+            <td>不變量留在各自的應用層；子系統可離線降級運作；重試與冪等是既有模式的延伸</td>
+            <td>最終一致，需要處理重試與去重（但這正是主後台已經在做的事）</td>
+            <td><span class="chip ok">採用</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout">
+      <b>沿用既有模式，不要發明新的。</b>
+      <p>主後台的 <code>volunteer_notification_deliveries</code> 已經是一張標準 outbox：唯一 <code>idempotency_key</code>、<code>available_at</code> 排程、<code>claim_token</code> 認領、<code>attempt_count</code> 退避、失敗清單與重送批次。子系統的 outbox 照抄這個結構就好——同樣的欄位、同樣的語義，兩邊維運心智模型一致，除錯時也不用切換思路。</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>三條資料流的契約</h2><span class="tag">具體設計</span></div>
+
+    <h3>A — 已核准志工名冊（主後台 → 子系統）</h3>
+    <p class="prose">用<strong>整份快照輪詢</strong>，不要做增量游標。理由是規模：單一收容所的在籍志工是數百人量級，一份含 UUID、姓名、期效、角色旗標的 JSON 大約幾十 KB，五分鐘拉一次的成本遠低於維護游標的成本。而以 <code>updated_at</code> 當游標有個容易漏資料的陷阱——先開始、後提交的交易，其 <code>updated_at</code> 可能早於上一輪的游標值，那筆更新就永遠不會被拉到。真要做增量，得用 <code>(updated_at, id)</code> 複合游標加上一段重疊回看窗，或在主後台加一張單調遞增序號的變更表。</p>
+    <ul>
+      <li>主後台新增 <code>GET /v1/integration/volunteer-roster</code>，回傳 <code>user_id</code>、<code>display_name</code>、<code>membership.status</code>、<code>valid_from</code>、<code>expires_at</code>、<code>access_version</code>。<strong>不含</strong>電話與 Email。</li>
+      <li>回應帶 <code>ETag</code>；子系統帶 <code>If-None-Match</code>，沒變動就是 304，實際傳輸量趨近於零。</li>
+      <li>子系統把快照寫進本地表並記下 <code>synced_at</code>。簽到時只讀本地表，不做同步呼叫——現場網路不該擋住簽到。</li>
+      <li>即時性由流 C 補足，輪詢只是防止漏接的保底。</li>
+    </ul>
+
+    <h3>B — 到勤事實（子系統 → 主後台）</h3>
+    <p class="prose">出勤是<strong>只增不改的事實</strong>，天然適合 at-least-once ＋冪等接收，這是三條流裡最安全的一條。</p>
+    <ul>
+      <li>每筆簽到／簽退寫進本地 <code>integration_outbox</code>，帶一個生成即固定的 <code>event_id</code>（UUID）。</li>
+      <li>背景排空，指數退避；主後台以 <code>(organization_id, event_id)</code> 唯一索引去重，重送必然安全。</li>
+      <li>Payload 只帶 <code>strayhub_user_id</code>、UTC instant、班次代碼、驗證方式（<code>self</code>／<code>staff</code>）與是否通過定位驗證。<strong>不要送 GPS 座標</strong>——主後台不需要，而座標是敏感資料。</li>
+      <li>主後台側以 <code>actor_type='system'</code>、<code>actor_reference='pawrescue'</code> 寫稽核，之後查得出每一筆到勤是哪個系統、哪個版本寫進來的。</li>
+    </ul>
+
+    <h3>C — 撤銷與到期（主後台 → 子系統）</h3>
+    <p class="prose">這條是<strong>安全關鍵</strong>：資格被撤銷的人必須立刻進不了現場，不能等下一輪輪詢。</p>
+    <ul>
+      <li>主後台 Worker 在 <code>expire_access</code> 與撤銷流程後，對已註冊的整合端點送 webhook。</li>
+      <li>簽章用 HMAC-SHA256 涵蓋「時間戳＋原始 body」，子系統驗簽並拒收 5 分鐘外的時間戳（重放保護），事件 id 另做去重。</li>
+      <li>子系統收到就地標記失效，不需等待下次快照。</li>
+      <li>送不到要進主後台自己的重試佇列——它已經有這個機制。</li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>整合認證</h2><span class="tag">機器不是人</span></div>
+    <ul>
+      <li><strong>獨立的服務帳號憑證。</strong>新增一張 <code>integration_clients</code>：<code>client_id</code>、Argon2 雜湊後的 secret、<code>organization_id</code>、scope 清單、狀態。沿用現成的 <code>PasswordHasherPort</code>。</li>
+      <li><strong>短效 token。</strong><code>POST /v1/integration/token</code> 走 client credentials，簽出 900 秒的 RS256 JWT，claim 帶 <code>actor_type=system</code>、<code>client_id</code>、<code>organization_id</code>、<code>scope</code>。<strong>不要</strong>讓機器走人類的 refresh token 輪替流程——那套設計是為了偵測 token 被竊後的家族撤銷，語義不適用，混用反而會讓兩邊的失效邏輯互相干擾。</li>
+      <li><strong>最小 scope。</strong>子系統只需要 <code>roster:read</code> 與 <code>attendance:write</code> 兩個。名冊唯讀的服務帳號即使外洩，也拿不到動物、醫療與回報資料。</li>
+      <li><strong>組織綁定。</strong>token 只綁一個 <code>organization_id</code>，套用一般租戶範圍而非 platform scope——RLS 會自動兜底。</li>
+      <li><strong>金鑰保管。</strong>放 Secret Manager 或部署平台的密鑰儲存，不要進 <code>.env.local</code>、不要進 git，並排一個輪替流程（新舊 secret 並存一段時間再停用舊的）。</li>
+      <li><strong>可追蹤。</strong>每次呼叫帶 <code>X-Operation-Id</code>，主後台寫進 <code>audit_records.operation_id</code>，一筆簽到就能從志工手機一路追到 CRM。</li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>主後台掛掉時，現場還能做什麼</h2><span class="tag">降級規則</span></div>
+    <p class="prose">「全部擋住」和「全部放行」都是錯的答案。按情境分開決定，並且把降級狀態顯示給現場人員看——他們需要知道自己正在用的是快取。</p>
+    <div class="scroller">
+      <table>
+        <caption>Table 4 — 逐情境的降級決策</caption>
+        <thead><tr><th>情境</th><th>行為</th><th>理由</th></tr></thead>
+        <tbody>
+          <tr><td class="rowkey">主後台不可用，本地名冊新鮮（&lt; 24h）</td><td><span class="chip ok">放行</span>照常簽到，出勤進 outbox</td><td>簽到只需要「這個人今天有資格」，24 小時內的快照足以回答</td></tr>
+          <tr><td class="rowkey">主後台不可用，名冊過期（&gt; 24h）</td><td><span class="chip warn">放行但標記</span>簽到可用，紀錄標為 <code>unverified</code>，管理端顯示待補驗</td><td>擋住現場作業的代價，高於事後補驗幾筆紀錄</td></tr>
+          <tr><td class="rowkey">名冊裡查無此人（首次簽到）</td><td><span class="chip crit">擋住</span>必須線上驗證</td><td>從未被核准過的人，沒有任何本地依據可以放行</td></tr>
+          <tr><td class="rowkey">明確收到撤銷／到期</td><td><span class="chip crit">擋住</span>永遠拒絕，不受快取新鮮度影響</td><td>撤銷是明確的安全決定，只能由主後台再次核准來翻轉</td></tr>
+          <tr><td class="rowkey">outbox 積壓</td><td>持續退避重試，管理端顯示積壓筆數</td><td>資料不會掉，但積壓要看得見，否則會靜靜壞掉好幾週</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>效率</h2><span class="tag">按實際規模</span></div>
+    <ul>
+      <li><strong>不要在使用者請求路徑上同步呼叫另一個系統。</strong>簽到讀本地、寫本地、回應，跨系統的事交給背景。若真有非同步不可的情形，一律加 <code>AbortSignal.timeout()</code>（3 秒）與連續失敗後跳開的斷路器——Node 的 <code>fetch</code> 預設不會逾時，一個掛住的 CRM 會拖垮整個 Express 程序。</li>
+      <li><strong>ETag 比增量游標划算。</strong>以你的資料量，304 回應的成本接近零，而且沒有游標會漏資料的風險。</li>
+      <li><strong>批次而非逐筆。</strong>outbox 一次送 50–100 筆事件，減少往返與 TLS 交握。</li>
+      <li><strong>SSE 已經在了。</strong>子系統既有的 <code>/api/events</code> 可以直接用來把「名冊已更新」推給正開著的管理端，不必為此加輪詢。</li>
+      <li><strong>批次寫入讓出事件迴圈。</strong>見 R7；這是唯一會實際影響到現場體感的效能問題。</li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>個資與法遵</h2><span class="tag">資料流動就要重新盤點</span></div>
+    <ul>
+      <li><strong>不要對稱複製。</strong>子系統握有電話、Email、緊急聯絡人、照片、GPS 與評分；主後台刻意只留 <code>display_name</code> ＋ LINE 綁定。整合的正確方向是讓每一項個資只有一個家，交換的是 ID 與最小必要欄位。</li>
+      <li><strong>位置資料要特別對待。</strong>簽到的 GPS 座標留在子系統，跨界只送「是否通過定位驗證」的布林值。</li>
+      <li><strong>刪除要會傳播。</strong>主後台已經有期效與撤銷的完整生命週期；子系統目前是永久保存。志工撤回同意或資格終止時，子系統要能<strong>真的刪除或去識別化</strong>，不是只加一個過濾條件。這需要一條刪除事件，而不只是名冊快照裡少一列——快照少一列跟「同步失敗」長得一模一樣。</li>
+      <li><strong>個資法的告知範圍。</strong>志工當初同意的蒐集目的是排班；資料要送進 CRM 屬於利用範圍的變更，蒐集聲明與同意流程需要更新。這件事在動工前確認，比事後補容易得多。</li>
+      <li><strong>保留期限。</strong>出勤與工時有服務證明的用途，需要長期保存；SOP 測驗答案、AI 評估文字、簽退照片則不需要。分別訂期限並實際執行清理。</li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>契約治理</h2><span class="tag">避免無聲漂移</span></div>
+    <ul>
+      <li>主後台已經把 OpenAPI 當唯一真相並產生 TS 型別（<code>@strayhub/contracts</code>，附 <code>check-generated</code> 檢查）。子系統直接吃這包產生的型別，不要手寫 fetch——兩邊 CI 都跑檢查，契約一漂移就紅燈。</li>
+      <li><strong>注意一個不對稱：</strong>主後台的 Pydantic model 幾乎都設 <code>extra="forbid"</code>。子系統多送一個欄位會被整個請求拒絕；反過來，子系統要能容忍回應裡出現沒見過的欄位。這條寫進整合的程式碼規範裡。</li>
+      <li>整合端點放在 <code>/v1/integration/*</code>，跟人類用的 API 分開，之後才有機會獨立演進與獨立限流。</li>
+      <li>只做加法式變更：新增選填欄位可以，改語義、改必填、刪欄位都要新版本路徑。</li>
+      <li>接收端一律做契約測試（主後台側已有 <code>contract</code> pytest marker，直接沿用），而不是靠整合環境手測。</li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>落地順序</h2><span class="tag">每階段都有可驗收的產出</span></div>
+    <ol class="steps">
+      <li>
+        <div>
+          <h3>止血：子系統的授權基線　<span class="chip ok">已完成</span></h3>
+          <div class="body">
+            <p>預設拒絕的中介層、公開端點白名單、寫入端點的擁有者檢查、移除預設密碼 <code>0000</code>、<code>/api/line/*</code> 限管理員、AI 端點加速率限制、開 WAL 與定時備份。</p>
+            <p>這階段完全不碰整合，但它是後面所有階段的前提——在一個誰都能改資料的系統上談資料交換沒有意義。</p>
+            <div class="gate"><b>驗收通過（PR #1，2026-08-24 合併）：</b>46 個受保護端點未帶 token 全部回 401，11 個白名單端點照常運作，2 種偽造登入被拒。另外補掉一個更嚴重的洞——Google 登入端點原本完全不驗 token，帶任何 email 就能取得該志工的 session。真實 Google 與 LINE 登入已實測可用；簽退時數以測試前的自動備份比對，確認剛好記一次。留下 <code>npm run check:security</code>（59 項）可隨時重跑，該腳本本身也以刻意注入的漏洞驗證過會紅燈。</div>
+          </div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h3>對齊：身分與邊界</h3>
+          <div class="body">
+            <p>子系統加 <code>strayhub_user_id</code>、<code>organization_id</code>；<code>volunteer_applications</code> 改名 <code>shift_signups</code>；跨界時間統一 UTC instant；工時改由伺服器計算；兩個 LINE channel 移到同一個 Provider。</p>
+            <div class="gate"><b>驗收：</b>可以人工把一位志工在兩邊的紀錄對起來，且 LINE userId 一致。</div>
+          </div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h3>單向唯讀：名冊同步</h3>
+          <div class="body">
+            <p>主後台新增服務帳號與 <code>GET /v1/integration/volunteer-roster</code>；子系統做快照拉取與本地快取，簽到改讀快取。這一階段<strong>不寫回</strong>任何東西——先讓資料流動起來，風險最低，而且能真實驗證身分對映對不對。</p>
+            <div class="gate"><b>驗收：</b>在主後台核准一位新志工，五分鐘內他能在現場完成簽到。</div>
+          </div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h3>寫回與即時失效</h3>
+          <div class="body">
+            <p>子系統 outbox ＋ 到勤事件推送；主後台冪等接收並寫 <code>actor_type='system'</code> 稽核；撤銷／到期 webhook 上線；降級規則與積壓監看落到管理端畫面上。</p>
+            <div class="gate"><b>驗收：</b>斷開主後台 30 分鐘，現場簽到照常，恢復後出勤一筆不漏也不重複；撤銷一位志工後他當場被擋下。</div>
+          </div>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <footer>
+    依據 2026-08-24 兩個 repo 的原始碼：<br>
+    子系統 <span class="mono">C:\remix-(修版)-浪浪家園-志工招募與排班管理系統</span>（server.ts、db.ts、src/types.ts）<br>
+    主後台 <span class="mono">StrayHub-main</span>（services/api、services/worker、migrations 0001–0029、specs 001–010、contracts/openapi.yaml）
+  </footer>
+
+</div>

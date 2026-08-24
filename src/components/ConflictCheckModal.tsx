@@ -1,37 +1,37 @@
 import React, { useState } from 'react';
-import { VolunteerApplication, PositionShift } from '../types';
-import { detectApplicationConflicts, ApplicationConflict } from '../utils/conflictChecker';
+import { ShiftSignup, PositionShift } from '../types';
+import { detectSignupConflicts, SignupConflict } from '../utils/conflictChecker';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { ShieldAlert, AlertTriangle, CheckCircle2, Trash2, X, Sparkles, ArrowRight, UserCheck, Clock, RefreshCw, Send, Check } from 'lucide-react';
 
 interface ConflictCheckModalProps {
-  applications: VolunteerApplication[];
+  shiftSignups: ShiftSignup[];
   shifts: PositionShift[];
   onClose: () => void;
-  onRejectApplication: (appId: string, reviewNotes?: string) => void;
+  onRejectSignup: (appId: string, reviewNotes?: string) => void;
   onSendLineToast: (msg: string) => void;
 }
 
 export const ConflictCheckModal: React.FC<ConflictCheckModalProps> = ({
-  applications,
+  shiftSignups,
   shifts,
   onClose,
-  onRejectApplication,
+  onRejectSignup,
   onSendLineToast
 }) => {
-  const conflicts = detectApplicationConflicts(applications, shifts);
+  const conflicts = detectSignupConflicts(shiftSignups, shifts);
   const [resolvedConflictIds, setResolvedConflictIds] = useState<Set<string>>(new Set());
 
   const activeConflicts = conflicts.filter(c => !resolvedConflictIds.has(c.id));
 
   // Single resolve action
-  const handleResolveConflict = (conflict: ApplicationConflict, appIdToDelete: string, appToKeepId: string) => {
+  const handleResolveConflict = (conflict: SignupConflict, appIdToDelete: string, appToKeepId: string) => {
     const appToDelete = appIdToDelete === conflict.app1.id ? conflict.app1 : conflict.app2;
     const shiftToDelete = appIdToDelete === conflict.app1.id ? conflict.shift1 : conflict.shift2;
     const shiftToKeep = appToKeepId === conflict.app1.id ? conflict.shift1 : conflict.shift2;
 
     const note = `【衝突自動刪除/退回】該志工同日已報名時間重疊之【${shiftToKeep.title}】，系統協助取消衝突報名。`;
-    onRejectApplication(appToDelete.id, note);
+    onRejectSignup(appToDelete.id, note);
 
     setResolvedConflictIds(prev => new Set(prev).add(conflict.id));
     onSendLineToast(
@@ -48,7 +48,7 @@ export const ConflictCheckModal: React.FC<ConflictCheckModalProps> = ({
       const shiftToKeep = c.suggestedKeepAppId === c.app1.id ? c.shift1 : c.shift2;
 
       const note = `【AI 衝突檢查批量自動退回】同日時間重疊【${shiftToKeep.title}】，已保留首要班次。`;
-      onRejectApplication(appToDelete.id, note);
+      onRejectSignup(appToDelete.id, note);
       count++;
     });
 

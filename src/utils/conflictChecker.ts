@@ -1,14 +1,14 @@
-import { VolunteerApplication, PositionShift } from '../types';
+import { ShiftSignup, PositionShift } from '../types';
 
-export interface ApplicationConflict {
+export interface SignupConflict {
   id: string;
   volunteerName: string;
   volunteerPhone: string;
   volunteerEmail: string;
   lineId: string;
-  app1: VolunteerApplication;
+  app1: ShiftSignup;
   shift1: PositionShift;
-  app2: VolunteerApplication;
+  app2: ShiftSignup;
   shift2: PositionShift;
   overlapMinutes: number;
   overlapDescription: string;
@@ -69,17 +69,17 @@ export function checkShiftTimeOverlap(shiftA: PositionShift, shiftB: PositionShi
 }
 
 /**
- * Scans all applications and returns list of conflicting pairs.
+ * Scans all signups and returns list of conflicting pairs.
  */
-export function detectApplicationConflicts(
-  applications: VolunteerApplication[],
+export function detectSignupConflicts(
+  shiftSignups: ShiftSignup[],
   shifts: PositionShift[]
-): ApplicationConflict[] {
-  const activeApps = applications.filter(a => a.status !== 'rejected' && a.status !== 'absent');
-  const conflicts: ApplicationConflict[] = [];
+): SignupConflict[] {
+  const activeApps = shiftSignups.filter(a => a.status !== 'rejected' && a.status !== 'absent');
+  const conflicts: SignupConflict[] = [];
 
   // Group by volunteer key (lineId or email or phone or name)
-  const appByVolunteer: Record<string, VolunteerApplication[]> = {};
+  const appByVolunteer: Record<string, ShiftSignup[]> = {};
 
   activeApps.forEach(app => {
     const key = (app.lineId || app.volunteerEmail || app.volunteerPhone || app.volunteerName).trim().toLowerCase();

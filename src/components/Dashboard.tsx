@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PositionShift, VolunteerApplication, ShelterLocation, AttendanceRecord } from '../types';
+import { PositionShift, ShiftSignup, ShelterLocation, AttendanceRecord } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { AlertCircle, CheckCircle2, Users, Calendar, MapPin, ArrowRight, ShieldAlert, Sparkles, Filter, Eye, ChevronRight, QrCode, LogOut, Send, Zap, FileSpreadsheet, FileText, Download, Building2, Clock, BarChart3, Star, Smartphone, MessageSquare, ThumbsUp, Search, RefreshCw, SlidersHorizontal, LayoutGrid, EyeOff, Megaphone } from 'lucide-react';
 import { UrgentShortageModal } from './UrgentShortageModal';
@@ -19,10 +19,10 @@ import {
 
 interface DashboardProps {
   shifts: PositionShift[];
-  applications: VolunteerApplication[];
+  shiftSignups: ShiftSignup[];
   shelterLocation: ShelterLocation;
   attendanceRecords?: AttendanceRecord[];
-  onNavigateToTab: (tab: 'dashboard' | 'positions' | 'applications' | 'portal' | 'roster') => void;
+  onNavigateToTab: (tab: 'dashboard' | 'positions' | 'signups' | 'portal' | 'roster') => void;
   onApplyForShift: (shiftId: string) => void;
   onOpenCheckInModal?: () => void;
   checkedInCount?: number;
@@ -31,7 +31,7 @@ interface DashboardProps {
 
 export const Dashboard: React.FC<DashboardProps> = ({
   shifts,
-  applications,
+  shiftSignups,
   shelterLocation,
   attendanceRecords = [],
   onNavigateToTab,
@@ -213,7 +213,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const shortageRate = requiredCount > 0 ? Math.round((shortageCount / requiredCount) * 100) : 0;
 
     const monthShiftIds = new Set(monthShifts.map(s => s.id));
-    const monthApps = applications.filter(a => monthShiftIds.has(a.shiftId));
+    const monthApps = shiftSignups.filter(a => monthShiftIds.has(a.shiftId));
     const uniqueVols = new Set(monthApps.map(a => a.volunteerName || a.lineId)).size;
     const totalVolunteers = Math.max(uniqueVols, filledCount);
 
@@ -286,7 +286,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     };
   });
 
-  const pendingApps = applications.filter(a => a.status === 'pending');
+  const pendingApps = shiftSignups.filter(a => a.status === 'pending');
 
   return (
     <div className="bg-[#FAF6EE] min-h-screen py-6 px-4 sm:px-6 lg:px-8 space-y-8 max-w-7xl mx-auto">
@@ -475,7 +475,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   {pendingApps.length} 筆
                 </span>
                 <button
-                  onClick={() => onNavigateToTab('applications')}
+                  onClick={() => onNavigateToTab('signups')}
                   className="text-xs text-[#716053] hover:underline block font-bold mt-1 cursor-pointer"
                 >
                   前往審核與聯繫 →
@@ -650,7 +650,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               const shortageRate = req > 0 ? Math.round((shortage / req) * 100) : 0;
 
               const mShiftIds = new Set(mShifts.map(s => s.id));
-              const mApps = applications.filter(a => mShiftIds.has(a.shiftId));
+              const mApps = shiftSignups.filter(a => mShiftIds.has(a.shiftId));
               const uniqueVols = new Set(mApps.map(a => a.volunteerName || a.lineId)).size;
               const totalVols = Math.max(uniqueVols, filled);
 
@@ -1273,7 +1273,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           month={selectedExportMonth}
           shelterLocation={shelterLocation}
           shifts={shifts}
-          applications={applications}
+          shiftSignups={shiftSignups}
           onClose={() => setShowReportModal(false)}
           onSendLineToast={onSendLineToast}
         />

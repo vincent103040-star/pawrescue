@@ -12,6 +12,11 @@
 // a passing run changes nothing and a failing run reveals a hole rather than
 // creating one. It needs no credentials and no test data.
 //
+// One thing it deliberately cannot tell you: because the default-deny middleware
+// runs before routing, a path that no longer exists answers 401 exactly like a
+// protected one. So this list has to be kept in step with the routes by hand --
+// a stale entry passes forever while testing nothing.
+//
 // A failure here means a route lost its protection. That is worth stopping for
 // even when everything looks fine in the browser -- the browser only ever shows
 // you the requests the app chooses to make.
@@ -46,10 +51,10 @@ const PROTECTED: Array<[string, string]> = [
   ['POST', '/api/shifts'],
   ['PUT', '/api/shifts/does-not-exist'],
   ['DELETE', '/api/shifts/does-not-exist'],
-  ['GET', '/api/applications'],
-  ['POST', '/api/applications'],
-  ['PUT', '/api/applications/does-not-exist/status'],
-  ['DELETE', '/api/applications/does-not-exist'],
+  ['GET', '/api/shift-signups'],
+  ['POST', '/api/shift-signups'],
+  ['PUT', '/api/shift-signups/does-not-exist/status'],
+  ['DELETE', '/api/shift-signups/does-not-exist'],
   ['GET', '/api/volunteers'],
   ['GET', '/api/volunteers/profile?email=nobody@example.com'],
   ['POST', '/api/volunteers/profile-extras'],

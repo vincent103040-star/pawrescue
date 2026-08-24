@@ -27,12 +27,12 @@ import {
   VolunteerUserSession,
   ShelterLocation,
   PositionShift,
-  VolunteerApplication,
+  ShiftSignup,
   VolunteerProfile,
-  ApplicationStatus,
+  SignupStatus,
   AttendanceRecord
 } from './types';
-import { INITIAL_SHIFTS, INITIAL_APPLICATIONS, VOLUNTEER_PROFILES, INITIAL_ATTENDANCE_RECORDS, ZONE_CONFIGS, DEFAULT_SHELTER_LOCATION } from './data/mockData';
+import { INITIAL_SHIFTS, INITIAL_SHIFT_SIGNUPS, VOLUNTEER_PROFILES, INITIAL_ATTENDANCE_RECORDS, ZONE_CONFIGS, DEFAULT_SHELTER_LOCATION } from './data/mockData';
 import { MessageSquare, X, Bell, Clock, MapPin, QrCode, ArrowUpRight } from 'lucide-react';
 import { sendLinePush } from './utils/linePush';
 import { setToken, clearToken, authFetch, fetchCurrentSession, logout as serverLogout } from './utils/session';
@@ -77,7 +77,7 @@ export default function App() {
   });
 
   // Tab states for separate roles
-  const [adminActiveTab, setAdminActiveTab] = useState<'dashboard' | 'positions' | 'applications' | 'roster' | 'sopManager'>('dashboard');
+  const [adminActiveTab, setAdminActiveTab] = useState<'dashboard' | 'positions' | 'signups' | 'roster' | 'sopManager'>('dashboard');
   const [volunteerActiveTab, setVolunteerActiveTab] = useState<VolunteerActiveTab>('shifts');
 
   // The shelter's single physical location (previously 3 fixed hardcoded
@@ -98,7 +98,7 @@ export default function App() {
   // Seeded from the mock data purely so the first paint isn't empty; the effects
   // below immediately replace all four with the server's copy.
   const [shifts, setShifts] = useState<PositionShift[]>(INITIAL_SHIFTS);
-  const [applications, setApplications] = useState<VolunteerApplication[]>(INITIAL_APPLICATIONS);
+  const [shiftSignups, setShiftSignups] = useState<ShiftSignup[]>(INITIAL_SHIFT_SIGNUPS);
   const [volunteers, setVolunteers] = useState<VolunteerProfile[]>(VOLUNTEER_PROFILES);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(INITIAL_ATTENDANCE_RECORDS);
 
@@ -108,7 +108,7 @@ export default function App() {
   const roleRef = React.useRef(userRole);
   roleRef.current = userRole;
 
-  // Shifts and applications now live server-side too. They used to be
+  // Shifts and signups now live server-side too. They used to be
   // localStorage-only, which meant a shift published on the coordinator's
   // desktop didn't exist for a volunteer on their phone. Re-fetching them is
   // how every mutation below stays consistent across devices.
@@ -118,10 +118,10 @@ export default function App() {
       .then(data => { if (data.success && Array.isArray(data.shifts)) setShifts(data.shifts); })
       .catch(() => { /* keep what's on screen if the backend is unreachable */ });
 
-  const refreshApplications = () =>
-    authFetch('/api/applications')
+  const refreshShiftSignups = () =>
+    authFetch('/api/shift-signups')
       .then(res => res.json())
-      .then(data => { if (data.success && Array.isArray(data.applications)) setApplications(data.applications); })
+      .then(data => { if (data.success && Array.isArray(data.shiftSignups)) setShiftSignups(data.shiftSignups); })
       .catch(() => { /* keep what's on screen if the backend is unreachable */ });
 
   // The full roster is admin-only on the server now -- it carries every
@@ -149,7 +149,7 @@ export default function App() {
   useEffect(() => {
     if (!userRole) return;
     refreshShifts();
-    refreshApplications();
+    refreshShiftSignups();
     refreshAttendance();
     refreshVolunteers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -163,7 +163,7 @@ export default function App() {
     const stop = subscribeToLiveUpdates(kind => {
       if (kind === 'attendance') refreshAttendance();
       else if (kind === 'shifts') refreshShifts();
-      else if (kind === 'applications') refreshApplications();
+      else if (kind === 'signups') refreshShiftSignups();
       else if (kind === 'volunteers') refreshVolunteers();
       else if (kind === 'promotions') setPromotionsRevision(n => n + 1);
     });
@@ -346,7 +346,7 @@ export default function App() {
     }
   }, [volunteerSession]);
 
-  // Shifts, applications, volunteers and attendance are no longer mirrored into
+  // Shifts, signups, volunteers and attendance are no longer mirrored into
   // localStorage: the server owns them, and a stale local copy would silently
   // win over fresher data on the next page load. They're re-fetched on mount and
   // after every mutation instead.
@@ -386,8 +386,8 @@ export default function App() {
     const vPhone = volunteerSession.phone || localStorage.getItem('volunteer_profile_phone') || '0912-345-678';
     const vLineId = volunteerSession.lineId || localStorage.getItem('volunteer_profile_lineid') || 'xiaoming_line';
 
-    // Find approved applications for this volunteer
-    const myApprovedAppShiftIds = applications
+    // Find approved signups for this volunteer
+    const myApprovedAppShiftIds = shiftSignups
       .filter(a =>
         a.status === 'approved' && (
           (a.volunteerName && a.volunteerName.trim().toLowerCase() === vName.trim().toLowerCase()) ||
@@ -422,7 +422,7 @@ export default function App() {
     if (candidateShifts.length === 0) return null;
 
     return candidateShifts[0];
-  }, [userRole, volunteerSession, applications, shifts]);
+  }, [userRole, volunteerSession, shiftSignups, shifts]);
 
   const handleLogout = () => {
     // Revoke the token on the server too, so logging out actually ends the
@@ -445,8 +445,8 @@ export default function App() {
   // local state; the SSE broadcast handles every other open device.
   const handleCheckInSubmit = (newRecord: AttendanceRecord) => {
     setAttendanceRecords(prev => [newRecord, ...prev]);
-    if (newRecord.applicationId) {
-      setApplications(prev => prev.map(a => a.id === newRecord.applicationId ? { ...a, status: 'attended' } : a));
+    if (newRecord.signupId) {
+      setShiftSignups(prev => prev.map(a => a.id === newRecord.signupId ? { ...a, status: 'attended' } : a));
     }
   };
 
@@ -478,12 +478,15 @@ export default function App() {
       return r;
     }));
 
+    // The check-out time and the hours are no longer sent: the server reads its
+    // own clock and takes the hours from the shift's schedule, because both are
+    // facts it already holds and neither should be an assertion by the caller.
+    // What comes back is authoritative, so reconcile against it rather than
+    // leaving the optimistic guess above on screen.
     authFetch(`/api/attendance/${recordId}/check-out`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        checkOutTime,
-        hoursLogged,
         rating,
         feedbackComment: comment,
         photoBase64: photo?.base64,
@@ -492,9 +495,15 @@ export default function App() {
     })
       .then(res => res.json())
       .then(data => {
-        // Pick up the server-assigned photoUrl once the photo is actually saved to disk.
-        if (data.success && data.record?.photoUrl) {
-          setAttendanceRecords(prev => prev.map(r => r.id === recordId ? { ...r, photoUrl: data.record.photoUrl } : r));
+        if (!data.success || !data.record) return;
+        setAttendanceRecords(prev => prev.map(r => (r.id === recordId ? data.record : r)));
+        // Same for the roster total: if the server credited different hours
+        // from the ones guessed below, this is the number that is real.
+        if (checkedOutName && typeof data.record.hoursLogged === 'number' && data.record.hoursLogged !== hoursLogged) {
+          const correction = data.record.hoursLogged - hoursLogged;
+          setVolunteers(prev => prev.map(v =>
+            v.name === checkedOutName ? { ...v, totalHours: v.totalHours + correction } : v
+          ));
         }
       })
       .catch(() => { /* best-effort backend sync -- local state already has the text feedback */ });
@@ -578,7 +587,7 @@ export default function App() {
     );
 
     if (hasScheduleChange) {
-      const affected = applications.filter(a => a.shiftId === updated.id && (a.status === 'approved' || a.status === 'pending'));
+      const affected = shiftSignups.filter(a => a.shiftId === updated.id && (a.status === 'approved' || a.status === 'pending'));
       if (affected.length > 0) {
         const text = `🔄【班次異動通知】您報名的【${updated.title}】時間或地點已更新：\n📅 ${updated.date} (${updated.timeRange})\n📍 ${updated.locationDetails}`;
 
@@ -598,9 +607,9 @@ export default function App() {
     setShifts(prev => prev.filter(s => s.id !== id));
     showToast('🗑️ 已成功刪除該班次');
 
-    // The server also drops this shift's applications, so pull both back.
+    // The server also drops this shift's signups, so pull both back.
     authFetch(`/api/shifts/${encodeURIComponent(id)}`, { method: 'DELETE' })
-      .then(() => { refreshShifts(); refreshApplications(); })
+      .then(() => { refreshShifts(); refreshShiftSignups(); })
       .catch(() => showToast('⚠️ 刪除未能同步到伺服器，請重新整理確認。'));
   };
 
@@ -621,7 +630,7 @@ export default function App() {
     const shift = shifts.find(s => s.id === shiftId);
     if (!shift) return;
 
-    const newApp: VolunteerApplication = {
+    const newApp: ShiftSignup = {
       id: `app-${Date.now()}`,
       shiftId,
       volunteerName: name,
@@ -640,7 +649,7 @@ export default function App() {
       aiReadinessAssessment: situational?.assessment
     };
 
-    setApplications(prev => [newApp, ...prev]);
+    setShiftSignups(prev => [newApp, ...prev]);
 
     // Update recruitment count on the shift immediately
     setShifts(sPrev => sPrev.map(s => {
@@ -660,12 +669,12 @@ export default function App() {
 
     // The server owns the headcount, so it recomputes it and we take its answer
     // -- two volunteers applying from different devices can't overwrite it.
-    authFetch('/api/applications', {
+    authFetch('/api/shift-signups', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newApp)
     })
-      .then(() => { refreshApplications(); refreshShifts(); })
+      .then(() => { refreshShiftSignups(); refreshShifts(); })
       .catch(() => showToast('⚠️ 報名未能存到伺服器，請重新整理確認。'));
   };
 
@@ -673,12 +682,12 @@ export default function App() {
   // the row locally, announced success, then re-fetched -- so when the server
   // refused the delete, the booking silently reappeared under a "已成功取消"
   // toast, which is exactly as confusing as it sounds.
-  const handleCancelVolunteerApplication = async (appId: string) => {
-    const targetApp = applications.find(a => a.id === appId);
+  const handleCancelShiftSignup = async (appId: string) => {
+    const targetApp = shiftSignups.find(a => a.id === appId);
     if (!targetApp) return;
 
     try {
-      const res = await authFetch(`/api/applications/${encodeURIComponent(appId)}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/shift-signups/${encodeURIComponent(appId)}`, { method: 'DELETE' });
       const data = await res.json();
 
       if (!data.success) {
@@ -686,7 +695,7 @@ export default function App() {
         return;
       }
 
-      setApplications(prev => prev.filter(a => a.id !== appId));
+      setShiftSignups(prev => prev.filter(a => a.id !== appId));
       if (targetApp.status !== 'rejected') {
         setShifts(sPrev => sPrev.map(s => {
           if (s.id !== targetApp.shiftId) return s;
@@ -695,15 +704,15 @@ export default function App() {
         }));
       }
       showToast('🗑️ 已成功取消該班次報名，名額已重新釋出。');
-      refreshApplications();
+      refreshShiftSignups();
       refreshShifts();
     } catch {
       showToast('⚠️ 取消報名失敗：無法連線到伺服器，請稍後再試。');
     }
   };
 
-  const handleUpdateAppStatus = (id: string, newStatus: ApplicationStatus, reviewNotes?: string) => {
-    setApplications(prev => prev.map(app => {
+  const handleUpdateAppStatus = (id: string, newStatus: SignupStatus, reviewNotes?: string) => {
+    setShiftSignups(prev => prev.map(app => {
       if (app.id === id) {
         const updated = {
           ...app,
@@ -745,12 +754,12 @@ export default function App() {
       return app;
     }));
 
-    authFetch(`/api/applications/${encodeURIComponent(id)}/status`, {
+    authFetch(`/api/shift-signups/${encodeURIComponent(id)}/status`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: newStatus, reviewNotes })
     })
-      .then(() => { refreshApplications(); refreshShifts(); })
+      .then(() => { refreshShiftSignups(); refreshShifts(); })
       .catch(() => showToast('⚠️ 審核結果未能同步到伺服器，請重新整理確認。'));
   };
 
@@ -767,7 +776,7 @@ export default function App() {
       return s;
     }));
 
-    const newApp: VolunteerApplication = {
+    const newApp: ShiftSignup = {
       id: `app-ai-${Date.now()}`,
       shiftId,
       volunteerName: volunteer.name,
@@ -782,19 +791,19 @@ export default function App() {
       syncToCalendar: true,
       syncToLine: true
     };
-    setApplications(prev => [newApp, ...prev]);
+    setShiftSignups(prev => [newApp, ...prev]);
 
-    authFetch('/api/applications', {
+    authFetch('/api/shift-signups', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newApp)
     })
-      .then(() => { refreshApplications(); refreshShifts(); })
+      .then(() => { refreshShiftSignups(); refreshShifts(); })
       .catch(() => showToast('⚠️ 直錄名單未能存到伺服器，請重新整理確認。'));
   };
 
-  const pendingCount = applications.filter(a => a.status === 'pending').length;
-  const myApplicationsCount = applications.filter(a => 
+  const pendingCount = shiftSignups.filter(a => a.status === 'pending').length;
+  const mySignupsCount = shiftSignups.filter(a => 
     a.volunteerName === (volunteerSession?.name || '林小明') ||
     (volunteerSession?.phone && a.volunteerPhone === volunteerSession.phone)
   ).length;
@@ -805,7 +814,7 @@ export default function App() {
       <LoginPortal
         onLoginAsAdmin={handleLoginAsAdmin}
         onLoginAsVolunteer={handleLoginAsVolunteer}
-        pendingApplicationsCount={pendingCount}
+        pendingSignupsCount={pendingCount}
         openShiftsCount={shifts.filter(s => s.status === 'active').length}
         totalVolunteersCount={volunteers.length}
         totalServiceHours={volunteers.reduce((sum, v) => sum + v.totalHours, 0)}
@@ -852,7 +861,7 @@ export default function App() {
             {adminActiveTab === 'dashboard' && (
               <Dashboard
                 shifts={shifts}
-                applications={applications}
+                shiftSignups={shiftSignups}
                 shelterLocation={shelterLocation}
                 attendanceRecords={attendanceRecords}
                 onNavigateToTab={(tab) => {
@@ -873,20 +882,20 @@ export default function App() {
               <PositionManager
                 shifts={shifts}
                 volunteers={volunteers}
-                applications={applications}
+                shiftSignups={shiftSignups}
                 onCreateShift={handleCreateShift}
                 onUpdateShift={handleUpdateShift}
                 onDeleteShift={handleDeleteShift}
                 onOpenAiGenerator={(shift) => setAiModalShift(shift)}
                 onSendLineToast={showToast}
                 onAssignVolunteer={handleAssignVolunteerToShift}
-                onUpdateApplicationStatus={handleUpdateAppStatus}
+                onUpdateSignupStatus={handleUpdateAppStatus}
               />
             )}
 
-            {adminActiveTab === 'applications' && (
+            {adminActiveTab === 'signups' && (
               <ApplicantReview
-                applications={applications}
+                shiftSignups={shiftSignups}
                 shifts={shifts}
                 onUpdateStatus={handleUpdateAppStatus}
                 onSendLineToast={showToast}
@@ -920,7 +929,7 @@ export default function App() {
             openCheckInModal={() => setIsCheckInModalOpen(true)}
             openRulebookModal={() => setIsRulebookModalOpen(true)}
             currentUser={volunteerSession}
-            myApplicationsCount={myApplicationsCount}
+            mySignupsCount={mySignupsCount}
             onLogout={handleLogout}
           />
 
@@ -935,23 +944,23 @@ export default function App() {
                 activeSection="shifts"
                 currentUser={volunteerSession}
                 attendanceRecords={attendanceRecords}
-                applications={applications}
+                shiftSignups={shiftSignups}
                 onNavigateToTab={(tab) => setVolunteerActiveTab(tab as any)}
                 onUpdateProfile={(updates) => setVolunteerSession(prev => prev ? { ...prev, ...updates } : prev)}
-                onCancelApplication={handleCancelVolunteerApplication}
+                onCancelSignup={handleCancelShiftSignup}
               />
             )}
 
             {volunteerActiveTab === 'myshifts' && (
               <VolunteerMyShifts
                 shifts={shifts}
-                applications={applications}
+                shiftSignups={shiftSignups}
                 shelterLocation={shelterLocation}
                 attendanceRecords={attendanceRecords}
                 currentUser={volunteerSession}
                 onOpenCheckInModal={() => setIsCheckInModalOpen(true)}
                 onSendLineToast={showToast}
-                onCancelApplication={handleCancelVolunteerApplication}
+                onCancelSignup={handleCancelShiftSignup}
               />
             )}
 
@@ -965,7 +974,7 @@ export default function App() {
                 activeSection="growth"
                 currentUser={volunteerSession}
                 attendanceRecords={attendanceRecords}
-                applications={applications}
+                shiftSignups={shiftSignups}
                 onNavigateToTab={(tab) => setVolunteerActiveTab(tab as any)}
                 onUpdateProfile={(updates) => setVolunteerSession(prev => prev ? { ...prev, ...updates } : prev)}
               />
@@ -981,7 +990,7 @@ export default function App() {
                 activeSection="settings"
                 currentUser={volunteerSession}
                 attendanceRecords={attendanceRecords}
-                applications={applications}
+                shiftSignups={shiftSignups}
                 onNavigateToTab={(tab) => setVolunteerActiveTab(tab as any)}
                 onUpdateProfile={(updates) => setVolunteerSession(prev => prev ? { ...prev, ...updates } : prev)}
               />
@@ -1056,7 +1065,7 @@ export default function App() {
       {isCheckInModalOpen && userRole === 'volunteer' && (
         <VolunteerSelfCheckIn
           shifts={shifts}
-          applications={applications}
+          shiftSignups={shiftSignups}
           shelterLocation={shelterLocation}
           attendanceRecords={attendanceRecords}
           currentUser={volunteerSession}
@@ -1072,7 +1081,7 @@ export default function App() {
       {isCheckInModalOpen && userRole !== 'volunteer' && (
         <VolunteerCheckInModal
           shifts={shifts}
-          applications={applications}
+          shiftSignups={shiftSignups}
           volunteers={volunteers}
           shelterLocation={shelterLocation}
           attendanceRecords={attendanceRecords}
