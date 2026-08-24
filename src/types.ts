@@ -110,6 +110,15 @@ export interface VolunteerProfile {
   linePreferences?: LineNotificationPreferences;
   lineLinked?: boolean;
   lineDisplayName?: string;
+  /**
+   * This volunteer's user id in the StrayHub CRM, once the two accounts have
+   * been paired. Absent until then -- and it stays absent unless the volunteer
+   * pairs deliberately. Matching on email instead would silently join two
+   * people who share a mailbox, and nothing downstream could tell.
+   */
+  strayhubUserId?: string;
+  /** Which shelter this record belongs to. See currentOrganizationId in db.ts. */
+  organizationId?: string;
 }
 
 export interface ServiceFeedback {

@@ -30,6 +30,24 @@ db.exec('PRAGMA busy_timeout = 5000');
 // power cut can't lose an already-answered check-in.
 db.exec('PRAGMA synchronous = FULL');
 
+/**
+ * Which shelter this deployment belongs to.
+ *
+ * The StrayHub CRM is multi-tenant: every row there carries an organization and
+ * PostgreSQL enforces the separation. This system has no such concept -- one
+ * shelter, one database, every query global. That asymmetry is fine as long as
+ * the deployment boundary is the tenant boundary: one instance per shelter,
+ * named here.
+ *
+ * Rows are stamped with it from now on. Not because anything filters on it yet
+ * -- with a single value there would be nothing to filter -- but because the
+ * moment data starts arriving from a tenant-scoped CRM, "which shelter is this
+ * row about" has to be an answer the data already carries.
+ */
+export function currentOrganizationId(): string {
+  return (process.env.ORGANIZATION_ID || 'pawrescue-local').trim();
+}
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS volunteers (
     email TEXT PRIMARY KEY,
@@ -63,6 +81,65 @@ try {
   db.exec(`ALTER TABLE volunteers ADD COLUMN lineDisplayName TEXT NOT NULL DEFAULT ''`);
 } catch {
   // column already exists
+}
+
+// ============================================================================
+// Identity: a key that is not the person's email address
+// ----------------------------------------------------------------------------
+// Two problems, both of which only get more expensive the longer they wait.
+//
+// First, email is the primary key here, and `id` -- the column that ought to be
+// the stable handle -- was being filled in with the email as well for anyone who
+// arrived through Google login. So the same fact was the identity twice over: a
+// volunteer who changes their address becomes a different person, and every
+// cross-system message has to carry a personal detail just to say who it means.
+//
+// Second, the CRM identifies people by a UUID of its own. That mapping needs
+// somewhere to live before the two systems can talk, and it must be a column
+// this system can leave empty -- nobody is mapped yet, and the pairing will be
+// a deliberate act by each volunteer rather than a guess made by matching
+// addresses. Matching on email would quietly connect two different people who
+// share a mailbox, and that mistake is invisible afterwards.
+// ============================================================================
+try {
+  db.exec(`ALTER TABLE volunteers ADD COLUMN strayhubUserId TEXT NOT NULL DEFAULT ''`);
+} catch {
+  // column already exists
+}
+try {
+  db.exec(`ALTER TABLE volunteers ADD COLUMN organizationId TEXT NOT NULL DEFAULT ''`);
+} catch {
+  // column already exists
+}
+
+// One CRM user maps to at most one volunteer here. A partial index so the many
+// rows that are legitimately unmapped don't all collide on the empty string.
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_volunteers_strayhub_user
+  ON volunteers (strayhubUserId) WHERE strayhubUserId <> ''
+`);
+
+// Backfill: replace any id that is really an email address, and stamp the
+// shelter on rows that predate the column. Seeded ids like "vol-001" are left
+// alone -- they are already opaque, already unique, and rewriting them would
+// churn rows for nothing.
+{
+  const contaminated = db
+    .prepare(`SELECT email FROM volunteers WHERE id LIKE '%@%'`)
+    .all() as Array<{ email: string }>;
+  for (const row of contaminated) {
+    db.prepare('UPDATE volunteers SET id = ? WHERE email = ?').run(randomUUID(), row.email);
+  }
+  if (contaminated.length > 0) {
+    console.log(`SQLite: 已為 ${contaminated.length} 位志工改用不含個資的識別碼`);
+  }
+
+  const stamped = db
+    .prepare(`UPDATE volunteers SET organizationId = ? WHERE organizationId = ''`)
+    .run(currentOrganizationId());
+  if (stamped.changes > 0) {
+    console.log(`SQLite: 已為 ${stamped.changes} 位志工標記所屬收容所`);
+  }
 }
 // Migration: LINE notification preference toggles. These used to live only in the
 // volunteer's own browser localStorage — which meant an admin's browser (editing a
@@ -121,7 +198,12 @@ function rowToProfile(row: any): VolunteerProfile {
     joinedDate: row.joinedDate,
     emergencyContact: row.emergencyContact,
     lineLinked: !!row.lineUserId,
-    lineDisplayName: row.lineDisplayName || undefined
+    lineDisplayName: row.lineDisplayName || undefined,
+    // Empty until this volunteer pairs their account with the CRM. Kept out of
+    // the shape entirely rather than sent as '' so a caller cannot mistake
+    // "not linked yet" for a real id.
+    strayhubUserId: row.strayhubUserId || undefined,
+    organizationId: row.organizationId || undefined
   };
 }
 
@@ -154,11 +236,15 @@ export function upsertVolunteerFromLogin(params: {
       WHERE email = ?
     `).run(params.name, params.phone, params.lineId, JSON.stringify(['google.com']), nowIso, email);
   } else {
+    // The id is generated, not derived. It used to be the email address, which
+    // made the address the identity -- so changing it would have made someone a
+    // different person, and every reference to them had to carry their personal
+    // details along with it.
     db.prepare(`
       INSERT INTO volunteers
-        (email, id, name, phone, lineId, avatar, skills, preferredZones, totalHours, completedShiftsCount, tier, joinedDate, emergencyContact, providers, status, lastLoginAt)
-      VALUES (?, ?, ?, ?, ?, '', '[]', '[]', 0, 0, '新進志工', ?, '', ?, 1, ?)
-    `).run(email, email, params.name, params.phone, params.lineId, nowIso.split('T')[0], JSON.stringify(['google.com']), nowIso);
+        (email, id, organizationId, name, phone, lineId, avatar, skills, preferredZones, totalHours, completedShiftsCount, tier, joinedDate, emergencyContact, providers, status, lastLoginAt)
+      VALUES (?, ?, ?, ?, ?, ?, '', '[]', '[]', 0, 0, '新進志工', ?, '', ?, 1, ?)
+    `).run(email, randomUUID(), currentOrganizationId(), params.name, params.phone, params.lineId, nowIso.split('T')[0], JSON.stringify(['google.com']), nowIso);
   }
 
   return getVolunteerByEmail(email)!;
