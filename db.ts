@@ -1,3 +1,6 @@
+// Must come first: this module reads ADMIN_PASSWORD and ORGANIZATION_ID while
+// deciding what to migrate, and both have to be in process.env by then.
+import './env';
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'fs';
 import path from 'path';

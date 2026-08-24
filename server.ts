@@ -1,3 +1,4 @@
+import './env';
 import express from 'express';
 import path from 'path';
 import { createHmac, timingSafeEqual, randomUUID } from 'crypto';
@@ -5,17 +6,13 @@ import { writeFileSync, mkdirSync, createWriteStream, statSync, readFileSync, un
 import { gzipSync } from 'zlib';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
-import dotenv from 'dotenv';
 import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, adjustShiftCount, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, deleteShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase } from './db';
 import { PDFParse } from 'pdf-parse';
 import type { SopContent, SopDocument, SopVideo } from './src/types';
 
-// dotenv.config() alone only loads a file literally named ".env" — this project
-// (like Vite) keeps secrets in ".env.local", so load that explicitly. ".env" is
-// loaded first (if present) so ".env.local" still wins as the override, matching
-// Vite's own precedence for the frontend VITE_* vars.
-dotenv.config();
-dotenv.config({ path: '.env.local', override: true });
+// Environment loading lives in ./env, which ./db imports before it does
+// anything -- see the comment there. Calling dotenv here instead was the bug:
+// it ran after ./db had already been evaluated.
 
 interface RulebookEmbeddingEntry {
   id: string;
