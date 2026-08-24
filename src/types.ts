@@ -148,8 +148,15 @@ export interface AttendanceRecord {
   shiftTitle: string;
   zone: ZoneCategory;
   date: string; // YYYY-MM-DD
-  checkInTime: string; // e.g., "2026-08-05 09:58:20"
-  checkOutTime?: string; // e.g., "2026-08-05 13:02:15"
+  checkInTime: string; // Taipei wall clock, for display -- e.g. "2026-08-05 09:58:20"
+  checkOutTime?: string; // Taipei wall clock, for display -- e.g. "2026-08-05 13:02:15"
+  /**
+   * The same two moments as UTC instants. The strings above read well but carry
+   * no timezone, so they cannot be compared, subtracted or handed to another
+   * system; these can. Absent on rows too malformed to convert.
+   */
+  checkInAt?: string;  // ISO-8601 UTC, e.g. "2026-08-05T01:58:20.000Z"
+  checkOutAt?: string; // ISO-8601 UTC
   status: 'checked_in' | 'completed';
   hoursLogged?: number;
   locationVerified: boolean;

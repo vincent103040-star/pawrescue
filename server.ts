@@ -1952,6 +1952,9 @@ ${contextText}
         zone: shift.zone as any,
         date: shift.date,
         checkInTime: now.toLocaleString('sv-SE', { timeZone: 'Asia/Taipei' }),
+        // The same moment, unambiguously. The line above is what the screens
+        // show; this is what can be compared or sent anywhere else.
+        checkInAt: now.toISOString(),
         status: 'checked_in',
         locationVerified,
         distanceMeters: verifiedDistance,
@@ -1973,13 +1976,32 @@ ${contextText}
     }
   });
 
+  /**
+   * Hours credited for a shift, read from its scheduled time range.
+   *
+   * This is the same rule the browser was applying -- a completed shift credits
+   * the hours the shift was scheduled for, not the minutes actually spent on
+   * site. Volunteer hours work that way by convention, and switching to elapsed
+   * time would quietly dock anyone who signed out a few minutes early and make
+   * every existing record inconsistent with every new one.
+   *
+   * What changes is only who applies it. The number used to arrive in the
+   * request body, which meant it was whatever the caller said it was.
+   */
+  function scheduledHoursFor(timeRange: string): number | null {
+    const match = String(timeRange || '').match(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/);
+    if (!match) return null;
+    const [, startHour, startMinute, endHour, endMinute] = match.map(Number);
+    const start = startHour * 60 + startMinute;
+    let end = endHour * 60 + endMinute;
+    if (end <= start) end += 24 * 60; // a shift that runs past midnight
+    return Math.round(((end - start) / 60) * 10) / 10;
+  }
+
   app.post('/api/attendance/:id/check-out', (req: any, res) => {
     try {
       const { id } = req.params;
-      const { checkOutTime, hoursLogged, rating, feedbackComment, photoBase64, mimeType } = req.body;
-      if (!checkOutTime || typeof hoursLogged !== 'number') {
-        return res.status(400).json({ success: false, error: '缺少簽退時間或服務時數' });
-      }
+      const { rating, feedbackComment, photoBase64, mimeType } = req.body;
 
       // You may only sign yourself out. This took nothing but a record id
       // before, so any caller could close out somebody else's shift, attach a
@@ -1995,11 +2017,18 @@ ${contextText}
         }
       }
 
-      // A shift nobody could work: the ceiling stops a typo or a tampered
-      // request from writing an impossible number into someone's total hours.
-      if (!Number.isFinite(hoursLogged) || hoursLogged < 0 || hoursLogged > 24) {
-        return res.status(400).json({ success: false, error: '服務時數需介於 0 到 24 小時之間' });
-      }
+      // When, and how many hours it counts for, are both decided here now.
+      //
+      // The time used to be whatever string the request carried, and the hours
+      // whatever number came with it -- so both were assertions by the caller
+      // about facts the server already knew. The clock is the server's, and the
+      // hours come from the shift's own schedule.
+      const now = new Date();
+      const checkOutTime = now.toLocaleString('sv-SE', { timeZone: 'Asia/Taipei' });
+      const checkOutAt = now.toISOString();
+
+      const shift = getAllShifts().find(sh => sh.id === target.shiftId);
+      const hoursLogged = (shift && scheduledHoursFor(shift.timeRange)) ?? 3;
 
       let photoUrl: string | undefined;
       if (photoBase64 && mimeType) {
@@ -2011,6 +2040,7 @@ ${contextText}
 
       const updated = updateAttendanceCheckout(id, {
         checkOutTime,
+        checkOutAt,
         hoursLogged,
         rating,
         feedbackComment,

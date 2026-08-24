@@ -478,12 +478,15 @@ export default function App() {
       return r;
     }));
 
+    // The check-out time and the hours are no longer sent: the server reads its
+    // own clock and takes the hours from the shift's schedule, because both are
+    // facts it already holds and neither should be an assertion by the caller.
+    // What comes back is authoritative, so reconcile against it rather than
+    // leaving the optimistic guess above on screen.
     authFetch(`/api/attendance/${recordId}/check-out`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        checkOutTime,
-        hoursLogged,
         rating,
         feedbackComment: comment,
         photoBase64: photo?.base64,
@@ -492,9 +495,15 @@ export default function App() {
     })
       .then(res => res.json())
       .then(data => {
-        // Pick up the server-assigned photoUrl once the photo is actually saved to disk.
-        if (data.success && data.record?.photoUrl) {
-          setAttendanceRecords(prev => prev.map(r => r.id === recordId ? { ...r, photoUrl: data.record.photoUrl } : r));
+        if (!data.success || !data.record) return;
+        setAttendanceRecords(prev => prev.map(r => (r.id === recordId ? data.record : r)));
+        // Same for the roster total: if the server credited different hours
+        // from the ones guessed below, this is the number that is real.
+        if (checkedOutName && typeof data.record.hoursLogged === 'number' && data.record.hoursLogged !== hoursLogged) {
+          const correction = data.record.hoursLogged - hoursLogged;
+          setVolunteers(prev => prev.map(v =>
+            v.name === checkedOutName ? { ...v, totalHours: v.totalHours + correction } : v
+          ));
         }
       })
       .catch(() => { /* best-effort backend sync -- local state already has the text feedback */ });

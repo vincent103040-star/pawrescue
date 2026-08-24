@@ -444,6 +444,9 @@ db.exec(`
     date TEXT NOT NULL,
     checkInTime TEXT NOT NULL,
     checkOutTime TEXT,
+    checkInAt TEXT NOT NULL DEFAULT '',
+    checkOutAt TEXT NOT NULL DEFAULT '',
+    organizationId TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL,
     hoursLogged REAL,
     locationVerified INTEGER NOT NULL DEFAULT 0,
@@ -472,6 +475,77 @@ try {
   db.exec(`ALTER TABLE attendance_records RENAME COLUMN smsSent TO lineReminderSent`);
 } catch {
   // already renamed, or this is a fresh install that never had the old column
+}
+
+// ============================================================================
+// Attendance: an unambiguous instant alongside the readable local time
+// ----------------------------------------------------------------------------
+// checkInTime and checkOutTime are Taipei wall-clock strings ("2026-08-24
+// 21:34:23") with nothing recording that they are Taipei. They read well and
+// they are what the screens show, so they stay -- but they cannot be compared,
+// subtracted, or handed to another system, because there is no way to know what
+// instant they mean without already knowing the convention.
+//
+// checkInAt and checkOutAt hold the same moments as UTC instants. The CRM
+// stores UTC and keeps a timezone per organization; when attendance starts
+// crossing that boundary this is the column that can make the trip.
+//
+// Backfilling the existing rows is exact rather than approximate: Taiwan has
+// observed no daylight saving since 1979, so its offset has been a flat +08:00
+// for every row this database could hold. A country with DST would need the
+// original date to decide, and some of those conversions would be ambiguous.
+// ============================================================================
+try {
+  db.exec(`ALTER TABLE attendance_records ADD COLUMN checkInAt TEXT NOT NULL DEFAULT ''`);
+} catch {
+  // column already exists
+}
+try {
+  db.exec(`ALTER TABLE attendance_records ADD COLUMN checkOutAt TEXT NOT NULL DEFAULT ''`);
+} catch {
+  // column already exists
+}
+try {
+  db.exec(`ALTER TABLE attendance_records ADD COLUMN organizationId TEXT NOT NULL DEFAULT ''`);
+} catch {
+  // column already exists
+}
+
+/**
+ * "2026-08-24 21:34:23" (Taipei) -> "2026-08-24T13:34:23.000Z".
+ * Returns '' for anything that isn't in that shape, so a malformed old row is
+ * left without an instant rather than given a wrong one.
+ */
+function taipeiLocalToUtcIso(local: string): string {
+  const match = String(local || '').match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (!match) return '';
+  const [, y, mo, d, h, mi, sec] = match;
+  const parsed = new Date(`${y}-${mo}-${d}T${h}:${mi}:${sec || '00'}+08:00`);
+  return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString();
+}
+
+{
+  const pending = db
+    .prepare(`SELECT id, checkInTime, checkOutTime FROM attendance_records WHERE checkInAt = ''`)
+    .all() as Array<{ id: string; checkInTime: string; checkOutTime: string | null }>;
+  let converted = 0;
+  for (const row of pending) {
+    const inAt = taipeiLocalToUtcIso(row.checkInTime);
+    if (!inAt) continue;
+    db.prepare('UPDATE attendance_records SET checkInAt = ?, checkOutAt = ? WHERE id = ?')
+      .run(inAt, taipeiLocalToUtcIso(row.checkOutTime || ''), row.id);
+    converted++;
+  }
+  if (converted > 0) {
+    console.log(`SQLite: 已為 ${converted} 筆出勤紀錄補上 UTC 時間戳`);
+  }
+
+  const stamped = db
+    .prepare(`UPDATE attendance_records SET organizationId = ? WHERE organizationId = ''`)
+    .run(currentOrganizationId());
+  if (stamped.changes > 0) {
+    console.log(`SQLite: 已為 ${stamped.changes} 筆出勤紀錄標記所屬收容所`);
+  }
 }
 
 // Migration: applicationId -> signupId, following volunteer_applications ->
@@ -508,6 +582,8 @@ function rowToAttendanceRecord(row: any): AttendanceRecord {
   return {
     id: row.id,
     signupId: row.signupId || undefined,
+    checkInAt: row.checkInAt || undefined,
+    checkOutAt: row.checkOutAt || undefined,
     volunteerName: row.volunteerName,
     volunteerPhone: row.volunteerPhone || undefined,
     lineId: row.lineId || undefined,
@@ -539,11 +615,12 @@ export function getAllAttendanceRecords(): AttendanceRecord[] {
 export function insertAttendanceRecord(r: AttendanceRecord): AttendanceRecord {
   db.prepare(`
     INSERT INTO attendance_records
-      (id, signupId, volunteerName, volunteerPhone, lineId, shiftId, shiftTitle, branchId, zone, date, checkInTime, checkOutTime, status, hoursLogged, locationVerified, distanceMeters, qrCodeToken, rating, feedbackComment, feedbackSubmittedAt, lineReminderSent, photoUrl)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, signupId, volunteerName, volunteerPhone, lineId, shiftId, shiftTitle, branchId, zone, date, checkInTime, checkOutTime, checkInAt, checkOutAt, organizationId, status, hoursLogged, locationVerified, distanceMeters, qrCodeToken, rating, feedbackComment, feedbackSubmittedAt, lineReminderSent, photoUrl)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     r.id, r.signupId || null, r.volunteerName, r.volunteerPhone || null, r.lineId || null,
     r.shiftId, r.shiftTitle, 'shelter', r.zone, r.date, r.checkInTime, r.checkOutTime || null,
+    r.checkInAt || '', r.checkOutAt || '', currentOrganizationId(),
     r.status, r.hoursLogged ?? null, r.locationVerified ? 1 : 0, r.distanceMeters ?? null,
     r.qrCodeToken, r.rating ?? null, r.feedbackComment || null, r.feedbackSubmittedAt || null,
     r.lineReminderSent ? 1 : 0, r.photoUrl || null
@@ -553,14 +630,14 @@ export function insertAttendanceRecord(r: AttendanceRecord): AttendanceRecord {
 
 export function updateAttendanceCheckout(
   id: string,
-  updates: { checkOutTime: string; hoursLogged: number; rating?: number; feedbackComment?: string; feedbackSubmittedAt: string; lineReminderSent: boolean; photoUrl?: string }
+  updates: { checkOutTime: string; checkOutAt: string; hoursLogged: number; rating?: number; feedbackComment?: string; feedbackSubmittedAt: string; lineReminderSent: boolean; photoUrl?: string }
 ): AttendanceRecord | null {
   db.prepare(`
     UPDATE attendance_records
-    SET checkOutTime = ?, hoursLogged = ?, status = 'completed', rating = ?, feedbackComment = ?, feedbackSubmittedAt = ?, lineReminderSent = ?, photoUrl = COALESCE(?, photoUrl)
+    SET checkOutTime = ?, checkOutAt = ?, hoursLogged = ?, status = 'completed', rating = ?, feedbackComment = ?, feedbackSubmittedAt = ?, lineReminderSent = ?, photoUrl = COALESCE(?, photoUrl)
     WHERE id = ?
   `).run(
-    updates.checkOutTime, updates.hoursLogged, updates.rating ?? null, updates.feedbackComment || null,
+    updates.checkOutTime, updates.checkOutAt, updates.hoursLogged, updates.rating ?? null, updates.feedbackComment || null,
     updates.feedbackSubmittedAt, updates.lineReminderSent ? 1 : 0, updates.photoUrl || null, id
   );
   const row = db.prepare('SELECT * FROM attendance_records WHERE id = ?').get(id);
