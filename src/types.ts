@@ -1,4 +1,16 @@
-export type ZoneCategory = 'cat' | 'dog' | 'puppy' | 'medical' | 'logistics';
+/**
+ * A zone id.
+ *
+ * This was a union of the five areas that happened to exist when the project
+ * started. Areas are now rows in a table an admin edits, so the set is not
+ * known at compile time and this can only be a string.
+ *
+ * The checking did not disappear, it moved: the server refuses to file a shift
+ * under a zone that does not exist or is disabled, and resolveZone in
+ * data/zones renders a neutral placeholder rather than crashing when an old
+ * record points at an area that has since been removed.
+ */
+export type ZoneCategory = string;
 
 // The shelter has a single physical location (previously modeled as 3 fixed
 // "branches" -- collapsed to this after that multi-branch architecture was

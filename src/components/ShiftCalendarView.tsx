@@ -3,6 +3,7 @@ import { PositionShift, ShelterLocation, ZoneCategory } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { buildGoogleCalendarLink } from '../utils/googleCalendar';
 import { authFetch } from '../utils/session';
+import { resolveZone } from '../data/zones';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -457,7 +458,7 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
             全部場域
           </button>
           {Object.keys(ZONE_CONFIGS).map(zKey => {
-            const z = ZONE_CONFIGS[zKey];
+            const z = resolveZone(zKey);
             return (
               <button
                 key={zKey}
@@ -541,7 +542,7 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
                 {hasShifts && isExpanded && (
                 <div className="p-3 pt-1 space-y-2">
                   {dayShifts.map(shift => {
-                    const zConf = ZONE_CONFIGS[shift.zone];
+                    const zConf = resolveZone(shift.zone);
                     const isFull = shift.currentCount >= shift.requiredCount;
                     const isApplied = myAppliedShiftIds.includes(shift.id);
 
@@ -659,7 +660,7 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
                 {/* Shifts List for this date */}
                 <div className="space-y-1.5 flex-1 overflow-y-auto max-h-[160px] pr-0.5">
                   {dayShifts.map(shift => {
-                    const zConf = ZONE_CONFIGS[shift.zone];
+                    const zConf = resolveZone(shift.zone);
                     const isFull = shift.currentCount >= shift.requiredCount;
                     const isBeingDragged = draggedShift?.id === shift.id;
                     const isApplied = myAppliedShiftIds.includes(shift.id);

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { PositionShift, ZoneCategory } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
+import { resolveZone } from '../data/zones';
 import { 
   ClipboardCheck, 
   CheckSquare, 
@@ -379,7 +380,7 @@ export const DailyDutyTaskboard: React.FC<DailyDutyTaskboardProps> = ({
           全部項目 ({sopItems.length})
         </button>
         {Object.keys(ZONE_CONFIGS).map(zKey => {
-          const z = ZONE_CONFIGS[zKey];
+          const z = resolveZone(zKey);
           const zCount = sopItems.filter(i => i.zone === zKey).length;
           return (
             <button
@@ -401,7 +402,7 @@ export const DailyDutyTaskboard: React.FC<DailyDutyTaskboardProps> = ({
       {/* Checklist Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {filteredItems.map(item => {
-          const zoneConf = ZONE_CONFIGS[item.zone];
+          const zoneConf = resolveZone(item.zone);
 
           return (
             <div

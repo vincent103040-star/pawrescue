@@ -4,6 +4,7 @@ import { ZONE_CONFIGS } from '../data/mockData';
 import { Sparkles, Users, Award, Clock, Send, CheckCircle2, Trophy, Star, Shield, Filter, ArrowRight, Zap, Check, MessageSquare, AlertCircle, X } from 'lucide-react';
 import { sendLinePush } from '../utils/linePush';
 
+import { resolveZone } from '../data/zones';
 interface AiScheduleModalProps {
   shift: PositionShift;
   volunteers: VolunteerProfile[];
@@ -25,7 +26,7 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({
   const [sortBy, setSortBy] = useState<'ai_score' | 'hours_desc' | 'shifts_desc'>('ai_score');
   const [isSendingAll, setIsSendingAll] = useState(false);
 
-  const zoneConf = ZONE_CONFIGS[shift.zone];
+  const zoneConf = resolveZone(shift.zone);
 
   // AI Matching Algorithm calculating match score for each volunteer
   const rankedVolunteers = volunteers.map(vol => {

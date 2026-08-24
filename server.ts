@@ -6,7 +6,7 @@ import { writeFileSync, mkdirSync, createWriteStream, statSync, readFileSync, un
 import { gzipSync } from 'zlib';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
-import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, adjustShiftCount, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, deleteShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase } from './db';
+import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, adjustShiftCount, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, deleteShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage } from './db';
 import { PDFParse } from 'pdf-parse';
 import type { SopContent, SopDocument, SopVideo } from './src/types';
 
@@ -309,7 +309,7 @@ async function startServer() {
   // fallback, so a proxy that buffers the stream degrades to slightly-delayed
   // updates instead of no updates.
   // ==========================================================================
-  type ChangeKind = 'attendance' | 'shifts' | 'signups' | 'volunteers' | 'promotions';
+  type ChangeKind = 'attendance' | 'shifts' | 'signups' | 'volunteers' | 'promotions' | 'zones';
   const sseClients = new Set<express.Response>();
 
   function broadcastChange(kind: ChangeKind) {
@@ -1372,6 +1372,161 @@ ${contextText}
   // Shifts & signups -- the server is now the source of truth for both,
   // so a shift published on one device is immediately visible on every other.
   // ==========================================================================
+  // ==========================================================================
+  // Zones
+  // --------------------------------------------------------------------------
+  // The shelter's own areas, which used to be five values compiled into the
+  // frontend. Reads are open to any signed-in user because volunteers need
+  // them to make sense of a shift listing; every write is admin-only, and the
+  // default-deny middleware above already guarantees the /api/admin prefix.
+  //
+  // There is no delete. Disabling is the strongest action available, because
+  // shifts, signups and attendance rows all store a zone and would be left
+  // pointing at nothing. See the comment on the table in db.ts.
+  // ==========================================================================
+
+  /** Palette keys the admin screen offers. Kept in step with src/data/zones.ts. */
+  const ZONE_PALETTE_KEYS = ['rose', 'emerald', 'amber', 'sky', 'purple', 'teal', 'orange', 'slate'];
+
+  app.get('/api/zones', (req: any, res) => {
+    try {
+      // Admins manage disabled zones, so they see everything. Volunteers only
+      // ever need the ones a shift could currently be filed under.
+      return res.json({ success: true, zones: isAdmin(req) ? getAllZones() : getActiveZones() });
+    } catch (error: any) {
+      console.error('Get Zones Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '讀取場域失敗' });
+    }
+  });
+
+  /**
+   * Validates the fields shared by create and update.
+   * Returns an error string, or null when the input is usable.
+   */
+  function validateZoneInput(body: any, { partial = false } = {}): string | null {
+    const name = body?.name;
+    const code = body?.code;
+    const palette = body?.palette;
+    const icon = body?.icon;
+
+    if (!partial || name !== undefined) {
+      if (typeof name !== 'string' || !name.trim()) return '請輸入場域名稱';
+      if (name.trim().length > 40) return '場域名稱請控制在 40 個字以內';
+    }
+    if (!partial || code !== undefined) {
+      if (typeof code !== 'string' || !code.trim()) return '請輸入場域代碼';
+      if (!/^[A-Za-z0-9_-]{1,12}$/.test(code.trim())) return '場域代碼只能使用英數字、連字號或底線，最多 12 個字元';
+    }
+    if (!partial || palette !== undefined) {
+      // A palette outside this list would store fine and then render with no
+      // colour at all, because Tailwind only ships classes it saw in source.
+      if (!ZONE_PALETTE_KEYS.includes(String(palette))) return '請選擇一個可用的顏色';
+    }
+    if (!partial || icon !== undefined) {
+      if (typeof icon !== 'string' || !icon.trim()) return '請選擇一個圖示';
+      if ([...String(icon)].length > 2) return '圖示請使用一個表情符號';
+    }
+    return null;
+  }
+
+  app.post('/api/admin/zones', (req, res) => {
+    try {
+      const problem = validateZoneInput(req.body);
+      if (problem) return res.status(400).json({ success: false, error: problem });
+
+      const zone = createZone({
+        name: String(req.body.name).trim(),
+        code: String(req.body.code).trim().toUpperCase(),
+        palette: String(req.body.palette),
+        icon: String(req.body.icon).trim(),
+        description: String(req.body.description || '').trim()
+      });
+      broadcastChange('zones');
+      return res.json({ success: true, zone });
+    } catch (error: any) {
+      console.error('Create Zone Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '新增場域失敗' });
+    }
+  });
+
+  app.put('/api/admin/zones/:id', (req, res) => {
+    try {
+      const problem = validateZoneInput(req.body, { partial: true });
+      if (problem) return res.status(400).json({ success: false, error: problem });
+
+      const updated = updateZone(req.params.id, {
+        name: req.body.name !== undefined ? String(req.body.name).trim() : undefined,
+        code: req.body.code !== undefined ? String(req.body.code).trim().toUpperCase() : undefined,
+        palette: req.body.palette !== undefined ? String(req.body.palette) : undefined,
+        icon: req.body.icon !== undefined ? String(req.body.icon).trim() : undefined,
+        description: req.body.description !== undefined ? String(req.body.description).trim() : undefined
+      });
+      if (!updated) return res.status(404).json({ success: false, error: '找不到該場域' });
+
+      broadcastChange('zones');
+      return res.json({ success: true, zone: updated });
+    } catch (error: any) {
+      console.error('Update Zone Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '更新場域失敗' });
+    }
+  });
+
+  /**
+   * How many records a zone already carries. The management screen asks before
+   * disabling, so the decision is made knowing what it affects rather than
+   * discovering it afterwards.
+   */
+  app.get('/api/admin/zones/:id/usage', (req, res) => {
+    try {
+      if (!getZone(req.params.id)) {
+        return res.status(404).json({ success: false, error: '找不到該場域' });
+      }
+      return res.json({ success: true, usage: countZoneUsage(req.params.id) });
+    } catch (error: any) {
+      console.error('Zone Usage Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '查詢場域使用狀況失敗' });
+    }
+  });
+
+  app.post('/api/admin/zones/:id/disable', (req, res) => {
+    try {
+      // The last active zone cannot be turned off: with none left, no shift
+      // could be created at all and the way back would be through this same
+      // screen, which needs a zone to show.
+      const active = getActiveZones();
+      if (active.length <= 1 && active.some(zone => zone.id === req.params.id)) {
+        return res.status(400).json({ success: false, error: '至少要保留一個啟用中的場域' });
+      }
+
+      const updated = setZoneStatus(req.params.id, 'disabled');
+      if (!updated) return res.status(404).json({ success: false, error: '找不到該場域' });
+
+      broadcastChange('zones');
+      const usage = countZoneUsage(req.params.id);
+      return res.json({
+        success: true,
+        zone: updated,
+        usage,
+        note: '已停用。既有的班次與出勤紀錄不受影響，仍會正常顯示；新班次不能再選擇這個場域。'
+      });
+    } catch (error: any) {
+      console.error('Disable Zone Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '停用場域失敗' });
+    }
+  });
+
+  app.post('/api/admin/zones/:id/restore', (req, res) => {
+    try {
+      const updated = setZoneStatus(req.params.id, 'active');
+      if (!updated) return res.status(404).json({ success: false, error: '找不到該場域' });
+      broadcastChange('zones');
+      return res.json({ success: true, zone: updated });
+    } catch (error: any) {
+      console.error('Restore Zone Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '恢復場域失敗' });
+    }
+  });
+
   app.get('/api/shifts', (req, res) => {
     try {
       return res.json({ success: true, shifts: getAllShifts() });
@@ -1387,6 +1542,20 @@ ${contextText}
       if (!shift?.id || !shift?.title || !shift?.date) {
         return res.status(400).json({ success: false, error: '缺少班次必要欄位' });
       }
+
+      // Zones stopped being a compile-time union when they became editable, so
+      // the check that used to happen in the type system happens here instead.
+      // A shift filed under a zone that does not exist would render as "未知場域"
+      // forever, and one filed under a disabled zone would quietly reopen an
+      // area the shelter had closed.
+      const zone = getZone(String(shift.zone || ''));
+      if (!zone) {
+        return res.status(400).json({ success: false, error: '找不到這個場域，請重新選擇' });
+      }
+      if (zone.status !== 'active') {
+        return res.status(400).json({ success: false, error: `【${zone.name}】已停用，無法用於新班次` });
+      }
+
       const created = insertShift(shift);
       broadcastChange('shifts');
       return res.json({ success: true, shift: created });

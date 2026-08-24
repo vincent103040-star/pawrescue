@@ -9,6 +9,7 @@ import { ResourceWarningMap } from './ResourceWarningMap';
 import { DailyDutyTaskboard } from './DailyDutyTaskboard';
 import { DashboardModuleCard } from './DashboardModuleCard';
 import { authFetch } from '../utils/session';
+import { resolveZone } from '../data/zones';
 import { 
   DashboardModuleCustomizer, 
   DashboardModuleId, 
@@ -271,7 +272,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   // Group by zone
   const zoneStats = Object.keys(ZONE_CONFIGS).map(zoneKey => {
-    const config = ZONE_CONFIGS[zoneKey];
+    const config = resolveZone(zoneKey);
     const zoneShifts = filteredShifts.filter(s => s.zone === zoneKey);
     const required = zoneShifts.reduce((acc, s) => acc + s.requiredCount, 0);
     const filled = zoneShifts.reduce((acc, s) => acc + s.currentCount, 0);
@@ -1192,7 +1193,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           {filteredShifts
             .filter(s => s.requiredCount > s.currentCount)
             .map(shift => {
-              const zoneConf = ZONE_CONFIGS[shift.zone];
+              const zoneConf = resolveZone(shift.zone);
               const remaining = shift.requiredCount - shift.currentCount;
 
               return (

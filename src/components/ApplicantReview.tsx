@@ -7,6 +7,7 @@ import { Check, X, Search, Filter, ShieldCheck, Clock, Calendar, Phone, Mail, Me
 import { buildGoogleCalendarLink } from '../utils/googleCalendar';
 import { sendLinePush } from '../utils/linePush';
 
+import { resolveZone } from '../data/zones';
 interface ApplicantReviewProps {
   shiftSignups: ShiftSignup[];
   shifts: PositionShift[];
@@ -205,7 +206,7 @@ export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
               ) : (
                 filteredApps.map(app => {
                   const shift = shifts.find(s => s.id === app.shiftId);
-                  const zoneConf = ZONE_CONFIGS[app.appliedZone];
+                  const zoneConf = resolveZone(app.appliedZone);
                   const conflictForApp = conflicts.find(c => c.app1.id === app.id || c.app2.id === app.id);
                   const hasConflict = !!conflictForApp;
 

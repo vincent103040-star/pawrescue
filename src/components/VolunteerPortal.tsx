@@ -9,6 +9,7 @@ import { startLineBinding } from '../utils/lineLogin';
 import { getLiffVolunteerIdentity } from '../utils/liff';
 
 import { authFetch } from '../utils/session';
+import { resolveZone } from '../data/zones';
 export interface GrowthChecklistItem {
   id: string;
   title: string;
@@ -747,7 +748,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                   </button>
 
                   {Object.keys(ZONE_CONFIGS).map(zKey => {
-                    const zConf = ZONE_CONFIGS[zKey];
+                    const zConf = resolveZone(zKey);
                     return (
                       <button
                         key={zKey}
@@ -773,7 +774,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
               {/* Shift Cards Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredShifts.map(shift => {
-                  const zoneConf = ZONE_CONFIGS[shift.zone];
+                  const zoneConf = resolveZone(shift.zone);
                   const remaining = shift.requiredCount - shift.currentCount;
                   const isFull = remaining <= 0;
                   const isApplied = myAppliedShiftIds.includes(shift.id);

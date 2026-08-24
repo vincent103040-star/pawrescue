@@ -4,6 +4,7 @@ import { ZONE_CONFIGS } from '../data/mockData';
 import { QrCode, Camera, CheckCircle2, Clock, MapPin, AlertCircle, LogOut, LogIn, UserCheck, ShieldCheck, Sparkles, RefreshCw, X, Compass, Navigation, Radio, AlertTriangle, Star, Send, MessageSquare, ThumbsUp, Heart } from 'lucide-react';
 import { authFetch } from '../utils/session';
 
+import { resolveZone } from '../data/zones';
 interface VolunteerCheckInModalProps {
   shifts: PositionShift[];
   shiftSignups: ShiftSignup[];
@@ -551,7 +552,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
                       </tr>
                     ) : (
                       attendanceRecords.map(rec => {
-                        const zoneConf = ZONE_CONFIGS[rec.zone];
+                        const zoneConf = resolveZone(rec.zone);
                         const isCheckedIn = rec.status === 'checked_in';
 
                         return (

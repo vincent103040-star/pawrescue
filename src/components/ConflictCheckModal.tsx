@@ -4,6 +4,7 @@ import { detectSignupConflicts, SignupConflict } from '../utils/conflictChecker'
 import { ZONE_CONFIGS } from '../data/mockData';
 import { ShieldAlert, AlertTriangle, CheckCircle2, Trash2, X, Sparkles, ArrowRight, UserCheck, Clock, RefreshCw, Send, Check } from 'lucide-react';
 
+import { resolveZone } from '../data/zones';
 interface ConflictCheckModalProps {
   shiftSignups: ShiftSignup[];
   shifts: PositionShift[];
@@ -129,8 +130,8 @@ export const ConflictCheckModal: React.FC<ConflictCheckModalProps> = ({
             </div>
           ) : (
             activeConflicts.map(conflict => {
-              const zone1 = ZONE_CONFIGS[conflict.shift1.zone];
-              const zone2 = ZONE_CONFIGS[conflict.shift2.zone];
+              const zone1 = resolveZone(conflict.shift1.zone);
+              const zone2 = resolveZone(conflict.shift2.zone);
 
               const isSuggestedDelete1 = conflict.suggestedDeleteAppId === conflict.app1.id;
 
