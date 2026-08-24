@@ -48,6 +48,18 @@ VITE_LINE_LOGIN_CHANNEL_ID=
 前端所有受保護的呼叫都改用 `authFetch`(`src/utils/session.ts`);公開的那幾支仍用一般 `fetch`。
 App.tsx 的資料載入改成跟著 `userRole` 走,登入後才抓、換身分會重抓。
 
+### 怎麼確認授權還沒被改壞
+```bash
+npm run check:security          # 針對 http://localhost:3000
+BASE=http://localhost:3100 npm run check:security
+```
+`scripts/security-smoke.ts` 會逐一戳 46 個受保護端點(未帶 token 必須回 401)、11 個白名單端點
+(必須維持可達,否則沒人能登入)、以及 2 種曾經有效的偽造登入。全部是唯讀或注定被拒的請求,
+用的都是不存在的 id,所以通過的話不會改到任何資料,失敗的話是指出漏洞而不是造成漏洞。
+
+任何一項失敗就代表某條路由失去保護。它驗不到真實的 Google/LINE 登入、現場簽到與 LINE 推播 ——
+那些只能真的走一次。
+
 ### 還沒補的洞
 - `/photos`、`/avatars` 仍是公開靜態目錄,頭像檔名可從 email 推出來。要修得走簽名 URL,
   因為 `<img src>` 不會帶 Authorization header。
