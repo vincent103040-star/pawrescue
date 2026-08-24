@@ -1,34 +1,34 @@
 import React, { useState } from 'react';
-import { VolunteerApplication, PositionShift, ApplicationStatus } from '../types';
+import { ShiftSignup, PositionShift, SignupStatus } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
-import { detectApplicationConflicts } from '../utils/conflictChecker';
+import { detectSignupConflicts } from '../utils/conflictChecker';
 import { ConflictCheckModal } from './ConflictCheckModal';
 import { Check, X, Search, Filter, ShieldCheck, Clock, Calendar, Phone, Mail, MessageSquare, Send, CheckCircle2, AlertCircle, Eye, ShieldAlert, AlertTriangle, Trash2, Sparkles, ArrowUpRight } from 'lucide-react';
 import { buildGoogleCalendarLink } from '../utils/googleCalendar';
 import { sendLinePush } from '../utils/linePush';
 
 interface ApplicantReviewProps {
-  applications: VolunteerApplication[];
+  shiftSignups: ShiftSignup[];
   shifts: PositionShift[];
-  onUpdateStatus: (id: string, newStatus: ApplicationStatus, reviewNotes?: string) => void;
+  onUpdateStatus: (id: string, newStatus: SignupStatus, reviewNotes?: string) => void;
   onSendLineToast: (msg: string) => void;
 }
 
 export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
-  applications,
+  shiftSignups,
   shifts,
   onUpdateStatus,
   onSendLineToast
 }) => {
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeAppModal, setActiveAppModal] = useState<VolunteerApplication | null>(null);
+  const [activeAppModal, setActiveAppModal] = useState<ShiftSignup | null>(null);
   const [reviewNoteInput, setReviewNoteInput] = useState('');
   const [showConflictModal, setShowConflictModal] = useState(false);
 
-  const conflicts = detectApplicationConflicts(applications, shifts);
+  const conflicts = detectSignupConflicts(shiftSignups, shifts);
 
-  const filteredApps = applications.filter(app => {
+  const filteredApps = shiftSignups.filter(app => {
     if (selectedStatus !== 'all' && app.status !== selectedStatus) return false;
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
@@ -41,7 +41,7 @@ export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
     return true;
   });
 
-  const handleApprove = async (app: VolunteerApplication) => {
+  const handleApprove = async (app: ShiftSignup) => {
     const notes = reviewNoteInput || '審核通過！歡迎支援浪浪園區。';
     onUpdateStatus(app.id, 'approved', notes);
     setActiveAppModal(null);
@@ -58,7 +58,7 @@ export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
     );
   };
 
-  const handleReject = async (app: VolunteerApplication) => {
+  const handleReject = async (app: ShiftSignup) => {
     const notes = reviewNoteInput || '抱歉，該班次名額暫滿或資格未符。';
     onUpdateStatus(app.id, 'rejected', notes);
     setActiveAppModal(null);
@@ -105,10 +105,10 @@ export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
           </button>
 
           <span className="px-3.5 py-1.5 bg-[#F5E6D0] text-[#716053] font-bold rounded-full">
-            待審核：{applications.filter(a => a.status === 'pending').length} 筆
+            待審核：{shiftSignups.filter(a => a.status === 'pending').length} 筆
           </span>
           <span className="px-3.5 py-1.5 bg-emerald-100 text-emerald-900 font-bold rounded-full">
-            已錄取：{applications.filter(a => a.status === 'approved').length} 筆
+            已錄取：{shiftSignups.filter(a => a.status === 'approved').length} 筆
           </span>
         </div>
       </div>
@@ -126,7 +126,7 @@ export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
                 : 'bg-[#FAF6EE] text-slate-600 hover:bg-[#F5E6D0]/40'
             }`}
           >
-            全部申請 ({applications.length})
+            全部申請 ({shiftSignups.length})
           </button>
 
           <button
@@ -139,7 +139,7 @@ export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
           >
             <span>待審核</span>
             <span className="bg-white/30 px-2 py-0.5 rounded-full text-[10px]">
-              {applications.filter(a => a.status === 'pending').length}
+              {shiftSignups.filter(a => a.status === 'pending').length}
             </span>
           </button>
 
@@ -151,7 +151,7 @@ export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
                 : 'bg-emerald-50 text-emerald-800'
             }`}
           >
-            已錄取 ({applications.filter(a => a.status === 'approved').length})
+            已錄取 ({shiftSignups.filter(a => a.status === 'approved').length})
           </button>
 
           <button
@@ -448,10 +448,10 @@ export const ApplicantReview: React.FC<ApplicantReviewProps> = ({
       {/* Conflict Check Modal */}
       {showConflictModal && (
         <ConflictCheckModal
-          applications={applications}
+          shiftSignups={shiftSignups}
           shifts={shifts}
           onClose={() => setShowConflictModal(false)}
-          onRejectApplication={(appId, notes) => {
+          onRejectSignup={(appId, notes) => {
             onUpdateStatus(appId, 'rejected', notes);
           }}
           onSendLineToast={onSendLineToast}

@@ -8,7 +8,7 @@ import { setToken } from '../utils/session';
 interface LoginPortalProps {
   onLoginAsAdmin: (admin: AdminUserSession) => void;
   onLoginAsVolunteer: (volunteer: VolunteerUserSession) => void;
-  pendingApplicationsCount: number;
+  pendingSignupsCount: number;
   openShiftsCount: number;
   totalVolunteersCount: number;
   totalServiceHours: number;
@@ -74,7 +74,7 @@ const ADOPTION_SUCCESS_STORIES = [
 export const LoginPortal: React.FC<LoginPortalProps> = ({
   onLoginAsAdmin,
   onLoginAsVolunteer,
-  pendingApplicationsCount,
+  pendingSignupsCount,
   openShiftsCount,
   totalVolunteersCount,
   totalServiceHours,
@@ -251,7 +251,7 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
             <div className="text-[11px] text-slate-500 font-medium">全院區開放預約班次</div>
           </div>
           <div className="bg-white p-3.5 rounded-2xl border border-[#716053] text-center shadow-2xs">
-            <div className="text-lg font-extrabold text-rose-600">{pendingApplicationsCount}</div>
+            <div className="text-lg font-extrabold text-rose-600">{pendingSignupsCount}</div>
             <div className="text-[11px] text-slate-500 font-medium">待審核志工報名名單</div>
           </div>
           <div className="bg-white p-3.5 rounded-2xl border border-[#716053] text-center shadow-2xs">

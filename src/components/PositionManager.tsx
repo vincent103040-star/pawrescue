@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { PositionShift, SkillLevel, ZoneCategory, VolunteerProfile, VolunteerApplication, ApplicationStatus, ShiftTemplate } from '../types';
+import { PositionShift, SkillLevel, ZoneCategory, VolunteerProfile, ShiftSignup, SignupStatus, ShiftTemplate } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
-import { detectApplicationConflicts } from '../utils/conflictChecker';
+import { detectSignupConflicts } from '../utils/conflictChecker';
 import { ConflictCheckModal } from './ConflictCheckModal';
 import { Plus, Sparkles, MapPin, Calendar, Clock, Users, FileText, Check, AlertCircle, Edit, Trash2, Link, FileCheck, Bot, UserCheck, ShieldAlert, AlertTriangle, LayoutGrid } from 'lucide-react';
 import { AiScheduleModal } from './AiScheduleModal';
@@ -11,27 +11,27 @@ import { authFetch } from '../utils/session';
 interface PositionManagerProps {
   shifts: PositionShift[];
   volunteers: VolunteerProfile[];
-  applications?: VolunteerApplication[];
+  shiftSignups?: ShiftSignup[];
   onCreateShift: (newShift: Omit<PositionShift, 'id' | 'createdAt'>) => void;
   onUpdateShift: (shift: PositionShift) => void;
   onDeleteShift: (id: string) => void;
   onOpenAiGenerator: (shift: PositionShift) => void;
   onSendLineToast: (msg: string) => void;
   onAssignVolunteer?: (shiftId: string, volunteer: VolunteerProfile) => void;
-  onUpdateApplicationStatus?: (id: string, newStatus: ApplicationStatus, notes?: string) => void;
+  onUpdateSignupStatus?: (id: string, newStatus: SignupStatus, notes?: string) => void;
 }
 
 export const PositionManager: React.FC<PositionManagerProps> = ({
   shifts,
   volunteers,
-  applications = [],
+  shiftSignups = [],
   onCreateShift,
   onUpdateShift,
   onDeleteShift,
   onOpenAiGenerator,
   onSendLineToast,
   onAssignVolunteer,
-  onUpdateApplicationStatus
+  onUpdateSignupStatus
 }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [viewMode, setViewMode] = useState<'calendar' | 'grid'>('calendar');
@@ -52,7 +52,7 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
       .catch(() => { /* best-effort */ });
   }, []);
 
-  const conflicts = detectApplicationConflicts(applications, shifts);
+  const conflicts = detectSignupConflicts(shiftSignups, shifts);
 
   // Form state for creating a shift.
   const [formData, setFormData] = useState({
@@ -585,12 +585,12 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
       {/* Modal: Application Conflict Check & Auto-Suggestion */}
       {showConflictModal && (
         <ConflictCheckModal
-          applications={applications}
+          shiftSignups={shiftSignups}
           shifts={shifts}
           onClose={() => setShowConflictModal(false)}
-          onRejectApplication={(appId, notes) => {
-            if (onUpdateApplicationStatus) {
-              onUpdateApplicationStatus(appId, 'rejected', notes);
+          onRejectSignup={(appId, notes) => {
+            if (onUpdateSignupStatus) {
+              onUpdateSignupStatus(appId, 'rejected', notes);
             }
           }}
           onSendLineToast={onSendLineToast}

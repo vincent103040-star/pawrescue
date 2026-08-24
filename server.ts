@@ -6,7 +6,7 @@ import { gzipSync } from 'zlib';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
-import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, adjustShiftCount, getAllApplications, insertApplication, updateApplicationStatus, deleteApplication, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase } from './db';
+import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, adjustShiftCount, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, deleteShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase } from './db';
 import { PDFParse } from 'pdf-parse';
 import type { SopContent, SopDocument, SopVideo } from './src/types';
 
@@ -312,7 +312,7 @@ async function startServer() {
   // fallback, so a proxy that buffers the stream degrades to slightly-delayed
   // updates instead of no updates.
   // ==========================================================================
-  type ChangeKind = 'attendance' | 'shifts' | 'applications' | 'volunteers' | 'promotions';
+  type ChangeKind = 'attendance' | 'shifts' | 'signups' | 'volunteers' | 'promotions';
   const sseClients = new Set<express.Response>();
 
   function broadcastChange(kind: ChangeKind) {
@@ -1372,7 +1372,7 @@ ${contextText}
 
   // API endpoint: Volunteer roster — single source of truth for the admin roster page
   // ==========================================================================
-  // Shifts & applications -- the server is now the source of truth for both,
+  // Shifts & signups -- the server is now the source of truth for both,
   // so a shift published on one device is immediately visible on every other.
   // ==========================================================================
   app.get('/api/shifts', (req, res) => {
@@ -1420,7 +1420,7 @@ ${contextText}
         return res.status(404).json({ success: false, error: '找不到該班次' });
       }
       broadcastChange('shifts');
-      broadcastChange('applications'); // its applications went with it
+      broadcastChange('signups'); // its signups went with it
       return res.json({ success: true });
     } catch (error: any) {
       console.error('Delete Shift Error:', error);
@@ -1433,11 +1433,11 @@ ${contextText}
   // volunteer portal already filtered it down to the current user in the
   // browser -- so nothing on screen changes, the data just stops leaving the
   // server in the first place.
-  app.get('/api/applications', (req: any, res) => {
+  app.get('/api/shift-signups', (req: any, res) => {
     try {
-      const all = getAllApplications();
+      const all = getAllShiftSignups();
       if (isAdmin(req)) {
-        return res.json({ success: true, applications: all });
+        return res.json({ success: true, shiftSignups: all });
       }
       const me = getVolunteerByEmail(sessionEmail(req));
       const mine = all.filter(a =>
@@ -1447,21 +1447,21 @@ ${contextText}
         // person they belong to. Same allowance the cancel route makes.
         (!String(a.volunteerEmail || '').trim() && !!me && a.volunteerName === me.name)
       );
-      return res.json({ success: true, applications: mine });
+      return res.json({ success: true, shiftSignups: mine });
     } catch (error: any) {
       console.error('Get Applications Error:', error);
       return res.status(500).json({ success: false, error: error.message || '讀取報名紀錄失敗' });
     }
   });
 
-  // Applying both records the application and takes a seat on the shift, so the
+  // Signing up both records it and takes a seat on the shift, so the
   // two stay consistent even if two volunteers apply from different devices at
   // the same time -- the headcount is incremented server-side, not sent up by
   // whichever client happened to compute it last.
-  app.post('/api/applications', requireAuth, (req, res) => {
+  app.post('/api/shift-signups', requireAuth, (req, res) => {
     try {
-      const application = req.body;
-      if (!application?.id || !application?.shiftId || !application?.volunteerName) {
+      const shiftSignup = req.body;
+      if (!shiftSignup?.id || !shiftSignup?.shiftId || !shiftSignup?.volunteerName) {
         return res.status(400).json({ success: false, error: '缺少報名必要欄位' });
       }
 
@@ -1471,55 +1471,55 @@ ${contextText}
       // and therefore couldn't cancel. Admins may still file one for someone
       // else, since that's a real thing coordinators do over the phone.
       const owned = (req as any).session.role === 'volunteer'
-        ? { ...application, volunteerEmail: (req as any).session.identity }
-        : application;
+        ? { ...shiftSignup, volunteerEmail: (req as any).session.identity }
+        : shiftSignup;
 
-      const saved = insertApplication(owned);
-      const shift = adjustShiftCount(application.shiftId, 1);
-      broadcastChange('applications');
+      const saved = insertShiftSignup(owned);
+      const shift = adjustShiftCount(shiftSignup.shiftId, 1);
+      broadcastChange('signups');
       broadcastChange('shifts');
-      return res.json({ success: true, application: saved, shift });
+      return res.json({ success: true, shiftSignup: saved, shift });
     } catch (error: any) {
       console.error('Create Application Error:', error);
       return res.status(500).json({ success: false, error: error.message || '送出報名失敗' });
     }
   });
 
-  // Rejecting a previously-approved application frees the seat back up; the
+  // Rejecting a previously-approved signup frees the seat back up; the
   // client no longer has to work that out for itself.
-  app.put('/api/applications/:id/status', requireAdmin, (req, res) => {
+  app.put('/api/shift-signups/:id/status', requireAdmin, (req, res) => {
     try {
       const { status, reviewNotes } = req.body || {};
       if (!status) {
         return res.status(400).json({ success: false, error: '缺少審核狀態' });
       }
 
-      const before = getAllApplications().find(a => a.id === req.params.id);
+      const before = getAllShiftSignups().find(a => a.id === req.params.id);
       if (!before) {
         return res.status(404).json({ success: false, error: '找不到該筆報名' });
       }
 
-      const updated = updateApplicationStatus(req.params.id, status, reviewNotes);
+      const updated = updateShiftSignupStatus(req.params.id, status, reviewNotes);
       let shift = null;
       const wasHolding = before.status === 'pending' || before.status === 'approved';
       if (wasHolding && (status === 'rejected' || status === 'absent')) {
         shift = adjustShiftCount(before.shiftId, -1);
       }
-      broadcastChange('applications');
+      broadcastChange('signups');
       broadcastChange('shifts');
-      return res.json({ success: true, application: updated, shift });
+      return res.json({ success: true, shiftSignup: updated, shift });
     } catch (error: any) {
       console.error('Update Application Status Error:', error);
       return res.status(500).json({ success: false, error: error.message || '更新報名狀態失敗' });
     }
   });
 
-  app.delete('/api/applications/:id', requireAuth, (req: any, res) => {
+  app.delete('/api/shift-signups/:id', requireAuth, (req: any, res) => {
     try {
-      // A volunteer may cancel their own application; anything else is an
+      // A volunteer may cancel their own signup; anything else is an
       // admin action. Without this check any signed-in volunteer could cancel
       // somebody else's shift just by knowing its id.
-      const target = getAllApplications().find(a => a.id === req.params.id);
+      const target = getAllShiftSignups().find(a => a.id === req.params.id);
       if (!target) {
         return res.status(404).json({ success: false, error: '找不到該筆報名' });
       }
@@ -1554,14 +1554,14 @@ ${contextText}
         return res.status(403).json({ success: false, error: '只能取消自己的報名。' });
       }
 
-      const removed = deleteApplication(req.params.id);
+      const removed = deleteShiftSignup(req.params.id);
       if (!removed) {
         return res.status(404).json({ success: false, error: '找不到該筆報名' });
       }
       const shift = adjustShiftCount(removed.shiftId, -1);
-      broadcastChange('applications');
+      broadcastChange('signups');
       broadcastChange('shifts');
-      return res.json({ success: true, application: removed, shift });
+      return res.json({ success: true, shiftSignup: removed, shift });
     } catch (error: any) {
       console.error('Delete Application Error:', error);
       return res.status(500).json({ success: false, error: error.message || '取消報名失敗' });
@@ -1718,15 +1718,15 @@ ${contextText}
         return res.json({ success: true, records: [] });
       }
       // Attendance rows identify the volunteer by name (that is what the
-      // check-in handler stamps), with the applicationId as a second route in
+      // check-in handler stamps), with the signupId as a second route in
       // for rows created from an approved booking.
-      const myApplicationIds = new Set(
-        getAllApplications()
+      const mySignupIds = new Set(
+        getAllShiftSignups()
           .filter(a => sameEmail(a.volunteerEmail, me.email))
           .map(a => a.id)
       );
       const records = all.filter(
-        r => r.volunteerName === me.name || (r.applicationId && myApplicationIds.has(r.applicationId))
+        r => r.volunteerName === me.name || (r.signupId && mySignupIds.has(r.signupId))
       );
       return res.json({ success: true, records });
     } catch (error: any) {
@@ -1751,7 +1751,7 @@ ${contextText}
   //      in the database -- not trusted from the request body.
   //
   // Plus the boring but important ones: you must be signed in, the shift must
-  // be today and roughly now, you must have an approved application for it,
+  // be today and roughly now, you must have an approved signup for it,
   // and you can't already be checked in.
   const SITE_CODE_WINDOW_SECONDS = 60;
   const GEOFENCE_RADIUS_METERS = 500;
@@ -1896,12 +1896,12 @@ ${contextText}
           return res.status(400).json({ success: false, error: `此班次日期為 ${shift.date}，只能在當天簽到` });
         }
 
-        const application = getAllApplications().find(
+        const shiftSignup = getAllShiftSignups().find(
           a => a.shiftId === shiftId &&
                a.status === 'approved' &&
                (a.volunteerEmail || '').toLowerCase() === volunteerEmail.toLowerCase()
         );
-        if (!application) {
+        if (!shiftSignup) {
           return res.status(403).json({ success: false, error: '您沒有這個班次的錄取名額，無法簽到' });
         }
 

@@ -2,9 +2,9 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'fs';
 import path from 'path';
 import { randomUUID, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
-import { VOLUNTEER_PROFILES, INITIAL_ATTENDANCE_RECORDS, INITIAL_SHIFTS, INITIAL_APPLICATIONS, DEFAULT_SHELTER_LOCATION, DEFAULT_LINE_OFFICIAL_ACCOUNT } from './src/data/mockData';
+import { VOLUNTEER_PROFILES, INITIAL_ATTENDANCE_RECORDS, INITIAL_SHIFTS, INITIAL_SHIFT_SIGNUPS, DEFAULT_SHELTER_LOCATION, DEFAULT_LINE_OFFICIAL_ACCOUNT } from './src/data/mockData';
 import { RULEBOOK_CORPUS } from './src/data/rulebookCorpus';
-import type { VolunteerProfile, AttendanceRecord, PositionShift, VolunteerApplication, SopContent, SopSection, SopDocument, SopVideo, PromotionRequest, ShiftTemplate, ShelterLocation, LineOfficialAccount } from './src/types';
+import type { VolunteerProfile, AttendanceRecord, PositionShift, ShiftSignup, SopContent, SopSection, SopDocument, SopVideo, PromotionRequest, ShiftTemplate, ShelterLocation, LineOfficialAccount } from './src/types';
 
 const dataDir = path.join(process.cwd(), 'data');
 fs.mkdirSync(dataDir, { recursive: true });
@@ -66,7 +66,7 @@ try {
 }
 // Migration: LINE notification preference toggles. These used to live only in the
 // volunteer's own browser localStorage — which meant an admin's browser (editing a
-// shift, approving an application) had no way to know a given volunteer had turned a
+// shift, approving a signup) had no way to know a given volunteer had turned a
 // notification type off. Storing them here lets the backend enforce them for real.
 try {
   db.exec(`ALTER TABLE volunteers ADD COLUMN linePreferences TEXT NOT NULL DEFAULT ''`);
@@ -347,7 +347,7 @@ export function getLinePreferences(email: string): StoredLinePreferences {
 db.exec(`
   CREATE TABLE IF NOT EXISTS attendance_records (
     id TEXT PRIMARY KEY,
-    applicationId TEXT,
+    signupId TEXT,
     volunteerName TEXT NOT NULL,
     volunteerPhone TEXT,
     lineId TEXT,
@@ -388,18 +388,28 @@ try {
   // already renamed, or this is a fresh install that never had the old column
 }
 
+// Migration: applicationId -> signupId, following volunteer_applications ->
+// shift_signups. This one is easy to forget because nothing type-checks it: the
+// column name only ever appears inside SQL strings, so the code and the schema
+// can disagree silently until a query fails at runtime.
+try {
+  db.exec(`ALTER TABLE attendance_records RENAME COLUMN applicationId TO signupId`);
+} catch {
+  // already renamed, or this is a fresh install that never had the old column
+}
+
 // Seed with the original mock attendance history on first run only, same pattern as
 // the volunteers table above.
 const attendanceSeedCount = db.prepare('SELECT COUNT(*) AS c FROM attendance_records').get() as { c: number };
 if (attendanceSeedCount.c === 0) {
   const insertSeed = db.prepare(`
     INSERT INTO attendance_records
-      (id, applicationId, volunteerName, volunteerPhone, lineId, shiftId, shiftTitle, branchId, zone, date, checkInTime, checkOutTime, status, hoursLogged, locationVerified, distanceMeters, qrCodeToken, checkInMethod, rating, feedbackComment, feedbackSubmittedAt, lineReminderSent, photoUrl)
+      (id, signupId, volunteerName, volunteerPhone, lineId, shiftId, shiftTitle, branchId, zone, date, checkInTime, checkOutTime, status, hoursLogged, locationVerified, distanceMeters, qrCodeToken, checkInMethod, rating, feedbackComment, feedbackSubmittedAt, lineReminderSent, photoUrl)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   for (const r of INITIAL_ATTENDANCE_RECORDS) {
     insertSeed.run(
-      r.id, r.applicationId || null, r.volunteerName, r.volunteerPhone || null, r.lineId || null,
+      r.id, r.signupId || null, r.volunteerName, r.volunteerPhone || null, r.lineId || null,
       r.shiftId, r.shiftTitle, 'shelter', r.zone, r.date, r.checkInTime, r.checkOutTime || null,
       r.status, r.hoursLogged ?? null, r.locationVerified ? 1 : 0, r.distanceMeters ?? null,
       r.qrCodeToken, r.checkInMethod || 'staff', r.rating ?? null, r.feedbackComment || null, r.feedbackSubmittedAt || null,
@@ -411,7 +421,7 @@ if (attendanceSeedCount.c === 0) {
 function rowToAttendanceRecord(row: any): AttendanceRecord {
   return {
     id: row.id,
-    applicationId: row.applicationId || undefined,
+    signupId: row.signupId || undefined,
     volunteerName: row.volunteerName,
     volunteerPhone: row.volunteerPhone || undefined,
     lineId: row.lineId || undefined,
@@ -443,10 +453,10 @@ export function getAllAttendanceRecords(): AttendanceRecord[] {
 export function insertAttendanceRecord(r: AttendanceRecord): AttendanceRecord {
   db.prepare(`
     INSERT INTO attendance_records
-      (id, applicationId, volunteerName, volunteerPhone, lineId, shiftId, shiftTitle, branchId, zone, date, checkInTime, checkOutTime, status, hoursLogged, locationVerified, distanceMeters, qrCodeToken, rating, feedbackComment, feedbackSubmittedAt, lineReminderSent, photoUrl)
+      (id, signupId, volunteerName, volunteerPhone, lineId, shiftId, shiftTitle, branchId, zone, date, checkInTime, checkOutTime, status, hoursLogged, locationVerified, distanceMeters, qrCodeToken, rating, feedbackComment, feedbackSubmittedAt, lineReminderSent, photoUrl)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    r.id, r.applicationId || null, r.volunteerName, r.volunteerPhone || null, r.lineId || null,
+    r.id, r.signupId || null, r.volunteerName, r.volunteerPhone || null, r.lineId || null,
     r.shiftId, r.shiftTitle, 'shelter', r.zone, r.date, r.checkInTime, r.checkOutTime || null,
     r.status, r.hoursLogged ?? null, r.locationVerified ? 1 : 0, r.distanceMeters ?? null,
     r.qrCodeToken, r.rating ?? null, r.feedbackComment || null, r.feedbackSubmittedAt || null,
@@ -1041,7 +1051,7 @@ export function updateLineOfficialAccount(updates: { basicId: string; displayNam
 }
 
 // ============================================================================
-// Shifts & volunteer applications
+// Shifts & shift signups
 // ----------------------------------------------------------------------------
 // These two lived in the browser's localStorage until now, which meant a shift
 // published on the coordinator's desktop simply did not exist for a volunteer
@@ -1069,8 +1079,31 @@ db.exec(`
   )
 `);
 
+// Migration: volunteer_applications -> shift_signups.
+//
+// This table records "X signed up for shift Y". The StrayHub CRM has a table of
+// its own called volunteer_applications, and there it means "X applied to
+// become a volunteer at this shelter" -- an approval that grants access, valid
+// for a fixed period. Two tables, the same name, opposite meanings, about to
+// exchange data with each other. Renaming ours is much cheaper now than
+// untangling a mix-up later.
+//
+// Runs before the CREATE below: the other order would leave CREATE IF NOT
+// EXISTS making an empty shift_signups, and the rename would then fail with
+// every real signup still stranded in the old table.
+{
+  const tableNames = db
+    .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('volunteer_applications', 'shift_signups')`)
+    .all()
+    .map((row: any) => row.name);
+  if (tableNames.includes('volunteer_applications') && !tableNames.includes('shift_signups')) {
+    db.exec('ALTER TABLE volunteer_applications RENAME TO shift_signups');
+    console.log('SQLite: volunteer_applications 已更名為 shift_signups');
+  }
+}
+
 db.exec(`
-  CREATE TABLE IF NOT EXISTS volunteer_applications (
+  CREATE TABLE IF NOT EXISTS shift_signups (
     id TEXT PRIMARY KEY,
     shiftId TEXT NOT NULL,
     volunteerName TEXT NOT NULL,
@@ -1112,7 +1145,7 @@ function rowToShift(row: any): PositionShift {
   };
 }
 
-function rowToApplication(row: any): VolunteerApplication {
+function rowToShiftSignup(row: any): ShiftSignup {
   return {
     id: row.id,
     shiftId: row.shiftId,
@@ -1168,12 +1201,12 @@ export function updateShift(s: PositionShift): PositionShift | null {
   return row ? rowToShift(row) : null;
 }
 
-// Deleting a shift takes its applications with it -- an application pointing at
+// Deleting a shift takes its signups with it -- a signup pointing at
 // a shift that no longer exists would surface as a blank row in the review queue.
 export function deleteShift(id: string): boolean {
   const existing = db.prepare('SELECT id FROM shifts WHERE id = ?').get(id);
   if (!existing) return false;
-  db.prepare('DELETE FROM volunteer_applications WHERE shiftId = ?').run(id);
+  db.prepare('DELETE FROM shift_signups WHERE shiftId = ?').run(id);
   db.prepare('DELETE FROM shifts WHERE id = ?').run(id);
   return true;
 }
@@ -1190,14 +1223,14 @@ export function adjustShiftCount(shiftId: string, delta: number): PositionShift 
   return updated ? rowToShift(updated) : null;
 }
 
-export function getAllApplications(): VolunteerApplication[] {
-  const rows = db.prepare('SELECT * FROM volunteer_applications ORDER BY appliedAt DESC').all();
-  return rows.map(rowToApplication);
+export function getAllShiftSignups(): ShiftSignup[] {
+  const rows = db.prepare('SELECT * FROM shift_signups ORDER BY appliedAt DESC').all();
+  return rows.map(rowToShiftSignup);
 }
 
-export function insertApplication(a: VolunteerApplication): VolunteerApplication {
+export function insertShiftSignup(a: ShiftSignup): ShiftSignup {
   db.prepare(`
-    INSERT INTO volunteer_applications (id, shiftId, volunteerName, volunteerEmail, volunteerPhone, lineId, experienceLevel, appliedZone, status, appliedAt, notes, reviewNotes, reviewedAt, syncToCalendar, syncToLine, situationalQuestion, situationalAnswer, aiReadinessAssessment)
+    INSERT INTO shift_signups (id, shiftId, volunteerName, volunteerEmail, volunteerPhone, lineId, experienceLevel, appliedZone, status, appliedAt, notes, reviewNotes, reviewedAt, syncToCalendar, syncToLine, situationalQuestion, situationalAnswer, aiReadinessAssessment)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     a.id, a.shiftId, a.volunteerName, (a.volunteerEmail || '').trim().toLowerCase(), a.volunteerPhone || '', a.lineId || '',
@@ -1214,26 +1247,26 @@ export function insertApplication(a: VolunteerApplication): VolunteerApplication
 // from being recognised as the owner, so cancelling their own booking came back
 // 403 -- and the page, which re-fetched afterwards, simply put the row back.
 // Normalise the existing rows once so old bookings behave like new ones.
-db.exec("UPDATE volunteer_applications SET volunteerEmail = LOWER(TRIM(volunteerEmail)) WHERE volunteerEmail <> LOWER(TRIM(volunteerEmail))");
+db.exec("UPDATE shift_signups SET volunteerEmail = LOWER(TRIM(volunteerEmail)) WHERE volunteerEmail <> LOWER(TRIM(volunteerEmail))");
 
-export function updateApplicationStatus(
+export function updateShiftSignupStatus(
   id: string,
   status: string,
   reviewNotes?: string
-): VolunteerApplication | null {
-  const existing = db.prepare('SELECT id FROM volunteer_applications WHERE id = ?').get(id);
+): ShiftSignup | null {
+  const existing = db.prepare('SELECT id FROM shift_signups WHERE id = ?').get(id);
   if (!existing) return null;
-  db.prepare('UPDATE volunteer_applications SET status = ?, reviewNotes = ?, reviewedAt = ? WHERE id = ?')
+  db.prepare('UPDATE shift_signups SET status = ?, reviewNotes = ?, reviewedAt = ? WHERE id = ?')
     .run(status, reviewNotes || null, new Date().toLocaleString('zh-TW', { hour12: false }), id);
-  const row = db.prepare('SELECT * FROM volunteer_applications WHERE id = ?').get(id);
-  return row ? rowToApplication(row) : null;
+  const row = db.prepare('SELECT * FROM shift_signups WHERE id = ?').get(id);
+  return row ? rowToShiftSignup(row) : null;
 }
 
-export function deleteApplication(id: string): VolunteerApplication | null {
-  const row = db.prepare('SELECT * FROM volunteer_applications WHERE id = ?').get(id);
+export function deleteShiftSignup(id: string): ShiftSignup | null {
+  const row = db.prepare('SELECT * FROM shift_signups WHERE id = ?').get(id);
   if (!row) return null;
-  db.prepare('DELETE FROM volunteer_applications WHERE id = ?').run(id);
-  return rowToApplication(row);
+  db.prepare('DELETE FROM shift_signups WHERE id = ?').run(id);
+  return rowToShiftSignup(row);
 }
 
 // Seeded from the original mock data on first run only, same pattern as the
@@ -1243,9 +1276,9 @@ const shiftSeedCount = db.prepare('SELECT COUNT(*) AS c FROM shifts').get() as {
 if (shiftSeedCount.c === 0) {
   for (const s of INITIAL_SHIFTS) insertShift(s);
 }
-const applicationSeedCount = db.prepare('SELECT COUNT(*) AS c FROM volunteer_applications').get() as { c: number };
-if (applicationSeedCount.c === 0) {
-  for (const a of INITIAL_APPLICATIONS) insertApplication(a);
+const signupSeedCount = db.prepare('SELECT COUNT(*) AS c FROM shift_signups').get() as { c: number };
+if (signupSeedCount.c === 0) {
+  for (const a of INITIAL_SHIFT_SIGNUPS) insertShiftSignup(a);
 }
 
 // ============================================================================

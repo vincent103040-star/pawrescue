@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { PositionShift, ShelterLocation, SkillLevel, ZoneCategory, LineNotificationPreferences, VolunteerUserSession, AttendanceRecord, VolunteerApplication, PromotionRequest, LineOfficialAccount } from '../types';
+import { PositionShift, ShelterLocation, SkillLevel, ZoneCategory, LineNotificationPreferences, VolunteerUserSession, AttendanceRecord, ShiftSignup, PromotionRequest, LineOfficialAccount } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { VolunteerWelcomeCard } from './VolunteerWelcomeCard';
 import { ShiftCalendarView } from './ShiftCalendarView';
@@ -82,9 +82,9 @@ interface VolunteerPortalProps {
   activeSection?: 'shifts' | 'growth' | 'settings';
   currentUser?: VolunteerUserSession | null;
   attendanceRecords?: AttendanceRecord[];
-  applications?: VolunteerApplication[];
+  shiftSignups?: ShiftSignup[];
   onNavigateToTab?: (tab: 'shifts' | 'myshifts' | 'growth' | 'settings' | 'sop') => void;
-  onCancelApplication?: (appId: string) => void;
+  onCancelSignup?: (appId: string) => void;
   onUpdateProfile?: (updates: Partial<VolunteerUserSession>) => void;
 }
 
@@ -97,9 +97,9 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
   activeSection = 'shifts',
   currentUser,
   attendanceRecords = [],
-  applications = [],
+  shiftSignups = [],
   onNavigateToTab,
-  onCancelApplication,
+  onCancelSignup,
   onUpdateProfile
 }) => {
   const [activePortalTab, setActivePortalTab] = useState<'shifts' | 'growth' | 'settings'>(activeSection);
@@ -134,7 +134,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
     const vPhone = currentUser?.phone || localStorage.getItem('volunteer_profile_phone') || '0912-345-678';
     const vLineId = currentUser?.lineId || localStorage.getItem('volunteer_profile_lineid') || 'xiaoming_line';
 
-    return applications
+    return shiftSignups
       .filter(a => 
         a.status !== 'rejected' && (
           (a.volunteerName && a.volunteerName.trim() === vName.trim()) ||
@@ -144,7 +144,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
         )
       )
       .map(a => a.shiftId);
-  }, [applications, currentUser]);
+  }, [shiftSignups, currentUser]);
 
 
   // LINE Notification Preferences State

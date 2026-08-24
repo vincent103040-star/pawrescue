@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { X, MapPin, KeyRound, Loader2, CheckCircle2, AlertCircle, Navigation, LogOut, Star, Camera, Sparkles } from 'lucide-react';
-import { PositionShift, VolunteerApplication, VolunteerUserSession, ShelterLocation, AttendanceRecord } from '../types';
+import { PositionShift, ShiftSignup, VolunteerUserSession, ShelterLocation, AttendanceRecord } from '../types';
 import { authFetch } from '../utils/session';
 
 interface VolunteerSelfCheckInProps {
   shifts: PositionShift[];
-  applications: VolunteerApplication[];
+  shiftSignups: ShiftSignup[];
   shelterLocation: ShelterLocation;
   attendanceRecords: AttendanceRecord[];
   currentUser: VolunteerUserSession | null;
@@ -53,7 +53,7 @@ function taiwanToday(): string {
  */
 export const VolunteerSelfCheckIn: React.FC<VolunteerSelfCheckInProps> = ({
   shifts,
-  applications,
+  shiftSignups,
   shelterLocation,
   attendanceRecords,
   currentUser,
@@ -71,12 +71,12 @@ export const VolunteerSelfCheckIn: React.FC<VolunteerSelfCheckInProps> = ({
   const todayShifts = useMemo(() => {
     const email = (currentUser?.email || '').trim().toLowerCase();
     const approvedShiftIds = new Set(
-      applications
+      shiftSignups
         .filter(a => a.status === 'approved' && (a.volunteerEmail || '').trim().toLowerCase() === email)
         .map(a => a.shiftId)
     );
     return shifts.filter(s => s.date === today && approvedShiftIds.has(s.id));
-  }, [shifts, applications, currentUser, today]);
+  }, [shifts, shiftSignups, currentUser, today]);
 
   const [selectedShiftId, setSelectedShiftId] = useState<string>(todayShifts[0]?.id || '');
   const [code, setCode] = useState('');

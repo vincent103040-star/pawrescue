@@ -58,9 +58,9 @@ export interface PositionShift {
   createdAt: string;
 }
 
-export type ApplicationStatus = 'pending' | 'approved' | 'rejected' | 'attended' | 'absent';
+export type SignupStatus = 'pending' | 'approved' | 'rejected' | 'attended' | 'absent';
 
-export interface VolunteerApplication {
+export interface ShiftSignup {
   id: string;
   shiftId: string;
   volunteerName: string;
@@ -69,7 +69,7 @@ export interface VolunteerApplication {
   lineId: string;
   experienceLevel: SkillLevel;
   appliedZone: ZoneCategory;
-  status: ApplicationStatus;
+  status: SignupStatus;
   appliedAt: string;
   notes?: string;
   reviewNotes?: string;
@@ -131,7 +131,7 @@ export interface ServiceFeedback {
 
 export interface AttendanceRecord {
   id: string;
-  applicationId?: string;
+  signupId?: string;
   volunteerName: string;
   volunteerPhone?: string;
   lineId?: string;

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PositionShift, VolunteerApplication, ShelterLocation, AttendanceRecord, VolunteerUserSession } from '../types';
+import { PositionShift, ShiftSignup, ShelterLocation, AttendanceRecord, VolunteerUserSession } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { Calendar, Clock, MapPin, CheckCircle2, AlertCircle, QrCode, Star, ArrowUpRight, Award, ExternalLink, ShieldCheck, Heart, FileText, Check, ChevronRight } from 'lucide-react';
 import { CertificateModal } from './CertificateModal';
@@ -7,24 +7,24 @@ import { buildGoogleCalendarLink } from '../utils/googleCalendar';
 
 interface VolunteerMyShiftsProps {
   shifts: PositionShift[];
-  applications: VolunteerApplication[];
+  shiftSignups: ShiftSignup[];
   shelterLocation: ShelterLocation;
   attendanceRecords: AttendanceRecord[];
   currentUser: VolunteerUserSession | null;
   onOpenCheckInModal: () => void;
   onSendLineToast: (msg: string) => void;
-  onCancelApplication?: (appId: string) => void;
+  onCancelSignup?: (appId: string) => void;
 }
 
 export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
   shifts,
-  applications,
+  shiftSignups,
   shelterLocation,
   attendanceRecords,
   currentUser,
   onOpenCheckInModal,
   onSendLineToast,
-  onCancelApplication
+  onCancelSignup
 }) => {
   const [cancelConfirmAppId, setCancelConfirmAppId] = useState<string | null>(null);
   const [activeSubTab, setActiveSubTab] = useState<'all' | 'upcoming' | 'completed' | 'pending'>('all');
@@ -36,8 +36,8 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
   const vPhone = currentUser?.phone || localStorage.getItem('volunteer_profile_phone') || '0912-345-678';
   const vLineId = currentUser?.lineId || localStorage.getItem('volunteer_profile_lineid') || 'xiaoming_line';
 
-  // Filter applications belonging to this volunteer
-  const myApplications = applications.filter(a => 
+  // Filter signups belonging to this volunteer
+  const mySignups = shiftSignups.filter(a => 
     (a.volunteerName && a.volunteerName.trim().toLowerCase() === vName.trim().toLowerCase()) ||
     (a.volunteerEmail && a.volunteerEmail.trim().toLowerCase() === vEmail.trim().toLowerCase()) ||
     (a.volunteerPhone && a.volunteerPhone.trim() === vPhone.trim()) ||
@@ -54,10 +54,10 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
   const completedAttendance = myAttendance.filter(r => r.status === 'completed');
   const totalCompletedHours = completedAttendance.reduce((acc, r) => acc + (r.hoursLogged || 3), 0) + (currentUser?.totalHours || 0);
 
-  const approvedApps = myApplications.filter(a => a.status === 'approved');
-  const pendingApps = myApplications.filter(a => a.status === 'pending');
+  const approvedApps = mySignups.filter(a => a.status === 'approved');
+  const pendingApps = mySignups.filter(a => a.status === 'pending');
 
-  const filteredApps = myApplications.filter(app => {
+  const filteredApps = mySignups.filter(app => {
     if (activeSubTab === 'upcoming') return app.status === 'approved';
     if (activeSubTab === 'completed') return app.status === 'attended';
     if (activeSubTab === 'pending') return app.status === 'pending';
@@ -161,7 +161,7 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
                 : 'text-slate-600 hover:bg-[#FAF6EE]'
             }`}
           >
-            全部紀錄 ({myApplications.length})
+            全部紀錄 ({mySignups.length})
           </button>
 
           <button
@@ -329,14 +329,14 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
                       </a>
                     )}
 
-                    {(app.status === 'pending' || app.status === 'approved') && onCancelApplication && (
+                    {(app.status === 'pending' || app.status === 'approved') && onCancelSignup && (
                       cancelConfirmAppId === app.id ? (
                         <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-xl animate-fade-in">
                           <span className="text-xs text-rose-800 font-bold">確定取消此班次？</span>
                           <button
                             type="button"
                             onClick={() => {
-                              onCancelApplication(app.id);
+                              onCancelSignup(app.id);
                               setCancelConfirmAppId(null);
                             }}
                             className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-black shadow-2xs transition cursor-pointer"
