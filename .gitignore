@@ -7,6 +7,11 @@ coverage/
 .env*
 !.env.example
 /data/*.db
+# WAL sidecar files -- they hold committed pages the .db doesn't yet.
+/data/*.db-wal
+/data/*.db-shm
+# Database snapshots: same personal data as the database itself.
+/data/backups/
 /data/photos/
 /data/avatars/
 /data/sop-docs/

@@ -1,3 +1,4 @@
+import { authFetch } from './session';
 export type LineNotificationType = 'shiftChanges' | 'urgentRecruitment' | 'checkInReminder';
 
 /**
@@ -12,7 +13,7 @@ export async function sendLinePush(
   notificationType?: LineNotificationType
 ): Promise<{ ok: boolean; simulated: boolean }> {
   try {
-    const res = await fetch('/api/line/push', {
+    const res = await authFetch('/api/line/push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, message, notificationType })
@@ -30,7 +31,7 @@ export async function sendLinePush(
  */
 export async function sendLineBroadcast(message: string): Promise<{ ok: boolean; simulated: boolean }> {
   try {
-    const res = await fetch('/api/line/broadcast', {
+    const res = await authFetch('/api/line/broadcast', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message })

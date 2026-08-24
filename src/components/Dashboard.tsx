@@ -8,6 +8,7 @@ import { MonthlyReportModal, calculateShiftDurationHours } from './MonthlyReport
 import { ResourceWarningMap } from './ResourceWarningMap';
 import { DailyDutyTaskboard } from './DailyDutyTaskboard';
 import { DashboardModuleCard } from './DashboardModuleCard';
+import { authFetch } from '../utils/session';
 import { 
   DashboardModuleCustomizer, 
   DashboardModuleId, 
@@ -97,7 +98,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     setIsBroadcasting(true);
     setBroadcastResult(null);
     try {
-      const res = await fetch('/api/line/broadcast', {
+      const res = await authFetch('/api/line/broadcast', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: broadcastText })

@@ -143,7 +143,7 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
 
   const loadContent = () => {
     setIsLoading(true);
-    fetch('/api/sop-content')
+    authFetch('/api/sop-content')
       .then(res => res.json())
       .then(data => {
         if (data.success) {
@@ -157,7 +157,7 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
   };
 
   const loadShiftTemplates = () => {
-    fetch('/api/shift-templates')
+    authFetch('/api/shift-templates')
       .then(res => res.json())
       .then(data => { if (data.success) setShiftTemplates(data.templates || []); })
       .catch(() => { /* best-effort */ });

@@ -111,7 +111,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
     if (!checkoutPhoto || isCaptioning) return;
     setIsCaptioning(true);
     try {
-      const res = await fetch('/api/ai/caption-photo', {
+      const res = await authFetch('/api/ai/caption-photo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageBase64: checkoutPhoto.base64, mimeType: checkoutPhoto.mimeType, shiftTitle, zone })

@@ -191,7 +191,7 @@ export const VolunteerSelfCheckIn: React.FC<VolunteerSelfCheckInProps> = ({
     if (!photo || !checkingOut || isCaptioning) return;
     setIsCaptioning(true);
     try {
-      const res = await fetch('/api/ai/caption-photo', {
+      const res = await authFetch('/api/ai/caption-photo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

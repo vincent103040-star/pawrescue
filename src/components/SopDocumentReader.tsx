@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { X, Search, Loader2, Download, BookOpen, AlertTriangle } from 'lucide-react';
 import { SopDocument } from '../types';
 
+import { authFetch } from '../utils/session';
 interface SopDocumentReaderProps {
   doc: SopDocument;
   onClose: () => void;
@@ -22,7 +23,7 @@ export const SopDocumentReader: React.FC<SopDocumentReaderProps> = ({ doc, onClo
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/sop-documents/${encodeURIComponent(doc.id)}/text`)
+    authFetch(`/api/sop-documents/${encodeURIComponent(doc.id)}/text`)
       .then(res => res.json())
       .then(data => {
         if (cancelled) return;

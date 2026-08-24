@@ -111,7 +111,7 @@ export const VolunteerRoster: React.FC<VolunteerRosterProps> = ({
   const [rejectNote, setRejectNote] = useState('');
 
   const refreshPromotionRequests = () => {
-    fetch('/api/promotions')
+    authFetch('/api/promotions')
       .then(res => res.json())
       .then(data => {
         if (data.success) setPromotionRequests(data.requests || []);

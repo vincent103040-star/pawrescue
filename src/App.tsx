@@ -102,46 +102,58 @@ export default function App() {
   const [volunteers, setVolunteers] = useState<VolunteerProfile[]>(VOLUNTEER_PROFILES);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(INITIAL_ATTENDANCE_RECORDS);
 
-  // Load the authoritative volunteer roster from the backend (SQLite) once on mount,
-  // replacing whatever was cached in localStorage / seeded from mock data.
-  useEffect(() => {
-    refreshVolunteers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // The live-updates subscription below is created once and therefore closes
+  // over the first render's values; this ref is how it can still see the
+  // current role.
+  const roleRef = React.useRef(userRole);
+  roleRef.current = userRole;
 
   // Shifts and applications now live server-side too. They used to be
   // localStorage-only, which meant a shift published on the coordinator's
   // desktop didn't exist for a volunteer on their phone. Re-fetching them is
   // how every mutation below stays consistent across devices.
   const refreshShifts = () =>
-    fetch('/api/shifts')
+    authFetch('/api/shifts')
       .then(res => res.json())
       .then(data => { if (data.success && Array.isArray(data.shifts)) setShifts(data.shifts); })
       .catch(() => { /* keep what's on screen if the backend is unreachable */ });
 
   const refreshApplications = () =>
-    fetch('/api/applications')
+    authFetch('/api/applications')
       .then(res => res.json())
       .then(data => { if (data.success && Array.isArray(data.applications)) setApplications(data.applications); })
       .catch(() => { /* keep what's on screen if the backend is unreachable */ });
 
-  const refreshVolunteers = () =>
-    fetch('/api/volunteers')
+  // The full roster is admin-only on the server now -- it carries every
+  // volunteer's phone number and emergency contact, and only the admin roster
+  // page ever shows it. Asking as a volunteer would just collect a 403.
+  const refreshVolunteers = () => {
+    if (roleRef.current !== 'admin') return Promise.resolve();
+    return authFetch('/api/volunteers')
       .then(res => res.json())
       .then(data => { if (data.success && Array.isArray(data.volunteers)) setVolunteers(data.volunteers); })
       .catch(() => { /* keep what's on screen if the backend is unreachable */ });
+  };
 
   const refreshAttendance = () =>
-    fetch('/api/attendance')
+    authFetch('/api/attendance')
       .then(res => res.json())
       .then(data => { if (data.success && Array.isArray(data.records)) setAttendanceRecords(data.records); })
       .catch(() => { /* keep what's on screen if the backend is unreachable */ });
 
+  // None of these endpoints is public any more, and what they return is scoped
+  // to whoever signed in -- an admin gets the whole board, a volunteer gets
+  // their own bookings and their own attendance. So the load waits for a role
+  // and runs again when it changes, instead of firing once on mount at the
+  // login screen where there is no session to scope it by.
   useEffect(() => {
+    if (!userRole) return;
     refreshShifts();
     refreshApplications();
+    refreshAttendance();
+    refreshVolunteers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [userRole]);
 
   // Live updates: the server pushes "this changed" and the page re-fetches just
   // that slice, so a check-in on someone's phone shows up on the coordinator's
@@ -199,13 +211,6 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Same idea for attendance records: they used to live only in this browser's
-  // localStorage, so a volunteer checking in on their phone (via LIFF) and an admin
-  // looking at the dashboard on a desktop never saw each other's data.
-  useEffect(() => {
-    refreshAttendance();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Deep-link support for the LINE Rich Menu: tapping a menu tile opens this app
   // with e.g. ?tab=sop or ?checkin=1. If the volunteer is already logged in on this
@@ -287,7 +292,7 @@ export default function App() {
     if (sessionStorage.getItem('paw_line_bind_dismissed') === '1') return;
 
     let cancelled = false;
-    fetch(`/api/volunteers/line-status?email=${encodeURIComponent(volunteerSession.email)}`)
+    authFetch(`/api/volunteers/line-status?email=${encodeURIComponent(volunteerSession.email)}`)
       .then(res => res.json())
       .then(data => {
         if (cancelled) return;
@@ -473,7 +478,7 @@ export default function App() {
       return r;
     }));
 
-    fetch(`/api/attendance/${recordId}/check-out`, {
+    authFetch(`/api/attendance/${recordId}/check-out`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -506,11 +511,12 @@ export default function App() {
         return v;
       }));
 
-      fetch('/api/volunteers/log-hours', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: checkedOutName, hoursLogged })
-      }).catch(() => { /* best-effort backend sync */ });
+      // The hours themselves are credited by the check-out request above --
+      // the server does it from the record it just closed, so there is nothing
+      // to post here. This used to be a separate call that took a name and a
+      // number, which meant the totals could be moved by anyone who could
+      // reach the URL. The local update above is just the optimistic paint;
+      // the next refresh reconciles it with what the server recorded.
     }
   };
 

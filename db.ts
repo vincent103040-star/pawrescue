@@ -9,7 +9,26 @@ import type { VolunteerProfile, AttendanceRecord, PositionShift, VolunteerApplic
 const dataDir = path.join(process.cwd(), 'data');
 fs.mkdirSync(dataDir, { recursive: true });
 
-const db = new DatabaseSync(path.join(dataDir, 'volunteers.db'));
+const dbPath = path.join(dataDir, 'volunteers.db');
+const db = new DatabaseSync(dbPath);
+
+// WAL lets a reader carry on while a write is in progress, instead of the two
+// blocking each other. node:sqlite's API is synchronous and runs on the event
+// loop, so a write that waits is a whole server that waits -- the SSE stream
+// and anyone mid-check-in included. busy_timeout covers the cases WAL doesn't
+// (two writers): wait up to 5 seconds rather than failing the request outright.
+// Switching journal mode needs a moment with no other connection to this file,
+// so it can fail if a second copy of the server is already running. That is a
+// reason to carry on in the old mode, not a reason to refuse to start.
+try {
+  db.exec('PRAGMA journal_mode = WAL');
+} catch {
+  console.warn('SQLite: could not switch to WAL (another process has the database open); continuing.');
+}
+db.exec('PRAGMA busy_timeout = 5000');
+// WAL trades a little durability for speed by default; FULL puts it back, so a
+// power cut can't lose an already-answered check-in.
+db.exec('PRAGMA synchronous = FULL');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS volunteers (
@@ -1279,17 +1298,106 @@ function passwordMatches(password: string, salt: string, expectedHash: string): 
   return timingSafeEqual(a, b);
 }
 
-// Seed the demo administrator on first run. The password stays "0000" so the
-// existing walkthrough still works, but it is now verified server-side against
-// a hash -- ADMIN_PASSWORD in the environment overrides it for a real deploy.
-const adminSeedCount = db.prepare('SELECT COUNT(*) AS c FROM admin_users').get() as { c: number };
-if (adminSeedCount.c === 0) {
-  const initialPassword = process.env.ADMIN_PASSWORD || '0000';
-  const { salt, hash } = hashPassword(initialPassword);
-  db.prepare(`
-    INSERT INTO admin_users (username, passwordSalt, passwordHash, roleTitle, email, createdAt)
-    VALUES (?, ?, ?, '系統管理員', 'admin@pawrescue.org.tw', ?)
-  `).run('Admin', salt, hash, new Date().toISOString());
+// The administrator account.
+//
+// There is deliberately no default password any more. This used to seed "0000",
+// which meant every copy of this project that never changed it -- including any
+// that ended up reachable from the internet -- had a four-digit admin login that
+// was written down in the repository.
+//
+// ADMIN_PASSWORD sets it. With nothing set, a strong random one is generated and
+// printed to the server log once, so a fresh clone still works out of the box
+// without shipping a credential that everyone already knows.
+function seedOrRepairAdmin(): void {
+  const envPassword = (process.env.ADMIN_PASSWORD || '').trim();
+  const existing = db.prepare('SELECT * FROM admin_users WHERE username = ?').get('Admin') as any;
+
+  const announce = (password: string, reason: string) => {
+    console.warn(
+      `\n${'='.repeat(64)}\n` +
+      `${reason}\n\n` +
+      `  帳號：Admin\n` +
+      `  密碼：${password}\n\n` +
+      `這組密碼只會顯示這一次。請登入後立刻更改，或在 .env.local\n` +
+      `設定 ADMIN_PASSWORD 之後重新啟動。\n` +
+      `${'='.repeat(64)}\n`
+    );
+  };
+
+  if (!existing) {
+    const password = envPassword || randomBytes(9).toString('base64url');
+    const { salt, hash } = hashPassword(password);
+    db.prepare(`
+      INSERT INTO admin_users (username, passwordSalt, passwordHash, roleTitle, email, createdAt)
+      VALUES (?, ?, ?, '系統管理員', 'admin@pawrescue.org.tw', ?)
+    `).run('Admin', salt, hash, new Date().toISOString());
+    if (!envPassword) announce(password, '已建立管理員帳號（未設定 ADMIN_PASSWORD，本次自動產生密碼）');
+    return;
+  }
+
+  // When ADMIN_PASSWORD is set it wins, every boot. Applying it only to a
+  // brand-new database would mean setting it on an existing one silently did
+  // nothing -- the kind of surprise that ends with someone assuming they have
+  // changed a password they haven't.
+  if (envPassword) {
+    if (passwordMatches(envPassword, existing.passwordSalt, existing.passwordHash)) return;
+    const { salt, hash } = hashPassword(envPassword);
+    db.prepare('UPDATE admin_users SET passwordSalt = ?, passwordHash = ? WHERE username = ?')
+      .run(salt, hash, 'Admin');
+    db.prepare(`DELETE FROM sessions WHERE role = 'admin'`).run();
+    console.warn('管理員密碼已依 ADMIN_PASSWORD 更新，既有的管理者登入階段已失效。');
+    return;
+  }
+
+  // Databases created before this change already contain the "0000" hash, and
+  // deleting the seed above does nothing for them -- which is precisely the
+  // case that matters, since those are the ones that have been running. Detect
+  // the known-weak values and rotate them.
+  const knownWeak = ['0000', '1234', '123456', 'admin', 'password'];
+  const usesWeakPassword = knownWeak.some(candidate =>
+    passwordMatches(candidate, existing.passwordSalt, existing.passwordHash)
+  );
+  if (!usesWeakPassword) return;
+
+  const password = randomBytes(9).toString('base64url');
+  const { salt, hash } = hashPassword(password);
+  db.prepare('UPDATE admin_users SET passwordSalt = ?, passwordHash = ? WHERE username = ?')
+    .run(salt, hash, 'Admin');
+  // Anyone signed in with the weak password loses their session too.
+  db.prepare(`DELETE FROM sessions WHERE role = 'admin'`).run();
+  announce(password, '偵測到管理員仍在使用預設弱密碼，已強制更換');
+}
+seedOrRepairAdmin();
+
+/**
+ * Writes a consistent snapshot to data/backups/ and prunes old ones.
+ *
+ * VACUUM INTO rather than copying volunteers.db: with WAL enabled the file on
+ * disk is only half the story, and copying it while a write is in flight can
+ * capture a torn page. This asks SQLite for the snapshot instead, which is safe
+ * to run against a live database.
+ */
+export function backupDatabase(keep = 14): { file: string; bytes: number } {
+  const backupDir = path.join(dataDir, 'backups');
+  fs.mkdirSync(backupDir, { recursive: true });
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const target = path.join(backupDir, `volunteers-${stamp}.db`);
+  // VACUUM INTO takes a literal, not a bound parameter.
+  db.exec(`VACUUM INTO '${target.replace(/'/g, "''")}'`);
+
+  const snapshots = fs.readdirSync(backupDir)
+    .filter(name => name.startsWith('volunteers-') && name.endsWith('.db'))
+    .sort();
+  for (const stale of snapshots.slice(0, Math.max(0, snapshots.length - keep))) {
+    try {
+      fs.unlinkSync(path.join(backupDir, stale));
+    } catch {
+      /* a backup we can't delete is not worth failing the backup over */
+    }
+  }
+
+  return { file: target, bytes: fs.statSync(target).size };
 }
 
 export function verifyAdminCredentials(

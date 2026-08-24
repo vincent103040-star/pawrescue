@@ -6,7 +6,7 @@ import { gzipSync } from 'zlib';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
-import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, adjustShiftCount, getAllApplications, insertApplication, updateApplicationStatus, deleteApplication, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount } from './db';
+import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, adjustShiftCount, getAllApplications, insertApplication, updateApplicationStatus, deleteApplication, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase } from './db';
 import { PDFParse } from 'pdf-parse';
 import type { SopContent, SopDocument, SopVideo } from './src/types';
 
@@ -47,7 +47,11 @@ function cosineSimilarity(a: number[], b: number[]): number {
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  // 3000 by default because the Google OAuth client and the LINE Login callback
+  // URL are both registered against localhost:3000. PORT overrides it, which is
+  // what makes it possible to run a second copy for testing without disturbing
+  // the one already serving.
+  const PORT = Number(process.env.PORT) || 3000;
 
   // Raised from the 100kb default to fit a compressed check-out photo as base64 JSON.
   // `verify` stashes the raw bytes on the request so the LINE webhook handler can
@@ -99,10 +103,135 @@ async function startServer() {
     next();
   }
 
+  const isAdmin = (req: any): boolean => req.session?.role === 'admin';
+
+  /**
+   * The signed-in volunteer's own email, lowercased; '' for an admin.
+   *
+   * Handlers that used to take an email from the query string or the request
+   * body use this instead, so "whose data is this" is answered by the token the
+   * server issued rather than by whatever the caller typed.
+   */
+  const sessionEmail = (req: any): string =>
+    req.session?.role === 'volunteer' ? String(req.session.identity || '').toLowerCase().trim() : '';
+
+  const sameEmail = (a: unknown, b: unknown): boolean => {
+    const norm = (v: unknown) => String(v || '').toLowerCase().trim();
+    return !!norm(a) && norm(a) === norm(b);
+  };
+
   app.use(attachSession);
+
+  // ==========================================================================
+  // Default deny
+  // --------------------------------------------------------------------------
+  // requireAuth used to be applied route by route, which meant a new endpoint
+  // was public until somebody remembered to protect it -- and about a dozen
+  // never were: the full volunteer roster with everyone's phone number, every
+  // attendance record, "approve my own promotion", and sending LINE messages
+  // from the shelter's official account were all one URL away for anyone.
+  //
+  // The rule is inverted here. Everything under /api needs a session unless it
+  // is on this list, so the failure mode of forgetting is a locked door rather
+  // than an open one. Paths are relative to /api -- Express strips the mount
+  // point before this middleware sees them.
+  // ==========================================================================
+  const PUBLIC_ENDPOINTS: ReadonlyArray<readonly [string, RegExp]> = [
+    ['GET', /^\/health$/],
+    // The SSE stream: EventSource cannot send an Authorization header, and the
+    // frames carry no data of their own -- just "something of kind X changed",
+    // which the client then has to be authorised to actually fetch.
+    ['GET', /^\/events$/],
+    // Shown on the signed-out landing page: where the shelter is, and which
+    // LINE account to add. Both are already public information.
+    ['GET', /^\/shelter-location$/],
+    ['GET', /^\/line-official-account$/],
+    // Sign-in itself. These are what issue a session, so they cannot require one.
+    ['POST', /^\/auth\/admin-login$/],
+    ['POST', /^\/auth\/google-userinfo$/],
+    ['POST', /^\/auth\/google-phone-login$/],
+    ['POST', /^\/auth\/line-login-url$/],
+    ['POST', /^\/auth\/line-session$/],
+    ['GET', /^\/auth\/line-callback$/],
+    // Answers "is my stored token still valid?" -- it has to be able to say no.
+    ['GET', /^\/auth\/me$/],
+    ['POST', /^\/auth\/logout$/],
+    // Called by LINE's servers, not by a browser. Authenticated by the
+    // x-line-signature HMAC in the handler instead of by a session.
+    ['POST', /^\/line\/webhook$/]
+  ];
+
+  app.use('/api', (req, res, next) => {
+    const isPublic = PUBLIC_ENDPOINTS.some(
+      ([method, pattern]) => method === req.method && pattern.test(req.path)
+    );
+    if (isPublic) return next();
+    return requireAuth(req, res, next);
+  });
+
   // Every current and future /api/admin/* route is covered by this one line,
   // rather than relying on each handler remembering to check.
   app.use('/api/admin', requireAdmin);
+
+  // ==========================================================================
+  // Rate limiting
+  // --------------------------------------------------------------------------
+  // A fixed window, held in memory, no new dependency -- npm install has OOM-ed
+  // on the 1GB deploy VM before, and this doesn't need to survive a restart.
+  // Keyed by signed-in identity where there is one, so a single account can't
+  // spend the whole shelter's Gemini quota, and by IP otherwise.
+  // ==========================================================================
+  function rateLimit(options: { windowMs: number; max: number; message: string }) {
+    const hits = new Map<string, { count: number; resetAt: number }>();
+
+    return (req: any, res: express.Response, next: express.NextFunction) => {
+      const now = Date.now();
+
+      // Opportunistic pruning: without it this map grows for as long as the
+      // process lives. Cheap because it only runs when the map is large.
+      if (hits.size > 5000) {
+        for (const [key, entry] of hits) {
+          if (entry.resetAt <= now) hits.delete(key);
+        }
+      }
+
+      const key = req.session?.identity || req.ip || 'unknown';
+      const entry = hits.get(key);
+
+      if (!entry || entry.resetAt <= now) {
+        hits.set(key, { count: 1, resetAt: now + options.windowMs });
+        return next();
+      }
+
+      entry.count += 1;
+      if (entry.count > options.max) {
+        const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
+        res.setHeader('Retry-After', String(retryAfter));
+        return res.status(429).json({
+          success: false,
+          error: `${options.message}（請於 ${retryAfter} 秒後再試）`
+        });
+      }
+      return next();
+    };
+  }
+
+  // Each AI call is a paid round-trip to Gemini and several seconds of work.
+  // 20 a minute is far more than any real user produces and far less than a
+  // script needs to be expensive.
+  app.use('/api/ai', rateLimit({
+    windowMs: 60_000,
+    max: 20,
+    message: 'AI 功能使用過於頻繁'
+  }));
+
+  // Guessing an admin password shouldn't be something you can do thousands of
+  // times a minute. Keyed by IP, since there is no session yet.
+  app.use('/api/auth/admin-login', rateLimit({
+    windowMs: 15 * 60_000,
+    max: 10,
+    message: '登入嘗試次數過多'
+  }));
 
   // Admin sign-in. The password is verified here against a scrypt hash -- it
   // used to be compared in the browser, which meant the check could simply be
@@ -1108,17 +1237,87 @@ ${contextText}
     }
   });
 
-  // API endpoint: Google login / self profile-edit upsert into the persistent SQLite volunteer DB
-  app.post('/api/auth/google-phone-login', async (req, res) => {
+  /**
+   * Asks Google who an access token belongs to.
+   *
+   * Returns null unless Google confirms it, which is the entire point: the
+   * answer has to come from Google rather than from whatever the caller wrote
+   * in the request body. The audience check matters too -- without it, a token
+   * minted for some other application would verify here just as happily.
+   */
+  async function verifyGoogleAccessToken(
+    accessToken: string
+  ): Promise<{ email: string; name: string } | null> {
     try {
-      const { idToken, googleProfile, phoneNumber, lineId, linePreferences } = req.body;
-
-      if (!idToken && !googleProfile) {
-        return res.status(400).json({ success: false, error: '缺少 Google 憑證或個人資料' });
+      const expectedClientId = process.env.VITE_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '';
+      if (expectedClientId) {
+        const infoRes = await fetch(
+          `https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`
+        );
+        if (!infoRes.ok) return null;
+        const info: any = await infoRes.json();
+        if (info?.aud !== expectedClientId) {
+          console.warn('Google token rejected: issued for a different client_id');
+          return null;
+        }
       }
 
-      const email = (googleProfile?.email || '').toLowerCase().trim();
-      const name = googleProfile?.name || '熱血志工';
+      const userinfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      if (!userinfoRes.ok) return null;
+
+      const profile: any = await userinfoRes.json();
+      const email = String(profile?.email || '').toLowerCase().trim();
+      if (!email || profile?.email_verified === false) return null;
+      return { email, name: String(profile?.name || '') };
+    } catch (error: any) {
+      console.warn('Google token verification failed:', error?.message || error);
+      return null;
+    }
+  }
+
+  // API endpoint: Google login / self profile-edit upsert into the persistent SQLite volunteer DB
+  app.post('/api/auth/google-phone-login', async (req: any, res) => {
+    try {
+      const { accessToken, googleProfile, phoneNumber, lineId, linePreferences } = req.body;
+
+      // Who this is has to come from somewhere the caller cannot simply type.
+      //
+      // It used to come from googleProfile.email in the request body, sitting
+      // next to a literal `idToken: 'google-oauth-verified'` string that the
+      // server never looked at. The Google check was real, but it happened in
+      // the browser and the browser then reported its own verdict -- so posting
+      // any address here returned a working session for that volunteer, and
+      // this endpoint has to stay reachable signed-out because it *is* the
+      // sign-in.
+      //
+      // Two callers are legitimate. Someone signing in proves it with a Google
+      // access token, verified above against Google. A volunteer who is already
+      // signed in and editing their own contact details proves it with the
+      // session they already hold.
+      let email = '';
+      let name = '';
+
+      if (req.session?.role === 'volunteer') {
+        const me = getVolunteerByEmail(req.session.identity);
+        if (!me) {
+          return res.status(404).json({ success: false, error: '找不到您的志工資料，請重新登入' });
+        }
+        email = me.email;
+        name = String(googleProfile?.name || me.name);
+      } else {
+        if (!accessToken) {
+          return res.status(400).json({ success: false, error: '缺少 Google 授權憑證，請重新以 Google 登入' });
+        }
+        const verified = await verifyGoogleAccessToken(String(accessToken));
+        if (!verified) {
+          return res.status(401).json({ success: false, error: 'Google 授權驗證失敗，請重新登入' });
+        }
+        email = verified.email;
+        name = verified.name || '熱血志工';
+      }
+
       if (!email) {
         return res.status(400).json({ success: false, error: '缺少 Google 帳號 email' });
       }
@@ -1229,9 +1428,26 @@ ${contextText}
     }
   });
 
-  app.get('/api/applications', (req, res) => {
+  // Admins review the whole queue; a volunteer gets their own bookings. The
+  // full list carries every applicant's name, phone and LINE ID, and the
+  // volunteer portal already filtered it down to the current user in the
+  // browser -- so nothing on screen changes, the data just stops leaving the
+  // server in the first place.
+  app.get('/api/applications', (req: any, res) => {
     try {
-      return res.json({ success: true, applications: getAllApplications() });
+      const all = getAllApplications();
+      if (isAdmin(req)) {
+        return res.json({ success: true, applications: all });
+      }
+      const me = getVolunteerByEmail(sessionEmail(req));
+      const mine = all.filter(a =>
+        sameEmail(a.volunteerEmail, sessionEmail(req)) ||
+        // Bookings filed before the server started stamping the owner have a
+        // blank email; fall back to the name so those stay visible to the
+        // person they belong to. Same allowance the cancel route makes.
+        (!String(a.volunteerEmail || '').trim() && !!me && a.volunteerName === me.name)
+      );
+      return res.json({ success: true, applications: mine });
     } catch (error: any) {
       console.error('Get Applications Error:', error);
       return res.status(500).json({ success: false, error: error.message || '讀取報名紀錄失敗' });
@@ -1352,7 +1568,10 @@ ${contextText}
     }
   });
 
-  app.get('/api/volunteers', (req, res) => {
+  // The whole roster -- every volunteer's phone, email, LINE ID and emergency
+  // contact. That is the admin roster page and nothing else; the volunteer
+  // portal never renders it.
+  app.get('/api/volunteers', requireAdmin, (req, res) => {
     try {
       return res.json({ success: true, volunteers: getAllVolunteers() });
     } catch (error: any) {
@@ -1406,9 +1625,12 @@ ${contextText}
   // avatar, which the roster-list endpoint above also returns but the settings tab
   // only needs one record of). Used to seed the settings form with what's actually
   // saved server-side instead of only whatever this browser's localStorage has.
-  app.get('/api/volunteers/profile', (req, res) => {
+  app.get('/api/volunteers/profile', (req: any, res) => {
     try {
-      const email = String(req.query.email || '');
+      // A volunteer always reads their own record: the email comes from the
+      // session, not the query string. It used to be whatever was in the URL,
+      // which made this a lookup service for anyone's personal details.
+      const email = isAdmin(req) ? String(req.query.email || '') : sessionEmail(req);
       if (!email) return res.status(400).json({ success: false, error: '缺少 email' });
       const volunteer = getVolunteerByEmail(email);
       if (!volunteer) return res.status(404).json({ success: false, error: '找不到此志工資料' });
@@ -1424,9 +1646,13 @@ ${contextText}
   // expected to already be downscaled/compressed client-side (see
   // VolunteerCheckInModal's canvas-downscale pattern) before being sent here as base64,
   // to keep the write small; this endpoint does not re-compress it.
-  app.post('/api/volunteers/profile-extras', (req, res) => {
+  app.post('/api/volunteers/profile-extras', (req: any, res) => {
     try {
-      const { email, emergencyContact, avatarBase64, avatarMimeType } = req.body;
+      const { emergencyContact, avatarBase64, avatarMimeType } = req.body;
+      // Whose profile this edits comes from the session. Taking it from the
+      // body meant any caller could rewrite any volunteer's emergency contact
+      // and replace their photo.
+      const email = isAdmin(req) ? String(req.body?.email || '') : sessionEmail(req);
       if (!email) return res.status(400).json({ success: false, error: '缺少 email' });
 
       const updates: { emergencyContact?: string; avatar?: string } = {};
@@ -1454,14 +1680,20 @@ ${contextText}
     }
   });
 
-  // API endpoint: increment a volunteer's hours/shift count after a check-out
-  app.post('/api/volunteers/log-hours', (req, res) => {
+  // Coordinator adjustment of someone's recorded hours.
+  //
+  // This is admin-only now, and volunteers no longer call it at all: a normal
+  // check-out credits the hours inside the check-out handler below, from the
+  // record the server already has. Previously anyone could POST a name and a
+  // number here and the totals moved -- no session, no ownership, no ceiling.
+  app.post('/api/volunteers/log-hours', requireAdmin, (req, res) => {
     try {
       const { name, hoursLogged } = req.body;
       if (!name || typeof hoursLogged !== 'number') {
         return res.status(400).json({ success: false, error: '缺少志工姓名或服務時數' });
       }
       addCompletedShiftHours(name, hoursLogged);
+      broadcastChange('volunteers');
       return res.json({ success: true });
     } catch (error: any) {
       console.error('Log Hours Error:', error);
@@ -1471,9 +1703,32 @@ ${contextText}
 
   // API endpoint: attendance records — single source of truth (was localStorage-only
   // before, so different devices/browsers never saw each other's check-ins)
-  app.get('/api/attendance', (req, res) => {
+  // Admins run the attendance board and see everything. A volunteer sees their
+  // own history -- which is all their screens ever displayed anyway; the filter
+  // just used to happen in the browser, after the server had already handed
+  // over every record for everyone.
+  app.get('/api/attendance', (req: any, res) => {
     try {
-      return res.json({ success: true, records: getAllAttendanceRecords() });
+      const all = getAllAttendanceRecords();
+      if (isAdmin(req)) {
+        return res.json({ success: true, records: all });
+      }
+      const me = getVolunteerByEmail(sessionEmail(req));
+      if (!me) {
+        return res.json({ success: true, records: [] });
+      }
+      // Attendance rows identify the volunteer by name (that is what the
+      // check-in handler stamps), with the applicationId as a second route in
+      // for rows created from an approved booking.
+      const myApplicationIds = new Set(
+        getAllApplications()
+          .filter(a => sameEmail(a.volunteerEmail, me.email))
+          .map(a => a.id)
+      );
+      const records = all.filter(
+        r => r.volunteerName === me.name || (r.applicationId && myApplicationIds.has(r.applicationId))
+      );
+      return res.json({ success: true, records });
     } catch (error: any) {
       console.error('Get Attendance Error:', error);
       return res.status(500).json({ success: false, error: error.message || '讀取出勤紀錄失敗' });
@@ -1718,12 +1973,32 @@ ${contextText}
     }
   });
 
-  app.post('/api/attendance/:id/check-out', (req, res) => {
+  app.post('/api/attendance/:id/check-out', (req: any, res) => {
     try {
       const { id } = req.params;
       const { checkOutTime, hoursLogged, rating, feedbackComment, photoBase64, mimeType } = req.body;
       if (!checkOutTime || typeof hoursLogged !== 'number') {
         return res.status(400).json({ success: false, error: '缺少簽退時間或服務時數' });
+      }
+
+      // You may only sign yourself out. This took nothing but a record id
+      // before, so any caller could close out somebody else's shift, attach a
+      // photo to it and file feedback in their name.
+      const target = getAllAttendanceRecords().find(r => r.id === id);
+      if (!target) {
+        return res.status(404).json({ success: false, error: '找不到該筆出勤紀錄' });
+      }
+      if (!isAdmin(req)) {
+        const me = getVolunteerByEmail(sessionEmail(req));
+        if (!me || target.volunteerName !== me.name) {
+          return res.status(403).json({ success: false, error: '只能為自己簽退。' });
+        }
+      }
+
+      // A shift nobody could work: the ceiling stops a typo or a tampered
+      // request from writing an impossible number into someone's total hours.
+      if (!Number.isFinite(hoursLogged) || hoursLogged < 0 || hoursLogged > 24) {
+        return res.status(400).json({ success: false, error: '服務時數需介於 0 到 24 小時之間' });
       }
 
       let photoUrl: string | undefined;
@@ -1746,6 +2021,14 @@ ${contextText}
 
       if (!updated) {
         return res.status(404).json({ success: false, error: '找不到該筆出勤紀錄' });
+      }
+
+      // Credit the hours here instead of trusting a separate call from the
+      // browser to do it. This can only ever credit the volunteer whose record
+      // was just closed, and the status guard means a retried or double-tapped
+      // check-out doesn't count the same shift twice.
+      if (target.status !== 'completed') {
+        addCompletedShiftHours(updated.volunteerName, hoursLogged);
       }
 
       // Best-effort real LINE push thanking the volunteer and confirming their
@@ -1778,9 +2061,14 @@ ${contextText}
   // pending request once their growth checklist hits 100%, an admin reviews
   // it from the roster page. Previously this was just a client-side toast
   // with nothing persisted anywhere an admin could see it.
-  app.post('/api/promotions/request', (req, res) => {
+  app.post('/api/promotions/request', (req: any, res) => {
     try {
-      const { volunteerEmail, volunteerName, currentTier, requestedTier, completedItems } = req.body;
+      const { currentTier, requestedTier, completedItems } = req.body;
+      // Who is asking for the promotion is the session, not the form. An admin
+      // may still file one on someone's behalf.
+      const me = isAdmin(req) ? null : getVolunteerByEmail(sessionEmail(req));
+      const volunteerEmail = me ? me.email : String(req.body?.volunteerEmail || '');
+      const volunteerName = me ? me.name : String(req.body?.volunteerName || '');
       if (!volunteerEmail || !volunteerName || !currentTier || !requestedTier) {
         return res.status(400).json({ success: false, error: '缺少晉升申請所需欄位' });
       }
@@ -1799,23 +2087,29 @@ ${contextText}
     }
   });
 
-  app.get('/api/promotions', (req, res) => {
+  app.get('/api/promotions', (req: any, res) => {
     try {
+      // A volunteer only ever gets their own latest request -- the email in the
+      // query string is ignored for them. Admins get the review queue.
+      // (This used to broadcast a 'promotions' change on every read, which had
+      // every connected client re-fetch, which broadcast again. Reads don't
+      // announce changes.)
+      if (!isAdmin(req)) {
+        const request = getLatestPromotionRequestForVolunteer(sessionEmail(req));
+        return res.json({ success: true, request });
+      }
       const { volunteerEmail } = req.query;
       if (typeof volunteerEmail === 'string' && volunteerEmail) {
-        const request = getLatestPromotionRequestForVolunteer(volunteerEmail);
-        broadcastChange('promotions');
-      return res.json({ success: true, request });
+        return res.json({ success: true, request: getLatestPromotionRequestForVolunteer(volunteerEmail) });
       }
-      const requests = getAllPromotionRequests();
-      return res.json({ success: true, requests });
+      return res.json({ success: true, requests: getAllPromotionRequests() });
     } catch (error: any) {
       console.error('Fetch Promotion Requests Error:', error);
       return res.status(500).json({ success: false, error: error.message || '讀取晉升申請失敗' });
     }
   });
 
-  app.post('/api/promotions/:id/approve', async (req, res) => {
+  app.post('/api/promotions/:id/approve', requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       const requests = getAllPromotionRequests();
@@ -1847,7 +2141,7 @@ ${contextText}
     }
   });
 
-  app.post('/api/promotions/:id/reject', (req, res) => {
+  app.post('/api/promotions/:id/reject', requireAdmin, (req, res) => {
     try {
       const { id } = req.params;
       const { reviewNote } = req.body;
@@ -1867,7 +2161,7 @@ ${contextText}
   // Shift templates ("班次" cards) -- read by the create-shift form's "套用過去
   // 班次範本" dropdown, and kept up to date by /api/shift-templates/sync,
   // which App.tsx calls (fire-and-forget) right after every shift publish.
-  app.get('/api/shift-templates', (req, res) => {
+  app.get('/api/shift-templates', requireAdmin, (req, res) => {
     try {
       return res.json({ success: true, templates: getAllShiftTemplates() });
     } catch (error: any) {
@@ -1876,7 +2170,7 @@ ${contextText}
     }
   });
 
-  app.post('/api/shift-templates/sync', (req, res) => {
+  app.post('/api/shift-templates/sync', requireAdmin, (req, res) => {
     try {
       const { title, zone, timeRange, requiredCount, skillRequired, description, tasks, locationDetails, attachmentUrl } = req.body;
       if (!title || !zone || !timeRange || !requiredCount || !skillRequired) {
@@ -1915,23 +2209,21 @@ ${contextText}
         return res.status(400).json({ success: false, error: '缺少 Google 存取權杖' });
       }
 
-      const userinfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      });
-
-      if (!userinfoRes.ok) {
-        const errText = await userinfoRes.text();
-        return res.status(userinfoRes.status).json({ success: false, error: `Google userinfo 錯誤: ${errText}` });
+      // Same verification the sign-in below uses, audience check included --
+      // this answer says whether an address is already registered here, so it
+      // should only ever be given to the person who holds that Google account.
+      const profile = await verifyGoogleAccessToken(String(accessToken));
+      if (!profile) {
+        return res.status(401).json({ success: false, error: 'Google 授權驗證失敗，請重新登入' });
       }
 
-      const profile: any = await userinfoRes.json();
-      const email = (profile.email || '').toLowerCase().trim();
+      const email = profile.email;
       const existing = getVolunteerByEmail(email);
 
       return res.json({
         success: true,
         name: profile.name || '',
-        email: profile.email || '',
+        email,
         existingPhone: existing?.phone || null,
         existingTier: existing?.tier || null,
         existingTotalHours: existing?.totalHours ?? null
@@ -1946,9 +2238,18 @@ ${contextText}
   // (matching the Gemini fallback pattern above) until LINE_CHANNEL_ACCESS_TOKEN is set.
   // Accepts either a raw LINE `to` userId, or an `email` — in which case the volunteer's
   // linked lineUserId (from real LINE Login) is looked up server-side.
-  app.post('/api/line/push', async (req, res) => {
+  app.post('/api/line/push', async (req: any, res) => {
     try {
-      const { to, email, message, notificationType } = req.body;
+      const { message, notificationType } = req.body;
+
+      // A volunteer can send to themselves and nobody else -- that is what the
+      // "test this notification" button in their settings does. Admins address
+      // anyone, which is how approval and reminder messages go out. Before
+      // this, an unauthenticated caller could name any recipient and send
+      // whatever they liked from the shelter's official account.
+      const admin = isAdmin(req);
+      const to = admin ? req.body?.to : undefined;
+      const email = admin ? req.body?.email : sessionEmail(req);
       let recipient = to;
 
       // Enforce the volunteer's own notification preference (stored server-side —
@@ -2014,7 +2315,7 @@ ${contextText}
 
   // API endpoint: Real LINE broadcast — sends to every friend of the official account.
   // No per-user LINE userId needed, so this works today without LINE Login.
-  app.post('/api/line/broadcast', async (req, res) => {
+  app.post('/api/line/broadcast', requireAdmin, async (req, res) => {
     try {
       const { message } = req.body;
       if (!message || !message.trim()) {
@@ -2177,9 +2478,24 @@ ${contextText}
       if (mode !== 'bind' && mode !== 'login') {
         return res.status(400).json({ success: false, error: '未知的 LINE 授權模式' });
       }
-      const normalizedEmail = mode === 'bind' ? String(email || '').toLowerCase().trim() : undefined;
-      if (mode === 'bind' && !normalizedEmail) {
-        return res.status(400).json({ success: false, error: '綁定 LINE 需要先完成 Google 登入' });
+
+      // Signing in with LINE has to work before there is a session, so this
+      // endpoint stays reachable signed-out. Binding does not: it decides which
+      // volunteer account a LINE userId will unlock from then on. Taking that
+      // email from the request body let anyone bind their own LINE account to
+      // someone else's volunteer record and then sign in as them.
+      let normalizedEmail: string | undefined;
+      if (mode === 'bind') {
+        const session = (req as any).session;
+        if (!session) {
+          return res.status(401).json({ success: false, error: '綁定 LINE 需要先完成登入。' });
+        }
+        normalizedEmail = session.role === 'admin'
+          ? String(email || '').toLowerCase().trim()
+          : String(session.identity || '').toLowerCase().trim();
+        if (!normalizedEmail) {
+          return res.status(400).json({ success: false, error: '綁定 LINE 需要先完成 Google 登入' });
+        }
       }
 
       const state = issueLineState({ mode, email: normalizedEmail });
@@ -2294,9 +2610,9 @@ ${contextText}
   });
 
   // API endpoint: check whether a volunteer has completed real LINE Login
-  app.get('/api/volunteers/line-status', (req, res) => {
+  app.get('/api/volunteers/line-status', (req: any, res) => {
     try {
-      const email = String(req.query.email || '');
+      const email = isAdmin(req) ? String(req.query.email || '') : sessionEmail(req);
       if (!email) {
         return res.status(400).json({ success: false, error: '缺少 email' });
       }
@@ -2477,6 +2793,30 @@ ${contextText}
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
+
+  // ==========================================================================
+  // Backups
+  // --------------------------------------------------------------------------
+  // data/volunteers.db has never had one. It holds every volunteer record,
+  // every shift, every logged hour and the SOP corpus, on a single file on one
+  // machine -- so the whole system is one bad disk away from starting over.
+  // One snapshot at boot (so a fresh deploy has a floor immediately) and one a
+  // day after that; backupDatabase keeps the newest 14 and drops the rest.
+  // ==========================================================================
+  const BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+  function runBackup() {
+    try {
+      const { file, bytes } = backupDatabase();
+      console.log(`DB backup written: ${path.basename(file)} (${Math.round(bytes / 1024)} KB)`);
+    } catch (error: any) {
+      // A failed backup must never take the server down with it.
+      console.error('Database Backup Error:', error?.message || error);
+    }
+  }
+
+  runBackup();
+  setInterval(runBackup, BACKUP_INTERVAL_MS).unref();
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🐾 Animal Shelter Volunteer HR Server running on http://localhost:${PORT}`);
