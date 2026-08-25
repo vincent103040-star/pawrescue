@@ -6,7 +6,7 @@ import { writeFileSync, mkdirSync, createWriteStream, statSync, readFileSync, un
 import { gzipSync } from 'zlib';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
-import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, deleteShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, getRollCall, getAbsenceCounts } from './db';
+import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, deleteShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, getRollCall, getAbsenceCounts, setVolunteerAccountStatus, sweepStaleSuspensions, ABSENCE_SUSPENSION_THRESHOLD } from './db';
 import { PDFParse } from 'pdf-parse';
 import type { SopContent, SopDocument, SopVideo } from './src/types';
 
@@ -1609,6 +1609,113 @@ ${contextText}
    * confirms. Marking an unpaid volunteer absent by inference, when the rule
    * ends in losing their place, is not a judgement to automate.
    */
+  // ==========================================================================
+  // Volunteer account state
+  // --------------------------------------------------------------------------
+  // See the comment on accountStatus in db.ts for what the three states mean
+  // and why none of them deletes anything.
+  // ==========================================================================
+
+  /**
+   * Tells a volunteer their account state changed.
+   *
+   * Sent regardless of their notification preferences. Those cover shift
+   * changes, urgent callouts and check-in reminders -- things somebody might
+   * reasonably not want. Being told you can no longer book shifts is not in
+   * that category: the whole process assumes they can ask to be reinstated,
+   * and they cannot ask about something nobody told them.
+   */
+  async function notifyAccountStatus(email: string, text: string): Promise<void> {
+    try {
+      const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+      const linked = getLineUserId(email);
+      if (!token || !linked) return; // not bound to LINE yet -- nothing to send to
+      await fetch('https://api.line.me/v2/bot/message/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ to: linked.lineUserId, messages: [{ type: 'text', text }] })
+      });
+    } catch (error: any) {
+      // Best effort: a push that fails must not stop the state change, but it
+      // should be visible, because a suspension nobody was told about is the
+      // failure mode this whole notification exists to prevent.
+      console.warn('Account status notification failed:', email, error?.message || error);
+    }
+  }
+
+  app.post('/api/admin/volunteers/:email/account-status', async (req: any, res) => {
+    try {
+      const email = decodeURIComponent(req.params.email);
+      const status = String(req.body?.status || '');
+      if (!['active', 'suspended', 'inactive'].includes(status)) {
+        return res.status(400).json({ success: false, error: '未知的帳號狀態' });
+      }
+
+      const actor = String(req.session?.displayName || req.session?.identity || 'Admin');
+      const reason = String(req.body?.reason || '').trim();
+      const updated = setVolunteerAccountStatus(
+        email,
+        status as 'active' | 'suspended' | 'inactive',
+        actor,
+        reason || (status === 'active' ? '由督導恢復' : '由督導手動設定')
+      );
+      if (!updated) return res.status(404).json({ success: false, error: '找不到這位志工' });
+
+      if (status === 'active') {
+        await notifyAccountStatus(
+          email,
+          `【浪浪家園】${updated.name} 您好，您的志工帳號已恢復正常，現在可以重新報名班次了。感謝您繼續陪伴浪浪 🐾`
+        );
+      } else if (status === 'suspended') {
+        await notifyAccountStatus(
+          email,
+          `【浪浪家園】${updated.name} 您好，您的搶班權限已暫停。${reason ? `原因：${reason}。` : ''}` +
+          `您仍可登入查看自己的服務紀錄與時數。如需恢復，請與社工督導聯繫。`
+        );
+      }
+
+      broadcastChange('volunteers');
+      return res.json({ success: true, volunteer: updated });
+    } catch (error: any) {
+      console.error('Account Status Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '更新帳號狀態失敗' });
+    }
+  });
+
+  /**
+   * Applies the rulebook's absence rule after a coordinator confirms a no-show.
+   *
+   * Automatic, unlike the absence itself. The count only moves when a person
+   * has deliberately marked somebody absent on the roll call, so this applies a
+   * published rule to facts a human established -- it does not infer them. And
+   * it is one click to undo, which the notification tells the volunteer.
+   */
+  async function applyAbsenceRule(volunteerEmail: string): Promise<void> {
+    const email = String(volunteerEmail || '').toLowerCase().trim();
+    if (!email) return;
+
+    const volunteer = getVolunteerByEmail(email);
+    if (!volunteer || volunteer.accountStatus !== 'active') return;
+
+    const absences = getAbsenceCounts().get(email) || 0;
+    if (absences < ABSENCE_SUSPENSION_THRESHOLD) return;
+
+    setVolunteerAccountStatus(
+      email,
+      'suspended',
+      'system',
+      `未到場達 ${absences} 次（規章門檻 ${ABSENCE_SUSPENSION_THRESHOLD} 次）`
+    );
+    console.log(`SQLite: ${volunteer.name} 因未到場 ${absences} 次已自動停權`);
+
+    await notifyAccountStatus(
+      email,
+      `【浪浪家園】${volunteer.name} 您好，系統記錄您已有 ${absences} 次未到場，` +
+      `依志工規章已暫停搶班權限。您仍可登入查看自己的服務紀錄與時數。` +
+      `若有特殊情況或已安排代班，請與社工督導聯繫恢復 🐾`
+    );
+  }
+
   app.get('/api/admin/roll-call', (req, res) => {
     try {
       const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || ''))
@@ -2214,6 +2321,19 @@ ${contextText}
         ? { ...shiftSignup, volunteerEmail: (req as any).session.identity }
         : shiftSignup;
 
+      // A suspended or filed-away volunteer cannot take a place. Checked here
+      // rather than hidden in the UI, because the rule has to hold however the
+      // request arrives.
+      const booker = getVolunteerByEmail(String(owned.volunteerEmail || ''));
+      if (booker && booker.accountStatus && booker.accountStatus !== 'active') {
+        return res.status(403).json({
+          success: false,
+          error: booker.accountStatus === 'suspended'
+            ? '此志工帳號目前為停權狀態，無法報名班次。請與社工督導聯繫恢復。'
+            : '此志工帳號目前為離退狀態，請與社工督導聯繫。'
+        });
+      }
+
       const saved = insertShiftSignup(owned);
       // No counter to bump -- the shift's headcount is read from the signups,
       // so re-reading it is what reflects the one just created.
@@ -2243,6 +2363,13 @@ ${contextText}
 
       const decidedBy = String(req.session?.displayName || req.session?.identity || 'Admin');
       const updated = updateShiftSignupStatus(req.params.id, status, reviewNotes, decidedBy);
+
+      // Confirming a no-show is what moves the count the rulebook's suspension
+      // rule reads. Fire and forget: the notification must not delay the
+      // coordinator's screen, and a failed push is logged rather than fatal.
+      if (status === 'absent' && before.volunteerEmail) {
+        void applyAbsenceRule(before.volunteerEmail);
+      }
       // Rejecting or marking absent frees the place, but nothing has to be
       // decremented for that to be true: the headcount excludes those statuses,
       // so the shift already reads correctly once the signup is updated.
@@ -3587,8 +3714,25 @@ ${contextText}
     }
   }
 
+  /**
+   * Files away suspensions nobody attended to. Runs beside the backup because
+   * it wants the same once-a-day cadence, and because a state change nobody
+   * requested should be logged where someone will see it.
+   */
+  function runSuspensionSweep() {
+    try {
+      for (const moved of sweepStaleSuspensions()) {
+        console.log(`SQLite: ${moved.name} 停權已 ${moved.days} 天未處理，轉為離退（可隨時恢復）`);
+      }
+    } catch (error: any) {
+      console.error('Suspension Sweep Error:', error?.message || error);
+    }
+  }
+
   runBackup();
+  runSuspensionSweep();
   setInterval(runBackup, BACKUP_INTERVAL_MS).unref();
+  setInterval(runSuspensionSweep, BACKUP_INTERVAL_MS).unref();
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🐾 Animal Shelter Volunteer HR Server running on http://localhost:${PORT}`);

@@ -141,6 +141,18 @@ export interface VolunteerProfile {
   strayhubUserId?: string;
   /** Which shelter this record belongs to. See currentOrganizationId in db.ts. */
   organizationId?: string;
+  /**
+   * Whether this volunteer can book shifts.
+   *
+   * 'suspended' blocks booking only -- they can still sign in and see their own
+   * history and hours. 'inactive' additionally hides them from the roster.
+   * Neither deletes anything: the service hours a volunteer may need for a
+   * certificate stay, and their attendance rows keep resolving.
+   */
+  accountStatus?: 'active' | 'suspended' | 'inactive';
+  statusChangedAt?: string;
+  statusChangedBy?: string;
+  statusReason?: string;
 }
 
 export interface ServiceFeedback {

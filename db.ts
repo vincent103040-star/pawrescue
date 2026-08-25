@@ -67,7 +67,6 @@ db.exec(`
     joinedDate TEXT NOT NULL,
     emergencyContact TEXT NOT NULL DEFAULT '',
     providers TEXT NOT NULL DEFAULT '[]',
-    status INTEGER NOT NULL DEFAULT 1,
     lastLoginAt TEXT NOT NULL
   )
 `);
@@ -206,8 +205,145 @@ function rowToProfile(row: any): VolunteerProfile {
     // the shape entirely rather than sent as '' so a caller cannot mistake
     // "not linked yet" for a real id.
     strayhubUserId: row.strayhubUserId || undefined,
-    organizationId: row.organizationId || undefined
+    organizationId: row.organizationId || undefined,
+    accountStatus: (row.accountStatus || 'active') as VolunteerProfile['accountStatus'],
+    statusChangedAt: row.statusChangedAt || undefined,
+    statusChangedBy: row.statusChangedBy || undefined,
+    statusReason: row.statusReason || undefined
   };
+}
+
+// ============================================================================
+// Volunteer account state
+// ----------------------------------------------------------------------------
+// The rulebook printed for volunteers says repeated unexplained absences cost
+// somebody their booking rights. Until the roll call existed there was no
+// absence count to act on; now there is, so the consequence needs somewhere to
+// live.
+//
+// Three states, and the distance between them matters:
+//
+//   active     books shifts normally.
+//   suspended  cannot book. Everything else still works -- they can sign in,
+//              see their own history and their hours. A coordinator restores
+//              them with one click.
+//   inactive   hidden from the roster and from counts. Reached automatically
+//              when a suspension goes unattended, or set by hand when somebody
+//              stops volunteering.
+//
+// Nothing here deletes anything. Deleting a volunteer would destroy the service
+// hours they may need for a certificate, and would orphan their attendance and
+// signup rows, which reference them by name and email rather than by key. That
+// is the same fault disabling was introduced to avoid for zones and duty items.
+// Data retention -- actually erasing personal details after a long period, or
+// on the volunteer's own request -- is a separate policy and is not implemented.
+//
+// A note on the old column: volunteers.status was an INTEGER defaulting to 1
+// that nothing ever read. Two columns called status on one table is a trap, so
+// the dead one goes rather than being pressed into service as a numeric state
+// machine nobody can read at a glance.
+// ============================================================================
+try {
+  db.exec(`ALTER TABLE volunteers ADD COLUMN accountStatus TEXT NOT NULL DEFAULT 'active'`);
+} catch {
+  // column already exists
+}
+try {
+  db.exec(`ALTER TABLE volunteers ADD COLUMN statusChangedAt TEXT NOT NULL DEFAULT ''`);
+} catch {
+  // column already exists
+}
+try {
+  db.exec(`ALTER TABLE volunteers ADD COLUMN statusChangedBy TEXT NOT NULL DEFAULT ''`);
+} catch {
+  // column already exists
+}
+try {
+  db.exec(`ALTER TABLE volunteers ADD COLUMN statusReason TEXT NOT NULL DEFAULT ''`);
+} catch {
+  // column already exists
+}
+try {
+  db.exec('ALTER TABLE volunteers DROP COLUMN status');
+  console.log('SQLite: 已移除未使用的 volunteers.status（改用 accountStatus）');
+} catch {
+  // already dropped, or a fresh database that never had it
+}
+
+export type VolunteerAccountStatus = 'active' | 'suspended' | 'inactive';
+
+/**
+ * How many confirmed absences suspend a volunteer.
+ *
+ * Two, matching the rulebook handed to volunteers. The count only moves when a
+ * coordinator confirms a no-show on the roll call, so this applies a published
+ * rule to facts a person has already established -- it does not infer anything.
+ *
+ * Worth reconciling: the same rulebook says the suspension lasts thirty days,
+ * while the process built here keeps it until a coordinator lifts it. One of
+ * the two should change so the document and the software agree.
+ */
+export const ABSENCE_SUSPENSION_THRESHOLD = 2;
+
+/**
+ * How long a suspension may sit unattended before the account is filed away.
+ *
+ * Reaching this does not delete or punish further -- it hides the row from the
+ * active roster so the list stays about people who are actually volunteering.
+ * A coordinator can bring them back at any time.
+ */
+export const SUSPENSION_TO_INACTIVE_DAYS = 14;
+
+export function setVolunteerAccountStatus(
+  email: string,
+  status: VolunteerAccountStatus,
+  changedBy: string,
+  reason: string
+): VolunteerProfile | null {
+  const normalized = email.toLowerCase().trim();
+  if (!db.prepare('SELECT email FROM volunteers WHERE email = ?').get(normalized)) return null;
+
+  db.prepare(`
+    UPDATE volunteers
+    SET accountStatus = ?, statusChangedAt = ?, statusChangedBy = ?, statusReason = ?
+    WHERE email = ?
+  `).run(status, new Date().toISOString(), changedBy, reason, normalized);
+
+  // A suspended account keeps its session: they should be able to sign in and
+  // see why, and their own history. Only booking is blocked, at the point of
+  // booking.
+  return getVolunteerByEmail(normalized);
+}
+
+/**
+ * Files away suspensions nobody has attended to.
+ *
+ * Runs on startup and once a day. Returns who was moved so the caller can log
+ * it -- a state change nobody asked for should at least be visible.
+ */
+export function sweepStaleSuspensions(): Array<{ email: string; name: string; days: number }> {
+  const cutoff = new Date(Date.now() - SUSPENSION_TO_INACTIVE_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const stale = db.prepare(`
+    SELECT email, name, statusChangedAt FROM volunteers
+    WHERE accountStatus = 'suspended' AND statusChangedAt <> '' AND statusChangedAt < ?
+  `).all(cutoff) as any[];
+
+  const moved: Array<{ email: string; name: string; days: number }> = [];
+  for (const row of stale) {
+    const days = Math.floor((Date.now() - new Date(row.statusChangedAt).getTime()) / 86400000);
+    db.prepare(`
+      UPDATE volunteers
+      SET accountStatus = 'inactive', statusChangedAt = ?, statusChangedBy = 'system',
+          statusReason = ?
+      WHERE email = ?
+    `).run(
+      new Date().toISOString(),
+      `停權滿 ${SUSPENSION_TO_INACTIVE_DAYS} 天未處理，自動轉為離退（可隨時恢復）`,
+      row.email
+    );
+    moved.push({ email: row.email, name: row.name, days });
+  }
+  return moved;
 }
 
 export function getAllVolunteers(): VolunteerProfile[] {
@@ -245,8 +381,8 @@ export function upsertVolunteerFromLogin(params: {
     // details along with it.
     db.prepare(`
       INSERT INTO volunteers
-        (email, id, organizationId, name, phone, lineId, avatar, skills, preferredZones, totalHours, completedShiftsCount, tier, joinedDate, emergencyContact, providers, status, lastLoginAt)
-      VALUES (?, ?, ?, ?, ?, ?, '', '[]', '[]', 0, 0, '新進志工', ?, '', ?, 1, ?)
+        (email, id, organizationId, name, phone, lineId, avatar, skills, preferredZones, totalHours, completedShiftsCount, tier, joinedDate, emergencyContact, providers, lastLoginAt)
+      VALUES (?, ?, ?, ?, ?, ?, '', '[]', '[]', 0, 0, '新進志工', ?, '', ?, ?)
     `).run(email, randomUUID(), currentOrganizationId(), params.name, params.phone, params.lineId, nowIso.split('T')[0], JSON.stringify(['google.com']), nowIso);
   }
 
