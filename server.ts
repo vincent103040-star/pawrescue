@@ -6,7 +6,7 @@ import { writeFileSync, mkdirSync, createWriteStream, statSync, readFileSync, un
 import { gzipSync } from 'zlib';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
-import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, adjustShiftCount, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, deleteShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage } from './db';
+import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, adjustShiftCount, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, deleteShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload } from './db';
 import { PDFParse } from 'pdf-parse';
 import type { SopContent, SopDocument, SopVideo } from './src/types';
 
@@ -309,7 +309,7 @@ async function startServer() {
   // fallback, so a proxy that buffers the stream degrades to slightly-delayed
   // updates instead of no updates.
   // ==========================================================================
-  type ChangeKind = 'attendance' | 'shifts' | 'signups' | 'volunteers' | 'promotions' | 'zones';
+  type ChangeKind = 'attendance' | 'shifts' | 'signups' | 'volunteers' | 'promotions' | 'zones' | 'duties';
   const sseClients = new Set<express.Response>();
 
   function broadcastChange(kind: ChangeKind) {
@@ -1583,6 +1583,289 @@ ${contextText}
     } catch (error: any) {
       console.error('Monthly Report Error:', error);
       return res.status(500).json({ success: false, error: error.message || '產生月報失敗' });
+    }
+  });
+
+  // ==========================================================================
+  // Duty items, today's duties, and completions
+  // --------------------------------------------------------------------------
+  // See the comment on duty_items in db.ts for why these are three concepts and
+  // not one. In short: the standard is read, the duty item is defined, and the
+  // completion is an event -- and the old board conflated the last two into a
+  // hardcoded array that could not be saved.
+  // ==========================================================================
+
+  const DUTY_TRIGGERS = ['daily', 'zone_shift', 'specific_shift'];
+  const DUTY_ROLES = ['staff', 'volunteer'];
+
+  /** Taiwan-local YYYY-MM-DD, matching how shifts and attendance store dates. */
+  const shelterToday = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' });
+
+  function validateDutyInput(body: any, { partial = false } = {}): string | null {
+    const has = (field: string) => body?.[field] !== undefined;
+
+    if (!partial || has('title')) {
+      const title = body?.title;
+      if (typeof title !== 'string' || !title.trim()) return '請輸入勤務名稱';
+      if (title.trim().length > 60) return '勤務名稱請控制在 60 個字以內';
+    }
+    if (!partial || has('triggerType')) {
+      if (!DUTY_TRIGGERS.includes(String(body?.triggerType))) return '請選擇有效的觸發方式';
+    }
+    if (!partial || has('responsibleRole')) {
+      if (!DUTY_ROLES.includes(String(body?.responsibleRole))) return '請選擇負責角色';
+    }
+    if (!partial || has('requiredPeople')) {
+      const people = Number(body?.requiredPeople);
+      if (!Number.isInteger(people) || people < 1 || people > 50) return '需求人數請填 1 到 50 之間的整數';
+    }
+    if (!partial || has('estimatedMinutes')) {
+      const minutes = Number(body?.estimatedMinutes);
+      if (!Number.isInteger(minutes) || minutes < 5 || minutes > 720) return '預估時間請填 5 到 720 分鐘之間';
+    }
+    // A zone is optional -- a shelter-wide duty such as opening checks belongs
+    // to nowhere in particular -- but naming one that does not exist would show
+    // as 未知場域 for good.
+    if (has('zoneId') && String(body.zoneId || '')) {
+      if (!getZone(String(body.zoneId))) return '找不到這個場域，請重新選擇';
+    }
+    return null;
+  }
+
+  app.get('/api/duty-items', (req: any, res) => {
+    try {
+      return res.json({ success: true, dutyItems: isAdmin(req) ? getAllDutyItems() : getActiveDutyItems() });
+    } catch (error: any) {
+      console.error('Get Duty Items Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '讀取勤務項目失敗' });
+    }
+  });
+
+  app.post('/api/admin/duty-items', (req, res) => {
+    try {
+      const problem = validateDutyInput(req.body);
+      if (problem) return res.status(400).json({ success: false, error: problem });
+
+      const item = createDutyItem({
+        zoneId: String(req.body.zoneId || ''),
+        title: String(req.body.title).trim(),
+        description: String(req.body.description || '').trim(),
+        category: String(req.body.category || '').trim(),
+        triggerType: req.body.triggerType,
+        shiftId: String(req.body.shiftId || ''),
+        responsibleRole: req.body.responsibleRole,
+        requiredPeople: Number(req.body.requiredPeople),
+        estimatedMinutes: Number(req.body.estimatedMinutes),
+        timeWindow: String(req.body.timeWindow || '').trim(),
+        isRequired: req.body.isRequired !== false,
+        sopSectionId: String(req.body.sopSectionId || ''),
+        sopVideoId: String(req.body.sopVideoId || '')
+      });
+      broadcastChange('duties');
+      return res.json({ success: true, dutyItem: item });
+    } catch (error: any) {
+      console.error('Create Duty Item Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '新增勤務項目失敗' });
+    }
+  });
+
+  app.put('/api/admin/duty-items/:id', (req, res) => {
+    try {
+      const problem = validateDutyInput(req.body, { partial: true });
+      if (problem) return res.status(400).json({ success: false, error: problem });
+
+      const updates: any = {};
+      for (const field of ['zoneId', 'title', 'description', 'category', 'triggerType',
+                           'shiftId', 'responsibleRole', 'timeWindow', 'sopSectionId', 'sopVideoId']) {
+        if (req.body[field] !== undefined) updates[field] = String(req.body[field]).trim();
+      }
+      if (req.body.requiredPeople !== undefined) updates.requiredPeople = Number(req.body.requiredPeople);
+      if (req.body.estimatedMinutes !== undefined) updates.estimatedMinutes = Number(req.body.estimatedMinutes);
+      if (req.body.isRequired !== undefined) updates.isRequired = req.body.isRequired !== false;
+
+      const updated = updateDutyItem(req.params.id, updates);
+      if (!updated) return res.status(404).json({ success: false, error: '找不到該勤務項目' });
+
+      broadcastChange('duties');
+      return res.json({ success: true, dutyItem: updated });
+    } catch (error: any) {
+      console.error('Update Duty Item Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '更新勤務項目失敗' });
+    }
+  });
+
+  app.post('/api/admin/duty-items/:id/disable', (req, res) => {
+    try {
+      const updated = setDutyItemStatus(req.params.id, 'disabled');
+      if (!updated) return res.status(404).json({ success: false, error: '找不到該勤務項目' });
+      broadcastChange('duties');
+      return res.json({
+        success: true,
+        dutyItem: updated,
+        completions: countDutyCompletions(req.params.id),
+        note: '已停用。既有的完成紀錄不受影響；這個項目不會再出現在今日勤務清單。'
+      });
+    } catch (error: any) {
+      console.error('Disable Duty Item Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '停用勤務項目失敗' });
+    }
+  });
+
+  app.post('/api/admin/duty-items/:id/restore', (req, res) => {
+    try {
+      const updated = setDutyItemStatus(req.params.id, 'active');
+      if (!updated) return res.status(404).json({ success: false, error: '找不到該勤務項目' });
+      broadcastChange('duties');
+      return res.json({ success: true, dutyItem: updated });
+    } catch (error: any) {
+      console.error('Restore Duty Item Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '恢復勤務項目失敗' });
+    }
+  });
+
+  /**
+   * Today's duties.
+   *
+   * Computed, never stored. Materialising this list would mean deciding what
+   * happens to already-generated rows when a duty item is edited afterwards,
+   * and there is no answer to that which is not surprising to somebody. Joining
+   * the definitions to the day's completions costs nothing at this size and
+   * cannot drift.
+   */
+  app.get('/api/duties/today', (req: any, res) => {
+    try {
+      const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || ''))
+        ? String(req.query.date)
+        : shelterToday();
+      const shiftId = String(req.query.shiftId || '');
+
+      const shiftsToday = getAllShifts().filter(shift => shift.date === date);
+      const zonesWithShifts = new Set(shiftsToday.map(shift => shift.zone));
+      const completions = getDutyCompletionsForDate(date);
+      const completionKey = (itemId: string, sid: string) => `${itemId}::${sid}`;
+      const byKey = new Map(completions.map(c => [completionKey(c.dutyItemId, c.shiftId), c]));
+
+      const items = getActiveDutyItems().filter(item => {
+        if (item.triggerType === 'daily') return true;
+        if (item.triggerType === 'zone_shift') return zonesWithShifts.has(item.zoneId);
+        return shiftId ? item.shiftId === shiftId : shiftsToday.some(s => s.id === item.shiftId);
+      });
+
+      const duties = items.map(item => {
+        // A duty tied to a specific shift is completed against that shift; a
+        // daily one is completed once for the day regardless of shifts.
+        const against = item.triggerType === 'specific_shift' ? item.shiftId : '';
+        const done = byKey.get(completionKey(item.id, against));
+        return {
+          ...item,
+          completionShiftId: against,
+          isCompleted: !!done,
+          completedBy: done?.completedBy,
+          completedAt: done?.completedAt,
+          completionMethod: done?.method
+        };
+      });
+
+      return res.json({ success: true, date, duties });
+    } catch (error: any) {
+      console.error("Today's Duties Error:", error);
+      return res.status(500).json({ success: false, error: error.message || '讀取今日勤務失敗' });
+    }
+  });
+
+  /**
+   * Marks a duty done.
+   *
+   * Who did it comes from the session, never the body. The method column
+   * mirrors attendance: 'self' is the volunteer's own tap, 'staff' is a
+   * coordinator recording it for someone. A tick carries no proof the way a
+   * check-in does -- GPS and a rotating code -- so recording how it was made
+   * keeps the record honest rather than implying more certainty than exists.
+   */
+  app.post('/api/duties/:id/complete', (req: any, res) => {
+    try {
+      const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.body?.date || ''))
+        ? String(req.body.date)
+        : shelterToday();
+
+      const actor = isAdmin(req)
+        ? String(req.session?.displayName || req.session?.identity || 'Admin')
+        : (getVolunteerByEmail(sessionEmail(req))?.name || sessionEmail(req));
+
+      const completion = completeDuty({
+        dutyItemId: req.params.id,
+        date,
+        shiftId: String(req.body?.shiftId || ''),
+        completedBy: actor,
+        method: isAdmin(req) ? 'staff' : 'self',
+        note: String(req.body?.note || '').trim()
+      });
+      if (!completion) return res.status(404).json({ success: false, error: '找不到該勤務項目' });
+
+      broadcastChange('duties');
+      return res.json({ success: true, completion });
+    } catch (error: any) {
+      console.error('Complete Duty Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '標記完成失敗' });
+    }
+  });
+
+  app.post('/api/duties/:id/uncomplete', (req: any, res) => {
+    try {
+      const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.body?.date || ''))
+        ? String(req.body.date)
+        : shelterToday();
+      const removed = uncompleteDuty(req.params.id, date, String(req.body?.shiftId || ''));
+      broadcastChange('duties');
+      return res.json({ success: true, removed });
+    } catch (error: any) {
+      console.error('Uncomplete Duty Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '取消完成失敗' });
+    }
+  });
+
+  /**
+   * Daily care workload per area.
+   *
+   * This is the input the roster calculation starts from, and it is derived
+   * from the duty items rather than entered a second time -- describing the
+   * work once should be enough.
+   */
+  app.get('/api/admin/workload', (req, res) => {
+    try {
+      const zones = getAllZones();
+      const zoneById = new Map(zones.map(zone => [zone.id, zone]));
+      const workload = getZoneWorkload().map(row => ({
+        ...row,
+        zoneName: row.zoneId
+          ? (zoneById.get(row.zoneId)?.name || `（已移除的場域：${row.zoneId}）`)
+          : '全園區（不分場域）',
+        zoneCode: row.zoneId ? (zoneById.get(row.zoneId)?.code || row.zoneId) : '—'
+      }));
+
+      const totals = workload.reduce(
+        (acc, row) => ({
+          personSlots: acc.personSlots + row.personSlots,
+          personHours: Math.round((acc.personHours + row.personHours) * 10) / 10
+        }),
+        { personSlots: 0, personHours: 0 }
+      );
+
+      return res.json({
+        success: true,
+        workload,
+        totals,
+        // Two weeks is the publishing horizon the plan assumes; showing the
+        // fortnight total is what makes this figure mean something to someone
+        // deciding how many shifts to open.
+        fortnight: {
+          personSlots: totals.personSlots * 14,
+          personHours: Math.round(totals.personHours * 14 * 10) / 10
+        }
+      });
+    } catch (error: any) {
+      console.error('Workload Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '計算照護量失敗' });
     }
   });
 

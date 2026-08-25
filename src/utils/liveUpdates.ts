@@ -11,13 +11,13 @@
  * that drops long-lived connections), the page still converges within one
  * interval instead of silently going stale.
  */
-export type ChangeKind = 'attendance' | 'shifts' | 'signups' | 'volunteers' | 'promotions' | 'zones';
+export type ChangeKind = 'attendance' | 'shifts' | 'signups' | 'volunteers' | 'promotions' | 'zones' | 'duties';
 
 type Handler = (kind: ChangeKind) => void;
 
 const POLL_INTERVAL_MS = 20000;
 /** Kinds refreshed by the polling fallback -- everything the boards display. */
-const ALL_KINDS: ChangeKind[] = ['attendance', 'shifts', 'signups', 'volunteers', 'promotions', 'zones'];
+const ALL_KINDS: ChangeKind[] = ['attendance', 'shifts', 'signups', 'volunteers', 'promotions', 'zones', 'duties'];
 
 /**
  * Starts listening. Returns a cleanup function that closes the stream and

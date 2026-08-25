@@ -1397,6 +1397,316 @@ export function countZoneUsage(id: string): { shifts: number; signups: number; a
 }
 
 // ============================================================================
+// Duty items, and the record of completing them
+// ----------------------------------------------------------------------------
+// "SOP" was one word doing three jobs, which is why it was never clear whose
+// data this was. Separated:
+//
+//   SOP 規範        the written standard. Read, searched, taught. Never
+//                   "completed". Already lives in sop_content and friends.
+//   勤務項目        this table. The definition of a job: where, when, who is
+//                   responsible, how many people, how long. Never completed
+//                   either -- instances of it are.
+//   勤務完成紀錄     duty_completions. One row per person per occurrence.
+//
+// The old DailyDutyTaskboard held both of the latter two in one hardcoded
+// useState array, mixing title and description (a definition) with isCompleted
+// and completedBy (an event). That is why nothing could be saved: storing it
+// would have copied the definition text on every tick, and editing a definition
+// would have rewritten history.
+//
+// requiredPeople and estimatedMinutes are here for a second reason. They are
+// also the per-area care workload the roster calculation needs -- "the cattery
+// needs 2 people for 90 minutes a day" is simultaneously a duty list and the
+// input to working out how many volunteers a fortnight requires. One table,
+// two purposes, rather than asking the shelter to describe its work twice.
+//
+// Note the column is triggerType, not trigger: TRIGGER is a SQLite keyword and
+// a column of that name is a quoting accident waiting to happen.
+// ============================================================================
+db.exec(`
+  CREATE TABLE IF NOT EXISTS duty_items (
+    id TEXT PRIMARY KEY,
+    zoneId TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    category TEXT NOT NULL DEFAULT '',
+    triggerType TEXT NOT NULL DEFAULT 'daily',
+    shiftId TEXT NOT NULL DEFAULT '',
+    responsibleRole TEXT NOT NULL DEFAULT 'volunteer',
+    requiredPeople INTEGER NOT NULL DEFAULT 1,
+    estimatedMinutes INTEGER NOT NULL DEFAULT 30,
+    timeWindow TEXT NOT NULL DEFAULT '',
+    isRequired INTEGER NOT NULL DEFAULT 1,
+    sopSectionId TEXT NOT NULL DEFAULT '',
+    sopVideoId TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'active',
+    sortOrder INTEGER NOT NULL DEFAULT 0,
+    organizationId TEXT NOT NULL DEFAULT '',
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL
+  )
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS duty_completions (
+    id TEXT PRIMARY KEY,
+    dutyItemId TEXT NOT NULL,
+    date TEXT NOT NULL,
+    shiftId TEXT NOT NULL DEFAULT '',
+    completedBy TEXT NOT NULL,
+    completedAt TEXT NOT NULL,
+    method TEXT NOT NULL DEFAULT 'self',
+    note TEXT NOT NULL DEFAULT '',
+    organizationId TEXT NOT NULL DEFAULT ''
+  )
+`);
+
+// One completion per item per day per shift. shiftId defaults to '' rather than
+// NULL precisely so this constraint works -- SQLite treats NULLs as distinct,
+// so a nullable column would let the same duty be completed any number of times.
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_duty_completion_once
+  ON duty_completions (dutyItemId, date, shiftId)
+`);
+
+export type DutyTrigger = 'daily' | 'zone_shift' | 'specific_shift';
+export type DutyRole = 'staff' | 'volunteer';
+
+export interface DutyItem {
+  id: string;
+  zoneId: string;
+  title: string;
+  description: string;
+  category: string;
+  triggerType: DutyTrigger;
+  shiftId: string;
+  responsibleRole: DutyRole;
+  requiredPeople: number;
+  estimatedMinutes: number;
+  timeWindow: string;
+  isRequired: boolean;
+  sopSectionId: string;
+  sopVideoId: string;
+  status: 'active' | 'disabled';
+  sortOrder: number;
+}
+
+export interface DutyCompletion {
+  id: string;
+  dutyItemId: string;
+  date: string;
+  shiftId: string;
+  completedBy: string;
+  completedAt: string;
+  method: 'self' | 'staff';
+  note: string;
+}
+
+function rowToDutyItem(row: any): DutyItem {
+  return {
+    id: row.id,
+    zoneId: row.zoneId,
+    title: row.title,
+    description: row.description,
+    category: row.category,
+    triggerType: row.triggerType,
+    shiftId: row.shiftId,
+    responsibleRole: row.responsibleRole,
+    requiredPeople: row.requiredPeople,
+    estimatedMinutes: row.estimatedMinutes,
+    timeWindow: row.timeWindow,
+    isRequired: !!row.isRequired,
+    sopSectionId: row.sopSectionId,
+    sopVideoId: row.sopVideoId,
+    status: row.status,
+    sortOrder: row.sortOrder
+  };
+}
+
+function rowToDutyCompletion(row: any): DutyCompletion {
+  return {
+    id: row.id,
+    dutyItemId: row.dutyItemId,
+    date: row.date,
+    shiftId: row.shiftId,
+    completedBy: row.completedBy,
+    completedAt: row.completedAt,
+    method: row.method,
+    note: row.note
+  };
+}
+
+// Seed from the list that was hardcoded in DailyDutyTaskboard, so the board
+// looks the same on the first run after this table appears. requiredPeople
+// defaults to 1 because the old data never recorded it -- the shelter has to
+// supply the real figures, and until it does the workload totals are a floor
+// rather than an estimate. The management screen says so.
+const dutySeedCount = db.prepare('SELECT COUNT(*) AS c FROM duty_items').get() as { c: number };
+if (dutySeedCount.c === 0) {
+  const seed: Array<[string, string, string, string, number]> = [
+    ['dog', '🐶 大狗放風與防護', '檢視胸背帶與雙扣牽繩牢固度', '09:00 - 09:30', 30],
+    ['dog', '🐶 大狗放風與防護', '草地放風便便清除與水份補充', '09:30 - 11:30', 120],
+    ['dog', '🐶 大狗放風與防護', '歸房體表檢查與趾縫清潔', '11:30 - 12:00', 30],
+    ['cat', '🐱 貓房照護與親人訓練', '貓砂盆與貓房地板深層清理', '13:30 - 14:30', 60],
+    ['cat', '🐱 貓房照護與親人訓練', '膽小貓肉泥互動與梳毛減壓', '14:30 - 16:00', 90],
+    ['medical', '🏥 醫療觀察與處方紀錄', '術後犬貓伊莉莎白圈與傷口檢查', '10:00 - 10:30', 30],
+    ['medical', '🏥 醫療觀察與處方紀錄', '口服處方藥物與高營養罐頭發放', '11:00 - 12:00', 60],
+    ['puppy', '🍼 幼犬育幼與溫室清消', '幼犬體重測量與配方奶粉餵食', '08:30 - 09:30', 60]
+  ];
+  const optional = new Set(['膽小貓肉泥互動與梳毛減壓']);
+  const seededAt = new Date().toISOString();
+  seed.forEach(([zoneId, category, title, timeWindow, minutes], index) => {
+    db.prepare(`
+      INSERT INTO duty_items
+        (id, zoneId, title, description, category, triggerType, shiftId, responsibleRole,
+         requiredPeople, estimatedMinutes, timeWindow, isRequired, sopSectionId, sopVideoId,
+         status, sortOrder, organizationId, createdAt, updatedAt)
+      VALUES (?, ?, ?, '', ?, 'daily', '', 'volunteer', 1, ?, ?, ?, '', '', 'active', ?, ?, ?, ?)
+    `).run(
+      `duty-${index + 1}`, zoneId, title, category, minutes, timeWindow,
+      optional.has(title) ? 0 : 1, index, currentOrganizationId(), seededAt, seededAt
+    );
+  });
+  console.log(`SQLite: 已建立 ${seed.length} 個預設勤務項目`);
+}
+
+export function getAllDutyItems(): DutyItem[] {
+  return (db.prepare('SELECT * FROM duty_items ORDER BY sortOrder, title').all() as any[]).map(rowToDutyItem);
+}
+
+export function getActiveDutyItems(): DutyItem[] {
+  return (db.prepare(`SELECT * FROM duty_items WHERE status = 'active' ORDER BY sortOrder, title`).all() as any[])
+    .map(rowToDutyItem);
+}
+
+export function getDutyItem(id: string): DutyItem | null {
+  const row = db.prepare('SELECT * FROM duty_items WHERE id = ?').get(id);
+  return row ? rowToDutyItem(row) : null;
+}
+
+export function createDutyItem(input: Omit<DutyItem, 'id' | 'status' | 'sortOrder'>): DutyItem {
+  const now = new Date().toISOString();
+  const id = `duty-${randomUUID().slice(0, 8)}`;
+  const next = db.prepare('SELECT COALESCE(MAX(sortOrder), -1) + 1 AS n FROM duty_items').get() as { n: number };
+  db.prepare(`
+    INSERT INTO duty_items
+      (id, zoneId, title, description, category, triggerType, shiftId, responsibleRole,
+       requiredPeople, estimatedMinutes, timeWindow, isRequired, sopSectionId, sopVideoId,
+       status, sortOrder, organizationId, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
+  `).run(
+    id, input.zoneId, input.title, input.description, input.category, input.triggerType,
+    input.shiftId, input.responsibleRole, input.requiredPeople, input.estimatedMinutes,
+    input.timeWindow, input.isRequired ? 1 : 0, input.sopSectionId, input.sopVideoId,
+    next.n, currentOrganizationId(), now, now
+  );
+  return getDutyItem(id)!;
+}
+
+export function updateDutyItem(id: string, updates: Partial<DutyItem>): DutyItem | null {
+  const existing = getDutyItem(id);
+  if (!existing) return null;
+  const merged = { ...existing, ...updates };
+  db.prepare(`
+    UPDATE duty_items SET
+      zoneId = ?, title = ?, description = ?, category = ?, triggerType = ?, shiftId = ?,
+      responsibleRole = ?, requiredPeople = ?, estimatedMinutes = ?, timeWindow = ?,
+      isRequired = ?, sopSectionId = ?, sopVideoId = ?, updatedAt = ?
+    WHERE id = ?
+  `).run(
+    merged.zoneId, merged.title, merged.description, merged.category, merged.triggerType,
+    merged.shiftId, merged.responsibleRole, merged.requiredPeople, merged.estimatedMinutes,
+    merged.timeWindow, merged.isRequired ? 1 : 0, merged.sopSectionId, merged.sopVideoId,
+    new Date().toISOString(), id
+  );
+  return getDutyItem(id);
+}
+
+/** Disabled, never deleted -- completions point here and must keep resolving. */
+export function setDutyItemStatus(id: string, status: 'active' | 'disabled'): DutyItem | null {
+  if (!getDutyItem(id)) return null;
+  db.prepare('UPDATE duty_items SET status = ?, updatedAt = ? WHERE id = ?')
+    .run(status, new Date().toISOString(), id);
+  return getDutyItem(id);
+}
+
+export function countDutyCompletions(dutyItemId: string): number {
+  return (db.prepare('SELECT COUNT(*) AS c FROM duty_completions WHERE dutyItemId = ?')
+    .get(dutyItemId) as { c: number }).c;
+}
+
+export function getDutyCompletionsForDate(date: string): DutyCompletion[] {
+  return (db.prepare('SELECT * FROM duty_completions WHERE date = ?').all(date) as any[])
+    .map(rowToDutyCompletion);
+}
+
+/**
+ * Records that someone completed a duty. Idempotent: completing the same duty
+ * twice on the same day keeps the first record rather than erroring, because a
+ * double tap on a phone should not be a failure.
+ */
+export function completeDuty(input: {
+  dutyItemId: string; date: string; shiftId: string;
+  completedBy: string; method: 'self' | 'staff'; note: string;
+}): DutyCompletion | null {
+  if (!getDutyItem(input.dutyItemId)) return null;
+
+  const already = db.prepare(
+    'SELECT * FROM duty_completions WHERE dutyItemId = ? AND date = ? AND shiftId = ?'
+  ).get(input.dutyItemId, input.date, input.shiftId);
+  if (already) return rowToDutyCompletion(already);
+
+  const id = `dc-${randomUUID().slice(0, 12)}`;
+  db.prepare(`
+    INSERT INTO duty_completions
+      (id, dutyItemId, date, shiftId, completedBy, completedAt, method, note, organizationId)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id, input.dutyItemId, input.date, input.shiftId, input.completedBy,
+    new Date().toISOString(), input.method, input.note, currentOrganizationId()
+  );
+  const row = db.prepare('SELECT * FROM duty_completions WHERE id = ?').get(id);
+  return row ? rowToDutyCompletion(row) : null;
+}
+
+export function uncompleteDuty(dutyItemId: string, date: string, shiftId: string): boolean {
+  const result = db.prepare(
+    'DELETE FROM duty_completions WHERE dutyItemId = ? AND date = ? AND shiftId = ?'
+  ).run(dutyItemId, date, shiftId);
+  return result.changes > 0;
+}
+
+/**
+ * Daily care workload per area, derived from the duty items rather than stored
+ * separately -- the same reason the report counts signups instead of reading a
+ * counter. A figure that can be derived should not be able to disagree with
+ * what it came from.
+ *
+ * personSlots is how many volunteer places a day of that area needs;
+ * personHours is what those places add up to in time.
+ */
+export function getZoneWorkload(): Array<{
+  zoneId: string; items: number; personSlots: number; personHours: number;
+}> {
+  const rows = db.prepare(`
+    SELECT zoneId,
+           COUNT(*) AS items,
+           SUM(requiredPeople) AS personSlots,
+           SUM(requiredPeople * estimatedMinutes) AS personMinutes
+    FROM duty_items
+    WHERE status = 'active' AND triggerType = 'daily'
+    GROUP BY zoneId
+  `).all() as any[];
+  return rows.map(row => ({
+    zoneId: row.zoneId,
+    items: row.items,
+    personSlots: row.personSlots || 0,
+    personHours: Math.round(((row.personMinutes || 0) / 60) * 10) / 10
+  }));
+}
+
+// ============================================================================
 // Shifts & shift signups
 // ----------------------------------------------------------------------------
 // These two lived in the browser's localStorage until now, which meant a shift
