@@ -86,6 +86,16 @@ export interface ShiftSignup {
   notes?: string;
   reviewNotes?: string;
   reviewedAt?: string;
+  /**
+   * Who recorded the outcome, and when as a UTC instant.
+   *
+   * Marking someone absent is the first step of a rule that ends in losing
+   * their place at the shelter, so the decision needs an author and a time that
+   * cannot be misread -- reviewedAt above is a localised string kept only for
+   * display.
+   */
+  reviewedBy?: string;
+  reviewedAtUtc?: string;
   syncToCalendar: boolean;
   syncToLine: boolean;
   situationalQuestion?: string;

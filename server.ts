@@ -6,7 +6,7 @@ import { writeFileSync, mkdirSync, createWriteStream, statSync, readFileSync, un
 import { gzipSync } from 'zlib';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
-import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, deleteShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged } from './db';
+import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, deleteShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, getRollCall, getAbsenceCounts } from './db';
 import { PDFParse } from 'pdf-parse';
 import type { SopContent, SopDocument, SopVideo } from './src/types';
 
@@ -1595,6 +1595,57 @@ ${contextText}
     return '﻿' + rows.join('\r\n') + '\r\n';
   }
 
+  /**
+   * The day's roll call: who was expected on each shift, and who checked in.
+   *
+   * The rulebook says two unexplained absences cost a volunteer their booking
+   * rights for thirty days, but nothing had ever set the 'absent' status, so
+   * that count was permanently zero and the rule applied to nobody. This is
+   * where the count starts existing.
+   *
+   * It reports; it does not decide. A missing check-in is evidence somebody did
+   * not check in, which is not the same as evidence they did not come -- phones
+   * lose signal inside kennel buildings and people forget. The coordinator
+   * confirms. Marking an unpaid volunteer absent by inference, when the rule
+   * ends in losing their place, is not a judgement to automate.
+   */
+  app.get('/api/admin/roll-call', (req, res) => {
+    try {
+      const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || ''))
+        ? String(req.query.date)
+        : new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' });
+
+      const shifts = getRollCall(date);
+      const absences = getAbsenceCounts();
+
+      // The running total travels with each row, so the coordinator can see
+      // that this would be someone's second miss before making it their second.
+      const withHistory = shifts.map(shift => ({
+        ...shift,
+        expected: shift.expected.map(person => ({
+          ...person,
+          absencesSoFar: absences.get(person.volunteerEmail.toLowerCase()) || 0
+        }))
+      }));
+
+      return res.json({
+        success: true,
+        date,
+        shifts: withHistory,
+        summary: {
+          expected: shifts.reduce((n, s) => n + s.expected.length, 0),
+          arrived: shifts.reduce((n, s) => n + s.expected.filter(p => p.checkedIn).length, 0),
+          unresolved: shifts.reduce(
+            (n, s) => n + s.expected.filter(p => !p.checkedIn && p.status === 'approved').length, 0
+          )
+        }
+      });
+    } catch (error: any) {
+      console.error('Roll Call Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '讀取點名表失敗' });
+    }
+  });
+
   app.get('/api/admin/reports/monthly.csv', (req, res) => {
     try {
       const month = String(req.query.month || '');
@@ -2178,7 +2229,7 @@ ${contextText}
 
   // Rejecting a previously-approved signup frees the seat back up; the
   // client no longer has to work that out for itself.
-  app.put('/api/shift-signups/:id/status', requireAdmin, (req, res) => {
+  app.put('/api/shift-signups/:id/status', requireAdmin, (req: any, res) => {
     try {
       const { status, reviewNotes } = req.body || {};
       if (!status) {
@@ -2190,7 +2241,8 @@ ${contextText}
         return res.status(404).json({ success: false, error: '找不到該筆報名' });
       }
 
-      const updated = updateShiftSignupStatus(req.params.id, status, reviewNotes);
+      const decidedBy = String(req.session?.displayName || req.session?.identity || 'Admin');
+      const updated = updateShiftSignupStatus(req.params.id, status, reviewNotes, decidedBy);
       // Rejecting or marking absent frees the place, but nothing has to be
       // decremented for that to be true: the headcount excludes those statuses,
       // so the shift already reads correctly once the signup is updated.
