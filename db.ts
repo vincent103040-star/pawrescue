@@ -458,6 +458,8 @@ db.exec(`
     rating INTEGER,
     feedbackComment TEXT,
     feedbackSubmittedAt TEXT,
+    feedbackAcknowledgedAt TEXT NOT NULL DEFAULT '',
+    feedbackAcknowledgedBy TEXT NOT NULL DEFAULT '',
     lineReminderSent INTEGER NOT NULL DEFAULT 0,
     photoUrl TEXT
   )
@@ -561,6 +563,56 @@ try {
   // already renamed, or this is a fresh install that never had the old column
 }
 
+// Migration: who acknowledged a volunteer's feedback, and when.
+//
+// The "標記為已參採" button used to be a useState array and nothing else. It
+// turned green, showed a toast, and forgot everything on reload -- another
+// coordinator saw nothing, and neither did the same coordinator on a different
+// machine. That is worse than having no button: it tells a social worker their
+// note was recorded when no record exists.
+//
+// Three columns rather than one flag, because "acknowledged" on its own cannot
+// answer the question anyone would ask next -- who, and when.
+try {
+  db.exec(`ALTER TABLE attendance_records ADD COLUMN feedbackAcknowledgedAt TEXT NOT NULL DEFAULT ''`);
+} catch {
+  // column already exists
+}
+try {
+  db.exec(`ALTER TABLE attendance_records ADD COLUMN feedbackAcknowledgedBy TEXT NOT NULL DEFAULT ''`);
+} catch {
+  // column already exists
+}
+
+/**
+ * Marks a volunteer's service feedback as taken up by the social work team, or
+ * clears that mark.
+ *
+ * Returns null when the record does not exist, so the caller can answer 404
+ * rather than silently succeeding.
+ */
+export function setFeedbackAcknowledged(
+  id: string,
+  acknowledged: boolean,
+  actor: string
+): AttendanceRecord | null {
+  const existing = db.prepare('SELECT id FROM attendance_records WHERE id = ?').get(id);
+  if (!existing) return null;
+
+  db.prepare(`
+    UPDATE attendance_records
+    SET feedbackAcknowledgedAt = ?, feedbackAcknowledgedBy = ?
+    WHERE id = ?
+  `).run(
+    acknowledged ? new Date().toISOString() : '',
+    acknowledged ? actor : '',
+    id
+  );
+
+  const row = db.prepare('SELECT * FROM attendance_records WHERE id = ?').get(id);
+  return row ? rowToAttendanceRecord(row) : null;
+}
+
 // Seed with the original mock attendance history on first run only, same pattern as
 // the volunteers table above.
 const attendanceSeedCount = db.prepare('SELECT COUNT(*) AS c FROM attendance_records').get() as { c: number };
@@ -585,6 +637,8 @@ function rowToAttendanceRecord(row: any): AttendanceRecord {
   return {
     id: row.id,
     signupId: row.signupId || undefined,
+    feedbackAcknowledgedAt: row.feedbackAcknowledgedAt || undefined,
+    feedbackAcknowledgedBy: row.feedbackAcknowledgedBy || undefined,
     checkInAt: row.checkInAt || undefined,
     checkOutAt: row.checkOutAt || undefined,
     volunteerName: row.volunteerName,
