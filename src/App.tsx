@@ -16,6 +16,7 @@ import { VolunteerSopGuide } from './components/VolunteerSopGuide';
 import { AdminSopManager } from './components/AdminSopManager';
 import { ZoneManager } from './components/ZoneManager';
 import { DutyItemManager } from './components/DutyItemManager';
+import { RollCallPanel } from './components/RollCallPanel';
 import { VolunteerRoster } from './components/VolunteerRoster';
 import { AiPostModal } from './components/AiPostModal';
 import { VolunteerCheckInModal } from './components/VolunteerCheckInModal';
@@ -917,12 +918,20 @@ export default function App() {
             )}
 
             {adminActiveTab === 'signups' && (
-              <ApplicantReview
-                shiftSignups={shiftSignups}
-                shifts={shifts}
-                onUpdateStatus={handleUpdateAppStatus}
-                onSendLineToast={showToast}
-              />
+              <div className="space-y-6">
+                <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto pt-6">
+                  <RollCallPanel
+                    onToast={showToast}
+                    onChanged={() => { refreshShiftSignups(); refreshShifts(); refreshAttendance(); }}
+                  />
+                </div>
+                <ApplicantReview
+                  shiftSignups={shiftSignups}
+                  shifts={shifts}
+                  onUpdateStatus={handleUpdateAppStatus}
+                  onSendLineToast={showToast}
+                />
+              </div>
             )}
 
             {adminActiveTab === 'roster' && (

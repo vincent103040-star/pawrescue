@@ -1916,6 +1916,8 @@ function rowToShiftSignup(row: any): ShiftSignup {
     notes: row.notes || undefined,
     reviewNotes: row.reviewNotes || undefined,
     reviewedAt: row.reviewedAt || undefined,
+    reviewedBy: row.reviewedBy || undefined,
+    reviewedAtUtc: row.reviewedAtUtc || undefined,
     syncToCalendar: !!row.syncToCalendar,
     syncToLine: !!row.syncToLine,
     situationalQuestion: row.situationalQuestion || undefined,
@@ -2015,14 +2017,124 @@ db.exec("UPDATE shift_signups SET volunteerEmail = LOWER(TRIM(volunteerEmail)) W
 export function updateShiftSignupStatus(
   id: string,
   status: string,
-  reviewNotes?: string
+  reviewNotes?: string,
+  reviewedBy = ''
 ): ShiftSignup | null {
   const existing = db.prepare('SELECT id FROM shift_signups WHERE id = ?').get(id);
   if (!existing) return null;
-  db.prepare('UPDATE shift_signups SET status = ?, reviewNotes = ?, reviewedAt = ? WHERE id = ?')
-    .run(status, reviewNotes || null, new Date().toLocaleString('zh-TW', { hour12: false }), id);
+  const now = new Date();
+  db.prepare(`
+    UPDATE shift_signups
+    SET status = ?, reviewNotes = ?, reviewedAt = ?, reviewedBy = ?, reviewedAtUtc = ?
+    WHERE id = ?
+  `).run(
+    status, reviewNotes || null,
+    now.toLocaleString('zh-TW', { hour12: false }),
+    reviewedBy, now.toISOString(), id
+  );
   const row = db.prepare('SELECT * FROM shift_signups WHERE id = ?').get(id);
   return row ? rowToShiftSignup(row) : null;
+}
+
+// Migration: who decided a signup's outcome, and when, unambiguously.
+//
+// reviewedAt held a localised string ("2026/8/25 下午3:20:14") with no timezone
+// and no author. That was tolerable while the field only recorded an approval.
+// It is not tolerable now: marking someone absent is the first step of a rule
+// that ends in losing their place at the shelter, so the record has to say who
+// made the call and at what instant -- the same reason attendance keeps a UTC
+// column beside its readable one.
+try {
+  db.exec(`ALTER TABLE shift_signups ADD COLUMN reviewedBy TEXT NOT NULL DEFAULT ''`);
+} catch {
+  // column already exists
+}
+try {
+  db.exec(`ALTER TABLE shift_signups ADD COLUMN reviewedAtUtc TEXT NOT NULL DEFAULT ''`);
+} catch {
+  // column already exists
+}
+
+/**
+ * The day's roll call: who was expected, and who actually arrived.
+ *
+ * The shelter's rulebook says a volunteer who fails to appear twice loses their
+ * booking rights for thirty days. Nothing had ever set the 'absent' status, so
+ * that count was always zero and the rule could not be applied to anybody.
+ *
+ * This deliberately reports rather than decides. A missing attendance row is
+ * evidence someone did not check in, which is not the same as evidence they did
+ * not come -- phones lose signal inside kennel buildings, and people forget. A
+ * coordinator confirms; the system only says who to look at. Getting that wrong
+ * costs an unpaid volunteer their place, which is worth a click to avoid.
+ */
+export function getRollCall(date: string): Array<{
+  shiftId: string;
+  shiftTitle: string;
+  zoneId: string;
+  timeRange: string;
+  expected: Array<{
+    signupId: string;
+    volunteerName: string;
+    volunteerEmail: string;
+    status: string;
+    checkedIn: boolean;
+    checkInTime?: string;
+    reviewedBy?: string;
+  }>;
+}> {
+  const shifts = db
+    .prepare('SELECT * FROM shifts WHERE date = ? ORDER BY timeRange')
+    .all(date) as any[];
+
+  return shifts.map(shift => {
+    // Everyone still holding a place when the shift came round: approved is the
+    // commitment, attended and absent are outcomes already recorded. Pending is
+    // excluded -- nobody promised them a place, so they cannot have missed it.
+    const signups = db.prepare(`
+      SELECT * FROM shift_signups
+      WHERE shiftId = ? AND status IN ('approved', 'attended', 'absent')
+      ORDER BY volunteerName
+    `).all(shift.id) as any[];
+
+    const attendance = db.prepare(
+      'SELECT volunteerName, checkInTime FROM attendance_records WHERE shiftId = ? AND date = ?'
+    ).all(shift.id, date) as any[];
+    const arrived = new Map(attendance.map(record => [record.volunteerName, record.checkInTime]));
+
+    return {
+      shiftId: shift.id,
+      shiftTitle: shift.title,
+      zoneId: shift.zone,
+      timeRange: shift.timeRange,
+      expected: signups.map(signup => ({
+        signupId: signup.id,
+        volunteerName: signup.volunteerName,
+        volunteerEmail: signup.volunteerEmail || '',
+        status: signup.status,
+        checkedIn: arrived.has(signup.volunteerName),
+        checkInTime: arrived.get(signup.volunteerName) || undefined,
+        reviewedBy: signup.reviewedBy || undefined
+      }))
+    };
+  });
+}
+
+/**
+ * How many shifts a volunteer has been recorded as missing.
+ *
+ * Counted from the signups rather than stored on the volunteer, for the same
+ * reason a shift's headcount is: a tally kept alongside the thing it counts
+ * eventually disagrees with it, and nothing reports that it has.
+ */
+export function getAbsenceCounts(): Map<string, number> {
+  const rows = db.prepare(`
+    SELECT volunteerEmail, COUNT(*) AS c
+    FROM shift_signups
+    WHERE status = 'absent' AND TRIM(COALESCE(volunteerEmail, '')) <> ''
+    GROUP BY volunteerEmail
+  `).all() as any[];
+  return new Map(rows.map(row => [String(row.volunteerEmail).toLowerCase(), row.c]));
 }
 
 export function deleteShiftSignup(id: string): ShiftSignup | null {
