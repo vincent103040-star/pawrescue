@@ -4,6 +4,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Download, X, FileSpreadsheet, FileText, Printer, CheckCircle2, ShieldCheck, Sparkles, Building2, Users, Clock, AlertTriangle, Loader2 } from 'lucide-react';
 
+import { authFetch } from '../utils/session';
 interface MonthlyReportModalProps {
   month: string; // e.g., '2026-08'
   shelterLocation: ShelterLocation;
@@ -58,6 +59,7 @@ export const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({
   const reportRef = useRef<HTMLDivElement>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   // Filter shifts for the specified month (e.g., '2026-08')
   const monthShifts = shifts.filter(s => s.date.startsWith(month));
@@ -121,33 +123,47 @@ export const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({
   const formattedMonthTitle = `${yearStr} 年 ${monthNumStr} 月`;
 
   // Export CSV Function
-  const handleExportCSV = () => {
-    const csvRows: string[] = [];
-    
-    // Title & Metadata
-    csvRows.push(`"流浪動物之家人力排班 - ${formattedMonthTitle}月度績效與缺工率統計總結"`);
-    csvRows.push(`"報名產出時間: ${new Date().toLocaleString('zh-TW')}"`);
-    csvRows.push(`"當月平均缺工率: ${overallShortageRate}%", "當月總服務人數: ${overallVolunteers}人", "當月總服務時數: ${overallCompletedHours}小時"`);
-    csvRows.push('');
+  /**
+   * Fetches the month's report from the server rather than assembling it here.
+   *
+   * The browser version could only report what the open page had loaded, and it
+   * summed "accepted volunteers x shift length" while labelling the result
+   * 完成服務時數 -- a figure that reads as a fact and was an assumption. The
+   * server reads the database, gives scheduled and actual hours as separate
+   * columns, and breaks the month down by zone and by day, because "42% short"
+   * is not something a shelter can act on and "the cattery is 71% short" is.
+   *
+   * Building it server-side also means it can be produced on a schedule later,
+   * without anyone remembering to press this button.
+   */
+  const handleExportCSV = async () => {
+    setIsExporting(true);
+    try {
+      const res = await authFetch(`/api/admin/reports/monthly.csv?month=${encodeURIComponent(month)}`);
+      if (!res.ok) {
+        const problem = await res.json().catch(() => ({}));
+        onSendLineToast(`⚠️ ${problem.error || '匯出失敗，請稍後再試。'}`);
+        return;
+      }
 
-    // Headers
-    csvRows.push('"園區名稱","統計月份","當月總班次數","需求志工人數","已報名人數","缺工人數","缺工率(%)","總完成服務時數(小時)","運作狀態"');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `浪浪家園_志工人力月報_${month}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
 
-    csvRows.push(`"${shelterLocation.name}","${month}","${stat.totalShifts}","${stat.requiredCount}","${stat.filledCount}","${stat.shortageCount}","${stat.shortageRate}%","${stat.totalCompletedHours}","${stat.statusLabel}"`);
-
-    const csvContent = '\uFEFF' + csvRows.join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `動物之家_月度據點績效總結_${month}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    setDownloadSuccess('CSV');
-    onSendLineToast(`📊 已匯出「${formattedMonthTitle}」月度績效總結 CSV 報表！`);
-    setTimeout(() => setDownloadSuccess(null), 3000);
+      setDownloadSuccess('CSV');
+      onSendLineToast(`📊 已匯出「${formattedMonthTitle}」志工人力月報（含各場域與每日明細）`);
+      setTimeout(() => setDownloadSuccess(null), 3000);
+    } catch {
+      onSendLineToast('⚠️ 匯出失敗，請確認網路連線。');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   // Export PDF Function
@@ -238,10 +254,11 @@ export const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={handleExportCSV}
-              className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              disabled={isExporting}
+              className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               <FileSpreadsheet className="w-4 h-4" />
-              <span>下載 CSV Excel 檔</span>
+              <span>{isExporting ? '產生中...' : '下載 CSV Excel 檔'}</span>
             </button>
 
             <button

@@ -1373,6 +1373,220 @@ ${contextText}
   // so a shift published on one device is immediately visible on every other.
   // ==========================================================================
   // ==========================================================================
+  // Monthly report
+  // --------------------------------------------------------------------------
+  // Built here rather than in the browser, for three reasons: it can be
+  // scheduled, so nobody has to remember to press a button; the main system can
+  // fetch it directly if it ever wants to; and it reads the database rather than
+  // whatever slice the open page happens to have loaded.
+  //
+  // Every column is a count or a total. No name, address, phone number or email
+  // appears anywhere in the output, and that is the point -- what the main
+  // system needs is numbers, not a roster.
+  // ==========================================================================
+
+  /** RFC 4180 quoting: wrap in quotes, and double any quote inside. */
+  function csvCell(value: unknown): string {
+    const text = value === null || value === undefined ? '' : String(value);
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+
+  const csvRow = (cells: unknown[]) => cells.map(csvCell).join(',');
+
+  /** Hours a shift is scheduled for, from its "10:00 - 13:00" range. */
+  function shiftDurationHours(timeRange: string): number {
+    const match = String(timeRange || '').match(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/);
+    if (!match) return 0;
+    const [, startHour, startMinute, endHour, endMinute] = match.map(Number);
+    const start = startHour * 60 + startMinute;
+    let end = endHour * 60 + endMinute;
+    if (end <= start) end += 24 * 60;
+    return (end - start) / 60;
+  }
+
+  const WEEKDAY_LABELS = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
+
+  interface ReportTotals {
+    shifts: number;
+    required: number;
+    accepted: number;
+    pending: number;
+    attended: number;
+    scheduledHours: number;
+    actualHours: number;
+  }
+
+  const emptyTotals = (): ReportTotals =>
+    ({ shifts: 0, required: 0, accepted: 0, pending: 0, attended: 0, scheduledHours: 0, actualHours: 0 });
+
+  const shortageOf = (t: ReportTotals) => Math.max(0, t.required - t.accepted);
+  const shortageRateOf = (t: ReportTotals) =>
+    t.required > 0 ? Math.round((shortageOf(t) / t.required) * 100) : 0;
+
+  function statusLabelFor(rate: number): string {
+    if (rate > 30) return '嚴重缺工';
+    if (rate > 10) return '人力微緊';
+    return '排班優良';
+  }
+
+  /**
+   * Assembles the month's report as CSV.
+   *
+   * Three sections, because one summary row could not answer the question that
+   * matters. "42% short" tells the shelter nothing it can act on; "the cattery
+   * is 60% short and logistics is fully staffed" does.
+   *
+   * Hours appear twice on purpose. 預計時數 is what the shifts were scheduled
+   * for -- accepted volunteers times shift length -- and 實際時數 is what the
+   * attendance records actually add up to. The report used to show only the
+   * first while calling it "完成服務時數", which reads as a fact and is an
+   * assumption; on the current data the two differ by about a third. The gap
+   * between them is itself the useful number: it is how much of the booked
+   * help did not arrive.
+   */
+  function buildMonthlyReportCsv(month: string): string {
+    const shelter = getShelterLocation();
+    const zones = getAllZones();
+    const monthShifts = getAllShifts().filter(shift => String(shift.date).startsWith(month));
+    const shiftById = new Map(monthShifts.map(shift => [shift.id, shift]));
+
+    // A signup holds a seat while it is pending or approved; only an approved
+    // one is a place the shelter is counting on.
+    const monthSignups = getAllShiftSignups().filter(signup => shiftById.has(signup.shiftId));
+    const acceptedSignups = monthSignups.filter(signup => signup.status === 'approved');
+    const pendingSignups = monthSignups.filter(signup => signup.status === 'pending');
+    const completedAttendance = getAllAttendanceRecords().filter(
+      record => String(record.date).startsWith(month) && record.status === 'completed'
+    );
+
+    const overall = emptyTotals();
+    const byZone = new Map<string, ReportTotals>();
+    const byDate = new Map<string, ReportTotals>();
+
+    const bucket = (map: Map<string, ReportTotals>, key: string) => {
+      if (!map.has(key)) map.set(key, emptyTotals());
+      return map.get(key)!;
+    };
+
+    for (const shift of monthShifts) {
+      const zoneTotals = bucket(byZone, shift.zone);
+      const dateTotals = bucket(byDate, shift.date);
+      for (const totals of [overall, zoneTotals, dateTotals]) {
+        totals.shifts += 1;
+        totals.required += shift.requiredCount || 0;
+      }
+    }
+
+    for (const signup of acceptedSignups) {
+      const shift = shiftById.get(signup.shiftId)!;
+      const hours = shiftDurationHours(shift.timeRange);
+      for (const totals of [overall, bucket(byZone, shift.zone), bucket(byDate, shift.date)]) {
+        totals.accepted += 1;
+        totals.scheduledHours += hours;
+      }
+    }
+
+    // Counted separately rather than folded into 錄取: a signup still waiting on
+    // a decision is a queue the shelter can act on, not staffing it can rely on.
+    // Shortage is measured against approved places only.
+    for (const signup of pendingSignups) {
+      const shift = shiftById.get(signup.shiftId)!;
+      for (const totals of [overall, bucket(byZone, shift.zone), bucket(byDate, shift.date)]) {
+        totals.pending += 1;
+      }
+    }
+
+    for (const record of completedAttendance) {
+      for (const totals of [overall, bucket(byZone, record.zone), bucket(byDate, record.date)]) {
+        totals.attended += 1;
+        totals.actualHours += record.hoursLogged || 0;
+      }
+    }
+
+    const round = (n: number) => Math.round(n * 10) / 10;
+    const rows: string[] = [];
+
+    rows.push(csvRow([`${shelter.name} 志工人力月報`, month]));
+    rows.push(csvRow(['產出時間', new Date().toISOString()]));
+    rows.push(csvRow(['資料範圍', '本報表僅含統計數字，不含姓名、電話、Email 等個人資料']));
+    rows.push('');
+
+    rows.push(csvRow(['【整體摘要】']));
+    rows.push(csvRow([
+      '總班次數', '需求人次', '錄取人次', '待審人次', '實際到勤人次', '缺工人次', '缺工率(%)',
+      '預計時數', '實際時數', '運作狀態'
+    ]));
+    rows.push(csvRow([
+      overall.shifts, overall.required, overall.accepted, overall.pending, overall.attended,
+      shortageOf(overall), shortageRateOf(overall),
+      round(overall.scheduledHours), round(overall.actualHours),
+      statusLabelFor(shortageRateOf(overall))
+    ]));
+    rows.push('');
+
+    rows.push(csvRow(['【各場域】']));
+    rows.push(csvRow([
+      '場域代碼', '場域名稱', '場域狀態', '班次數', '需求人次', '錄取人次', '待審人次',
+      '實際到勤人次', '缺工人次', '缺工率(%)', '預計時數', '實際時數'
+    ]));
+    // Every zone that either has a row this month or is currently active, so a
+    // quiet area still shows as a zero rather than vanishing from the report.
+    const zoneIds = new Set<string>([
+      ...byZone.keys(),
+      ...zones.filter(zone => zone.status === 'active').map(zone => zone.id)
+    ]);
+    const zoneById = new Map(zones.map(zone => [zone.id, zone]));
+    for (const zoneId of [...zoneIds].sort()) {
+      const totals = byZone.get(zoneId) || emptyTotals();
+      const zone = zoneById.get(zoneId);
+      rows.push(csvRow([
+        zone?.code || zoneId,
+        // A zone deleted before disabling existed would land here; name it
+        // rather than leaving a bare id nobody recognises.
+        zone?.name || `（已移除的場域：${zoneId}）`,
+        zone ? (zone.status === 'active' ? '啟用' : '已停用') : '不存在',
+        totals.shifts, totals.required, totals.accepted, totals.pending, totals.attended,
+        shortageOf(totals), shortageRateOf(totals),
+        round(totals.scheduledHours), round(totals.actualHours)
+      ]));
+    }
+    rows.push('');
+
+    rows.push(csvRow(['【每日】']));
+    rows.push(csvRow([
+      '日期', '星期', '班次數', '需求人次', '錄取人次', '待審人次', '實際到勤人次', '缺工人次', '缺工率(%)', '實際時數'
+    ]));
+    for (const date of [...byDate.keys()].sort()) {
+      const totals = byDate.get(date)!;
+      const weekday = WEEKDAY_LABELS[new Date(`${date}T00:00:00+08:00`).getDay()] || '';
+      rows.push(csvRow([
+        date, weekday, totals.shifts, totals.required, totals.accepted, totals.pending,
+        totals.attended, shortageOf(totals), shortageRateOf(totals), round(totals.actualHours)
+      ]));
+    }
+
+    // The BOM is what makes Excel open a UTF-8 CSV without mangling Chinese.
+    return '﻿' + rows.join('\r\n') + '\r\n';
+  }
+
+  app.get('/api/admin/reports/monthly.csv', (req, res) => {
+    try {
+      const month = String(req.query.month || '');
+      if (!/^\d{4}-\d{2}$/.test(month)) {
+        return res.status(400).json({ success: false, error: '請指定統計月份，格式為 YYYY-MM' });
+      }
+
+      const csv = buildMonthlyReportCsv(month);
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="pawrescue-monthly-${month}.csv"`);
+      return res.send(csv);
+    } catch (error: any) {
+      console.error('Monthly Report Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '產生月報失敗' });
+    }
+  });
+
+  // ==========================================================================
   // Zones
   // --------------------------------------------------------------------------
   // The shelter's own areas, which used to be five values compiled into the
