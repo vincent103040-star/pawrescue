@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { authFetch } from '../utils/session';
 import { PositionShift, ZoneCategory } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { resolveZone } from '../data/zones';
@@ -62,150 +63,101 @@ export const DailyDutyTaskboard: React.FC<DailyDutyTaskboardProps> = ({
     return s.date === todayStr || true; // Show today's shifts or standard daily template
   });
 
-  // Initial SOP Checklist items derived from shift zone SOPs
-  const [sopItems, setSopItems] = useState<SopItem[]>([
-    {
-      id: 'sop-1',
-      shiftId: 'shift-1',
-      shiftTitle: '狗園晨間運動與散步夥伴',
-      zone: 'dog',
-      category: '🐶 大狗放風與防護',
-      title: '檢視胸背帶與雙扣牽繩牢固度',
-      description: '出犬前務必確認扣環無鬆脫，確認大狗配載黃色/紅色個性識別絲帶。',
-      isRequired: true,
-      timeWindow: '09:00 - 09:30',
-      isCompleted: true,
-      completedBy: '林志豪 (資深志工)',
-      completedAt: '09:15'
-    },
-    {
-      id: 'sop-2',
-      shiftId: 'shift-1',
-      shiftTitle: '狗園晨間運動與散步夥伴',
-      zone: 'dog',
-      category: '🐶 大狗放風與防護',
-      title: '草地放風便便清除與水份補充',
-      description: '帶狗至陽明山/草山運動場，隨身攜帶拾便袋與飲水碗，每15分鐘補充水分。',
-      isRequired: true,
-      timeWindow: '09:30 - 11:30',
-      isCompleted: true,
-      completedBy: '陳雅婷',
-      completedAt: '10:40'
-    },
-    {
-      id: 'sop-3',
-      shiftId: 'shift-1',
-      shiftTitle: '狗園晨間運動與散步夥伴',
-      zone: 'dog',
-      category: '🐶 大狗放風與防護',
-      title: '歸房體表檢查與趾縫清潔',
-      description: '返回犬舍後檢查是否有壁虱、雜草刺黏附，並使用微濕毛巾擦拭四肢趾縫。',
-      isRequired: true,
-      timeWindow: '11:30 - 12:00',
-      isCompleted: false
-    },
-    {
-      id: 'sop-4',
-      shiftId: 'shift-2',
-      shiftTitle: '貓島貓咪照護與社會化陪伴',
-      zone: 'cat',
-      category: '🐱 貓房照護與親人訓練',
-      title: '貓砂盆與貓房地板深層清理',
-      description: '清理便便與尿塊，補滿豆腐貓砂至 5cm 厚度，並以寵物專用次氯酸水擦拭層架。',
-      isRequired: true,
-      timeWindow: '13:30 - 14:30',
-      isCompleted: true,
-      completedBy: '張小美',
-      completedAt: '14:10'
-    },
-    {
-      id: 'sop-5',
-      shiftId: 'shift-2',
-      shiftTitle: '貓島貓咪照護與社會化陪伴',
-      zone: 'cat',
-      category: '🐱 貓房照護與親人訓練',
-      title: '膽小貓肉泥互動與梳毛減壓',
-      description: '使用肉泥棒與親人梳子進行 20 分鐘減敏陪伴，記錄貓咪進食與允許摸頭狀況。',
-      isRequired: false,
-      timeWindow: '14:30 - 16:00',
-      isCompleted: false
-    },
-    {
-      id: 'sop-6',
-      shiftId: 'shift-3',
-      shiftTitle: '醫療區術後照護與陪伴助理',
-      zone: 'medical',
-      category: '🏥 醫療觀察與處方紀錄',
-      title: '術後犬貓伊莉莎白圈與傷口檢查',
-      description: '核對醫療卡，確認頭套有無脫落，檢查傷口是否有滲血或異常紅腫並紀錄。',
-      isRequired: true,
-      timeWindow: '10:00 - 10:30',
-      isCompleted: true,
-      completedBy: '黃建宏 (獸醫助理)',
-      completedAt: '10:20'
-    },
-    {
-      id: 'sop-7',
-      shiftId: 'shift-3',
-      shiftTitle: '醫療區術後照護與陪伴助理',
-      zone: 'medical',
-      category: '🏥 醫療觀察與處方紀錄',
-      title: '口服處方藥物與高營養罐頭發放',
-      description: '協助社工/獸醫師發給每隻觀察區浪浪對應藥包，確認完整吞服後核銷系統。',
-      isRequired: true,
-      timeWindow: '11:00 - 12:00',
-      isCompleted: false
-    },
-    {
-      id: 'sop-8',
-      shiftId: 'shift-4',
-      shiftTitle: '幼犬溫室餵奶與生活訓練',
-      zone: 'puppy',
-      category: '🍼 幼犬育幼與溫室清消',
-      title: '幼犬體重測量與配方奶粉餵食',
-      description: '使用電子秤紀錄幼犬晨間體重，沖泡 38°C 專用奶粉，觀察吮吸反應與便溺情況。',
-      isRequired: true,
-      timeWindow: '08:30 - 09:30',
-      isCompleted: true,
-      completedBy: '李心怡',
-      completedAt: '09:10'
+  /**
+   * Today's duties, fetched rather than declared.
+   *
+   * This was a hardcoded array in useState, which meant the "5/7 完成" figure
+   * reset to the same value on every reload and ticking an item recorded
+   * nothing anywhere. The list now comes from the duty items an admin has
+   * configured, joined with today's completion records on the server -- see the
+   * comment on duty_items in db.ts for why those are two separate tables.
+   */
+  const [sopItems, setSopItems] = useState<SopItem[]>([]);
+  const [isLoadingDuties, setIsLoadingDuties] = useState(true);
+  const [busyIds, setBusyIds] = useState<string[]>([]);
+
+  const loadDuties = React.useCallback(() => {
+    setIsLoadingDuties(true);
+    return authFetch('/api/duties/today')
+      .then(res => res.json())
+      .then(data => {
+        if (!data.success) return;
+        setSopItems(data.duties.map((duty: any) => ({
+          id: duty.id,
+          shiftId: duty.shiftId || '',
+          shiftTitle: duty.timeWindow || '',
+          zone: duty.zoneId,
+          category: duty.category,
+          title: duty.title,
+          description: duty.description,
+          isRequired: duty.isRequired,
+          timeWindow: duty.timeWindow,
+          isCompleted: duty.isCompleted,
+          completedBy: duty.completedBy,
+          // The server stores a UTC instant; the board only ever shows a time.
+          completedAt: duty.completedAt
+            ? new Date(duty.completedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })
+            : undefined
+        })));
+      })
+      .catch(() => { /* leave whatever is on screen if the backend is unreachable */ })
+      .finally(() => setIsLoadingDuties(false));
+  }, []);
+
+  useEffect(() => { loadDuties(); }, [loadDuties]);
+
+  /**
+   * Ticks or un-ticks a duty.
+   *
+   * Optimistic, then reconciled: the checkbox responds immediately because a
+   * volunteer standing in a kennel should not wait on a round trip, and the
+   * refresh afterwards makes the server's version the one that stays -- so two
+   * coordinators ticking the same item converge instead of disagreeing.
+   */
+  const handleToggleSop = async (id: string) => {
+    const item = sopItems.find(i => i.id === id);
+    if (!item || busyIds.includes(id)) return;
+    const next = !item.isCompleted;
+
+    setBusyIds(prev => [...prev, id]);
+    setSopItems(prev => prev.map(i => (i.id === id ? { ...i, isCompleted: next } : i)));
+
+    try {
+      const res = await authFetch(`/api/duties/${encodeURIComponent(id)}/${next ? 'complete' : 'uncomplete'}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      const data = await res.json();
+      if (!data.success) {
+        onSendLineToast(`⚠️ ${data.error || '儲存失敗'}`);
+      } else if (next) {
+        onSendLineToast(`✅ 已完成勤務：【${item.title}】`);
+      }
+    } catch {
+      onSendLineToast('⚠️ 無法連線，這次的勾選尚未儲存。');
+    } finally {
+      setBusyIds(prev => prev.filter(i => i !== id));
+      loadDuties();
     }
-  ]);
+  };
+
+  /** Clears every completion recorded for today. */
+  const handleResetAll = async () => {
+    const completed = sopItems.filter(item => item.isCompleted);
+    if (!completed.length) return;
+    await Promise.all(completed.map(item =>
+      authFetch(`/api/duties/${encodeURIComponent(item.id)}/uncomplete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      }).catch(() => {})
+    ));
+    await loadDuties();
+    onSendLineToast('🔄 已重置本日勤務完成紀錄。');
+  };
 
   const [selectedZoneFilter, setSelectedZoneFilter] = useState<string>('all');
-
-  // Toggle SOP completion
-  const handleToggleSop = (id: string) => {
-    setSopItems(prev => prev.map(item => {
-      if (item.id === id) {
-        const nextCompleted = !item.isCompleted;
-        const nowStr = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false });
-        
-        if (nextCompleted) {
-          onSendLineToast(`✅ 已完成 SOP 項目：【${item.title}】！已記錄於每日志工勤務日誌。`);
-        }
-
-        return {
-          ...item,
-          isCompleted: nextCompleted,
-          completedBy: nextCompleted ? '當前勤務志工' : undefined,
-          completedAt: nextCompleted ? nowStr : undefined
-        };
-      }
-      return item;
-    }));
-  };
-
-  // Reset all
-  const handleResetAll = () => {
-    setSopItems(prev => prev.map(item => ({
-      ...item,
-      isCompleted: false,
-      completedBy: undefined,
-      completedAt: undefined
-    })));
-    onSendLineToast('🔄 已重置本日 SOP 檢查清單。');
-  };
 
   // Filtered items
   const filteredItems = sopItems.filter(item => {

@@ -15,6 +15,7 @@ import { VolunteerMyShifts } from './components/VolunteerMyShifts';
 import { VolunteerSopGuide } from './components/VolunteerSopGuide';
 import { AdminSopManager } from './components/AdminSopManager';
 import { ZoneManager } from './components/ZoneManager';
+import { DutyItemManager } from './components/DutyItemManager';
 import { VolunteerRoster } from './components/VolunteerRoster';
 import { AiPostModal } from './components/AiPostModal';
 import { VolunteerCheckInModal } from './components/VolunteerCheckInModal';
@@ -936,6 +937,7 @@ export default function App() {
               <>
                 <div className="space-y-6 pt-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
                   <ZoneManager onToast={showToast} onZonesChanged={() => { refreshZones(); refreshShifts(); }} />
+                  <DutyItemManager zones={zones} onToast={showToast} />
                 </div>
                 <AdminSopManager onSendLineToast={showToast} />
               </>
