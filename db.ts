@@ -1778,7 +1778,6 @@ db.exec(`
     timeRange TEXT NOT NULL,
     shiftType TEXT NOT NULL,
     requiredCount INTEGER NOT NULL,
-    currentCount INTEGER NOT NULL DEFAULT 0,
     skillRequired TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
     tasks TEXT NOT NULL DEFAULT '[]',
@@ -1812,6 +1811,24 @@ db.exec(`
   }
 }
 
+// Migration: drop shifts.currentCount.
+//
+// It was a stored counter kept in step by hand -- incremented on signup,
+// decremented on withdrawal -- and it had drifted badly: five of the seven
+// shifts on the deployed database disagreed with their own signups, and one
+// read "full" while still needing three people, which tells volunteers not to
+// sign up for a shift that is short-staffed.
+//
+// The count is derived now (see HEADCOUNT_SQL), so the column has no readers.
+// Removing it rather than leaving it is the point: a stale column that still
+// looks authoritative is exactly how the next person reintroduces the bug.
+try {
+  db.exec('ALTER TABLE shifts DROP COLUMN currentCount');
+  console.log('SQLite: 已移除 shifts.currentCount（改為從報名紀錄推導）');
+} catch {
+  // already dropped, or a fresh database that never had it
+}
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS shift_signups (
     id TEXT PRIMARY KEY,
@@ -1835,7 +1852,36 @@ db.exec(`
   )
 `);
 
+/**
+ * How many places a shift is currently holding.
+ *
+ * Occupying means everything except a signup that was turned down or a
+ * volunteer who did not show: pending is a place the coordinator is still
+ * considering, approved is a place counted on, attended is a place that was
+ * used. That is exactly the set the old counter maintained, so the arithmetic
+ * is unchanged -- only where it happens.
+ */
+const HEADCOUNT_SQL = `(
+  SELECT COUNT(*) FROM shift_signups g
+  WHERE g.shiftId = shifts.id AND g.status NOT IN ('rejected', 'absent')
+)`;
+
+/**
+ * Whether the shift is full, open, or called off.
+ *
+ * Cancelled is a decision somebody made and is stored. Full and active are not
+ * decisions -- they are what the numbers say -- so they are worked out here
+ * rather than written down and hoped to stay true.
+ */
+function shiftStatusFrom(row: any, headcount: number): PositionShift['status'] {
+  if (row.status === 'cancelled') return 'cancelled';
+  return headcount >= row.requiredCount ? 'full' : 'active';
+}
+
 function rowToShift(row: any): PositionShift {
+  // Queries that select from `shifts` get headcount computed alongside; the few
+  // that do not fall back to zero rather than to a stale stored number.
+  const headcount = typeof row.headcount === 'number' ? row.headcount : 0;
   return {
     id: row.id,
     title: row.title,
@@ -1844,13 +1890,13 @@ function rowToShift(row: any): PositionShift {
     timeRange: row.timeRange,
     shiftType: row.shiftType,
     requiredCount: row.requiredCount,
-    currentCount: row.currentCount,
+    currentCount: headcount,
     skillRequired: row.skillRequired,
     description: row.description,
     tasks: JSON.parse(row.tasks),
     locationDetails: row.locationDetails,
     attachmentUrl: row.attachmentUrl || undefined,
-    status: row.status,
+    status: shiftStatusFrom(row, headcount),
     createdAt: row.createdAt
   };
 }
@@ -1879,23 +1925,20 @@ function rowToShiftSignup(row: any): ShiftSignup {
 }
 
 export function getAllShifts(): PositionShift[] {
-  const rows = db.prepare('SELECT * FROM shifts ORDER BY date ASC, timeRange ASC').all();
+  const rows = db.prepare(`SELECT *, ${HEADCOUNT_SQL} AS headcount FROM shifts ORDER BY date ASC, timeRange ASC`).all();
   return rows.map(rowToShift);
 }
 
 export function insertShift(s: PositionShift): PositionShift {
   db.prepare(`
-    INSERT INTO shifts (id, title, zone, date, timeRange, shiftType, requiredCount, currentCount, skillRequired, description, tasks, locationDetails, attachmentUrl, status, createdAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO shifts (id, title, zone, date, timeRange, shiftType, requiredCount, skillRequired, description, tasks, locationDetails, attachmentUrl, status, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    // currentCount defaults rather than binding undefined: a payload without it
-    // used to fail with SQLite's own "cannot be bound to parameter 8" message,
-    // which is both a crash and a needless peek at the storage layer.
-    s.id, s.title, s.zone, s.date, s.timeRange, s.shiftType, s.requiredCount, s.currentCount ?? 0,
+    s.id, s.title, s.zone, s.date, s.timeRange, s.shiftType, s.requiredCount,
     s.skillRequired, s.description, JSON.stringify(s.tasks), s.locationDetails,
-    s.attachmentUrl || null, s.status, s.createdAt
+    s.attachmentUrl || null, s.status === 'cancelled' ? 'cancelled' : 'active', s.createdAt
   );
-  return s;
+  return getShift(s.id) || s;
 }
 
 export function updateShift(s: PositionShift): PositionShift | null {
@@ -1903,14 +1946,14 @@ export function updateShift(s: PositionShift): PositionShift | null {
   if (!existing) return null;
   db.prepare(`
     UPDATE shifts SET title = ?, zone = ?, date = ?, timeRange = ?, shiftType = ?, requiredCount = ?,
-      currentCount = ?, skillRequired = ?, description = ?, tasks = ?, locationDetails = ?,
+      skillRequired = ?, description = ?, tasks = ?, locationDetails = ?,
       attachmentUrl = ?, status = ? WHERE id = ?
   `).run(
-    s.title, s.zone, s.date, s.timeRange, s.shiftType, s.requiredCount, s.currentCount,
+    s.title, s.zone, s.date, s.timeRange, s.shiftType, s.requiredCount,
     s.skillRequired, s.description, JSON.stringify(s.tasks), s.locationDetails,
-    s.attachmentUrl || null, s.status, s.id
+    s.attachmentUrl || null, s.status === 'cancelled' ? 'cancelled' : 'active', s.id
   );
-  const row = db.prepare('SELECT * FROM shifts WHERE id = ?').get(s.id);
+  const row = db.prepare(`SELECT *, ${HEADCOUNT_SQL} AS headcount FROM shifts WHERE id = ?`).get(s.id);
   return row ? rowToShift(row) : null;
 }
 
@@ -1926,14 +1969,21 @@ export function deleteShift(id: string): boolean {
 
 // Adjusts a shift's filled headcount, clamped so it can never fall below zero,
 // and keeps the active/full status in step with it.
-export function adjustShiftCount(shiftId: string, delta: number): PositionShift | null {
-  const row = db.prepare('SELECT * FROM shifts WHERE id = ?').get(shiftId) as any;
-  if (!row) return null;
-  const next = Math.max(0, row.currentCount + delta);
-  const status = next >= row.requiredCount ? 'full' : 'active';
-  db.prepare('UPDATE shifts SET currentCount = ?, status = ? WHERE id = ?').run(next, status, shiftId);
-  const updated = db.prepare('SELECT * FROM shifts WHERE id = ?').get(shiftId);
-  return updated ? rowToShift(updated) : null;
+/**
+ * Returns a shift as it now stands.
+ *
+ * This replaces adjustShiftCount, which used to add or subtract one from a
+ * stored counter whenever a signup appeared or went away. That counter drifted:
+ * on the deployed database five of seven shifts disagreed with their own
+ * signups, and one showed "full" while needing three more people -- which tells
+ * volunteers not to sign up for a shift that is short-staffed.
+ *
+ * Nothing needs adjusting now. The count is read from the signups, so callers
+ * that used to nudge it just ask for the shift again.
+ */
+export function getShift(shiftId: string): PositionShift | null {
+  const row = db.prepare(`SELECT *, ${HEADCOUNT_SQL} AS headcount FROM shifts WHERE id = ?`).get(shiftId);
+  return row ? rowToShift(row) : null;
 }
 
 export function getAllShiftSignups(): ShiftSignup[] {
