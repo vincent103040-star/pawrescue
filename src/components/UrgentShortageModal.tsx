@@ -5,6 +5,7 @@ import { Sparkles, AlertTriangle, Send, CheckCircle2, Copy, RefreshCw, X, Messag
 import { sendLineBroadcast } from '../utils/linePush';
 
 import { authFetch } from '../utils/session';
+import { resolveZone } from '../data/zones';
 interface UrgentShortageModalProps {
   shifts: PositionShift[];
   shelterLocation: ShelterLocation;
@@ -52,7 +53,7 @@ export const UrgentShortageModal: React.FC<UrgentShortageModalProps> = ({
     setCopied(false);
     setSentCount(null);
 
-    const shiftZone = ZONE_CONFIGS[shiftObj.zone];
+    const shiftZone = resolveZone(shiftObj.zone);
     const shiftGap = shiftObj.requiredCount - shiftObj.currentCount;
     const shiftRate = Math.round((shiftGap / shiftObj.requiredCount) * 100);
 

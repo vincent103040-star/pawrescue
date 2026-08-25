@@ -1,3 +1,4 @@
+import { applyZones, type ZoneRecord } from './zones';
 import { ShelterLocation, ZoneConfig, PositionShift, ShiftSignup, VolunteerProfile, AttendanceRecord, LineOfficialAccount } from '../types';
 
 // Seed value only -- db.ts writes this into the shelter_location table on
@@ -20,68 +21,28 @@ export const DEFAULT_LINE_OFFICIAL_ACCOUNT: LineOfficialAccount = {
   avatarUrl: ''
 };
 
-export const ZONE_CONFIGS: Record<string, ZoneConfig> = {
-  cat: {
-    id: 'cat',
-    name: '貓舍區 (A棟)',
-    code: 'CAT',
-    color: '#EF4444', // Red / Rose
-    bgLight: 'bg-rose-50 dark:bg-rose-950/40',
-    borderClass: 'border-rose-200 dark:border-rose-800',
-    textClass: 'text-rose-700 dark:text-rose-300',
-    badgeBg: 'bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-200',
-    icon: '🐱',
-    description: '負責貓咪餵食、鏟貓砂、貓房清潔、親人社會化訓練與陪伴。'
-  },
-  dog: {
-    id: 'dog',
-    name: '大狗運動場 (B區)',
-    code: 'DOG',
-    color: '#10B981', // Green
-    bgLight: 'bg-emerald-50 dark:bg-emerald-950/40',
-    borderClass: 'border-emerald-200 dark:border-emerald-800',
-    textClass: 'text-emerald-700 dark:text-emerald-300',
-    badgeBg: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200',
-    icon: '🐕',
-    description: '負責大型犬牽繩放風散步、洗澡吹乾、戶外大運動場放電與體能訓練。'
-  },
-  puppy: {
-    id: 'puppy',
-    name: '幼犬育幼區 (C棟)',
-    code: 'PUPPY',
-    color: '#F59E0B', // Amber / Yellow
-    bgLight: 'bg-amber-50 dark:bg-amber-950/40',
-    borderClass: 'border-amber-200 dark:border-amber-800',
-    textClass: 'text-amber-700 dark:text-amber-300',
-    badgeBg: 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200',
-    icon: '🐾',
-    description: '負責幼犬泡奶泡泡糧、定時陪伴、保暖監測與基礎衛教。'
-  },
-  medical: {
-    id: 'medical',
-    name: '醫療與隔離區 (M棟)',
-    code: 'MED',
-    color: '#3B82F6', // Blue
-    bgLight: 'bg-sky-50 dark:bg-sky-950/40',
-    borderClass: 'border-sky-200 dark:border-sky-800',
-    textClass: 'text-sky-700 dark:text-sky-300',
-    badgeBg: 'bg-sky-100 text-sky-800 dark:bg-sky-900/60 dark:text-sky-200',
-    icon: '🏥',
-    description: '協助駐院獸醫餵藥、術後照護記錄、深度環境消毒（需資深志工）。'
-  },
-  logistics: {
-    id: 'logistics',
-    name: '物資與行政導覽 (L區)',
-    code: 'LOG',
-    color: '#8B5CF6', // Purple
-    bgLight: 'bg-purple-50 dark:bg-purple-950/40',
-    borderClass: 'border-purple-200 dark:border-purple-800',
-    textClass: 'text-purple-700 dark:text-purple-300',
-    badgeBg: 'bg-purple-100 text-purple-800 dark:bg-purple-900/60 dark:text-purple-200',
-    icon: '📦',
-    description: '民眾捐贈罐頭飼料拆箱分類、參訪導覽解說與義賣現場協助。'
-  }
-};
+/**
+ * The five areas this shelter started with.
+ *
+ * These are no longer the definition of which areas exist -- that lives in the
+ * database now and is editable, because a different shelter has different
+ * areas. This array is only the seed for the very first paint, before the fetch
+ * in App returns, so the page never flashes empty.
+ *
+ * Colours are palette keys rather than CSS classes, for the reason set out at
+ * the top of ./zones.
+ */
+const INITIAL_ZONES: ZoneRecord[] = [
+  { id: 'cat', name: '貓舍區 (A棟)', code: 'CAT', palette: 'rose', icon: '🐱', description: '負責貓咪餵食、鏟貓砂、貓房清潔、親人社會化訓練與陪伴。', status: 'active', sortOrder: 0 },
+  { id: 'dog', name: '大狗運動場 (B區)', code: 'DOG', palette: 'emerald', icon: '🐕', description: '負責大型犬牽繩放風散步、洗澡吹乾、戶外大運動場放電與體能訓練。', status: 'active', sortOrder: 1 },
+  { id: 'puppy', name: '幼犬育幼區 (C棟)', code: 'PUPPY', palette: 'amber', icon: '🐾', description: '負責幼犬泡奶泡泡糧、定時陪伴、保暖監測與基礎衛教。', status: 'active', sortOrder: 2 },
+  { id: 'medical', name: '醫療與隔離區 (M棟)', code: 'MED', palette: 'sky', icon: '🏥', description: '協助駐院獸醫餵藥、術後照護記錄、深度環境消毒（需資深志工）。', status: 'active', sortOrder: 3 },
+  { id: 'logistics', name: '物資與行政導覽 (L區)', code: 'LOG', palette: 'purple', icon: '📦', description: '民眾捐贈罐頭飼料拆箱分類、參訪導覽解說與義賣現場協助。', status: 'active', sortOrder: 4 },
+];
+
+applyZones(INITIAL_ZONES);
+
+export { ZONE_CONFIGS } from './zones';
 
 // Get today formatted as YYYY-MM-DD
 const today = new Date();

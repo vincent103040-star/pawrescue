@@ -14,6 +14,7 @@ import { VolunteerPortal } from './components/VolunteerPortal';
 import { VolunteerMyShifts } from './components/VolunteerMyShifts';
 import { VolunteerSopGuide } from './components/VolunteerSopGuide';
 import { AdminSopManager } from './components/AdminSopManager';
+import { ZoneManager } from './components/ZoneManager';
 import { VolunteerRoster } from './components/VolunteerRoster';
 import { AiPostModal } from './components/AiPostModal';
 import { VolunteerCheckInModal } from './components/VolunteerCheckInModal';
@@ -33,6 +34,7 @@ import {
   AttendanceRecord
 } from './types';
 import { INITIAL_SHIFTS, INITIAL_SHIFT_SIGNUPS, VOLUNTEER_PROFILES, INITIAL_ATTENDANCE_RECORDS, ZONE_CONFIGS, DEFAULT_SHELTER_LOCATION } from './data/mockData';
+import { applyZones, type ZoneRecord } from './data/zones';
 import { MessageSquare, X, Bell, Clock, MapPin, QrCode, ArrowUpRight } from 'lucide-react';
 import { sendLinePush } from './utils/linePush';
 import { setToken, clearToken, authFetch, fetchCurrentSession, logout as serverLogout } from './utils/session';
@@ -135,6 +137,23 @@ export default function App() {
       .catch(() => { /* keep what's on screen if the backend is unreachable */ });
   };
 
+  // The shelter's areas, which used to be five values compiled into the
+  // frontend. applyZones updates the module-level lookup that sixteen
+  // components already read from; the state below exists so that updating it
+  // re-renders the tree, at which point those components see the new values.
+  const [zones, setZones] = useState<ZoneRecord[]>([]);
+
+  const refreshZones = () =>
+    authFetch('/api/zones')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && Array.isArray(data.zones)) {
+          applyZones(data.zones);
+          setZones(data.zones);
+        }
+      })
+      .catch(() => { /* the seeded five stay on screen if this fails */ });
+
   const refreshAttendance = () =>
     authFetch('/api/attendance')
       .then(res => res.json())
@@ -148,6 +167,7 @@ export default function App() {
   // login screen where there is no session to scope it by.
   useEffect(() => {
     if (!userRole) return;
+    refreshZones();
     refreshShifts();
     refreshShiftSignups();
     refreshAttendance();
@@ -166,6 +186,7 @@ export default function App() {
       else if (kind === 'signups') refreshShiftSignups();
       else if (kind === 'volunteers') refreshVolunteers();
       else if (kind === 'promotions') setPromotionsRevision(n => n + 1);
+      else if (kind === 'zones') refreshZones();
     });
     return stop;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -912,7 +933,12 @@ export default function App() {
             )}
 
             {adminActiveTab === 'sopManager' && (
-              <AdminSopManager onSendLineToast={showToast} />
+              <>
+                <div className="space-y-6 pt-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+                  <ZoneManager onToast={showToast} onZonesChanged={() => { refreshZones(); refreshShifts(); }} />
+                </div>
+                <AdminSopManager onSendLineToast={showToast} />
+              </>
             )}
           </main>
         </>

@@ -1217,6 +1217,186 @@ export function updateLineOfficialAccount(updates: { basicId: string; displayNam
 }
 
 // ============================================================================
+// Zones -- the shelter's own areas, editable rather than compiled in
+// ----------------------------------------------------------------------------
+// These were five values in a TypeScript union: cat, dog, puppy, medical,
+// logistics. That is fine for one shelter that happens to have exactly those
+// five areas and wrong for everyone else -- a shelter with an aviary, or
+// without a puppy nursery, could not describe itself without a code change.
+// Per-area care workload is also the input the whole roster calculation starts
+// from, and workload cannot be configured for areas that only exist as a type.
+//
+// Two decisions here are load-bearing.
+//
+// Colours are stored as a palette key ('rose'), never as CSS classes. Tailwind
+// generates styles only for class names it can see in the source at build time,
+// so a class name assembled from database content produces no CSS at all --
+// silently, with the element rendering unstyled. The key maps to class strings
+// that are literals in src/data/zones.ts, where the scanner finds them.
+//
+// Zones are disabled, never deleted. Three tables store a zone on every row
+// (shifts, shift_signups, attendance_records), so deleting one would leave
+// every historical record pointing at something that no longer exists. A
+// disabled zone stops being offered for new shifts while old records still
+// render. The CRM reached the same conclusion for its observation options,
+// which have disable, restore and archive, and no delete at all.
+// ============================================================================
+db.exec(`
+  CREATE TABLE IF NOT EXISTS zones (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    code TEXT NOT NULL,
+    palette TEXT NOT NULL DEFAULT 'slate',
+    icon TEXT NOT NULL DEFAULT '📍',
+    description TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'active',
+    sortOrder INTEGER NOT NULL DEFAULT 0,
+    organizationId TEXT NOT NULL DEFAULT '',
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL
+  )
+`);
+
+export interface ZoneRecord {
+  id: string;
+  name: string;
+  code: string;
+  palette: string;
+  icon: string;
+  description: string;
+  status: 'active' | 'disabled';
+  sortOrder: number;
+}
+
+function rowToZone(row: any): ZoneRecord {
+  return {
+    id: row.id,
+    name: row.name,
+    code: row.code,
+    palette: row.palette,
+    icon: row.icon,
+    description: row.description,
+    status: row.status,
+    sortOrder: row.sortOrder
+  };
+}
+
+// Seed the five areas this shelter already had, so nothing on screen changes on
+// the first run after this table appears. The ids are kept exactly as they were
+// -- every existing shift, signup and attendance row already stores one of
+// them, and new ids would orphan all of that history.
+const zoneSeedCount = db.prepare('SELECT COUNT(*) AS c FROM zones').get() as { c: number };
+if (zoneSeedCount.c === 0) {
+  const seed: Array<[string, string, string, string, string, string]> = [
+    ['cat', '貓舍區 (A棟)', 'CAT', 'rose', '🐱',
+     '負責貓咪餵食、鏟貓砂、貓房清潔、親人社會化訓練與陪伴。'],
+    ['dog', '大狗運動場 (B區)', 'DOG', 'emerald', '🐕',
+     '負責大型犬牽繩放風散步、洗澡吹乾、戶外大運動場放電與體能訓練。'],
+    ['puppy', '幼犬育幼區 (C棟)', 'PUPPY', 'amber', '🐾',
+     '負責幼犬泡奶泡泡糧、定時陪伴、保暖監測與基礎衛教。'],
+    ['medical', '醫療與隔離區 (M棟)', 'MED', 'sky', '🏥',
+     '協助駐院獸醫餵藥、術後照護記錄、深度環境消毒（需資深志工）。'],
+    ['logistics', '物資與行政導覽 (L區)', 'LOG', 'purple', '📦',
+     '民眾捐贈罐頭飼料拆箱分類、參訪導覽解說與義賣現場協助。']
+  ];
+  const seededAt = new Date().toISOString();
+  seed.forEach(([id, name, code, palette, icon, description], index) => {
+    db.prepare(`
+      INSERT INTO zones (id, name, code, palette, icon, description, status, sortOrder, organizationId, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
+    `).run(id, name, code, palette, icon, description, index, currentOrganizationId(), seededAt, seededAt);
+  });
+  console.log(`SQLite: 已建立 ${seed.length} 個預設場域`);
+}
+
+/** Every zone, disabled ones included -- what the management screen lists. */
+export function getAllZones(): ZoneRecord[] {
+  return (db.prepare('SELECT * FROM zones ORDER BY sortOrder, name').all() as any[]).map(rowToZone);
+}
+
+/** Only the zones a new shift may be filed under. */
+export function getActiveZones(): ZoneRecord[] {
+  return (db.prepare(`SELECT * FROM zones WHERE status = 'active' ORDER BY sortOrder, name`).all() as any[]).map(rowToZone);
+}
+
+export function getZone(id: string): ZoneRecord | null {
+  const row = db.prepare('SELECT * FROM zones WHERE id = ?').get(id);
+  return row ? rowToZone(row) : null;
+}
+
+/**
+ * Turns a display name into an id. Latin text becomes a slug; anything else --
+ * Chinese, for instance -- has no useful slug, so it falls back to a numbered
+ * generic one. Nobody ever sees this value; it only has to be stable and
+ * unique, because rows in three other tables will point at it indefinitely.
+ */
+function makeZoneId(name: string): string {
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24);
+  const base = slug || 'zone';
+  let candidate = base;
+  let attempt = 1;
+  while (db.prepare('SELECT id FROM zones WHERE id = ?').get(candidate)) {
+    candidate = `${base}-${++attempt}`;
+  }
+  return candidate;
+}
+
+export function createZone(input: {
+  name: string; code: string; palette: string; icon: string; description: string;
+}): ZoneRecord {
+  const now = new Date().toISOString();
+  const id = makeZoneId(input.name);
+  const next = db.prepare('SELECT COALESCE(MAX(sortOrder), -1) + 1 AS n FROM zones').get() as { n: number };
+  db.prepare(`
+    INSERT INTO zones (id, name, code, palette, icon, description, status, sortOrder, organizationId, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
+  `).run(id, input.name, input.code, input.palette, input.icon, input.description, next.n, currentOrganizationId(), now, now);
+  return getZone(id)!;
+}
+
+export function updateZone(id: string, updates: {
+  name?: string; code?: string; palette?: string; icon?: string; description?: string;
+}): ZoneRecord | null {
+  const existing = getZone(id);
+  if (!existing) return null;
+  db.prepare(`
+    UPDATE zones SET name = ?, code = ?, palette = ?, icon = ?, description = ?, updatedAt = ?
+    WHERE id = ?
+  `).run(
+    updates.name ?? existing.name,
+    updates.code ?? existing.code,
+    updates.palette ?? existing.palette,
+    updates.icon ?? existing.icon,
+    updates.description ?? existing.description,
+    new Date().toISOString(),
+    id
+  );
+  return getZone(id);
+}
+
+/**
+ * Disable rather than delete. Historical shifts, signups and attendance rows
+ * keep pointing here and keep rendering; the zone just stops being offered for
+ * anything new.
+ */
+export function setZoneStatus(id: string, status: 'active' | 'disabled'): ZoneRecord | null {
+  if (!getZone(id)) return null;
+  db.prepare('UPDATE zones SET status = ?, updatedAt = ? WHERE id = ?')
+    .run(status, new Date().toISOString(), id);
+  return getZone(id);
+}
+
+/** How many existing records already reference a zone -- shown before disabling it. */
+export function countZoneUsage(id: string): { shifts: number; signups: number; attendance: number } {
+  const one = (sql: string) => (db.prepare(sql).get(id) as { c: number }).c;
+  return {
+    shifts: one('SELECT COUNT(*) AS c FROM shifts WHERE zone = ?'),
+    signups: one('SELECT COUNT(*) AS c FROM shift_signups WHERE appliedZone = ?'),
+    attendance: one('SELECT COUNT(*) AS c FROM attendance_records WHERE zone = ?')
+  };
+}
+
+// ============================================================================
 // Shifts & shift signups
 // ----------------------------------------------------------------------------
 // These two lived in the browser's localStorage until now, which meant a shift
@@ -1344,7 +1524,10 @@ export function insertShift(s: PositionShift): PositionShift {
     INSERT INTO shifts (id, title, zone, date, timeRange, shiftType, requiredCount, currentCount, skillRequired, description, tasks, locationDetails, attachmentUrl, status, createdAt)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    s.id, s.title, s.zone, s.date, s.timeRange, s.shiftType, s.requiredCount, s.currentCount,
+    // currentCount defaults rather than binding undefined: a payload without it
+    // used to fail with SQLite's own "cannot be bound to parameter 8" message,
+    // which is both a crash and a needless peek at the storage layer.
+    s.id, s.title, s.zone, s.date, s.timeRange, s.shiftType, s.requiredCount, s.currentCount ?? 0,
     s.skillRequired, s.description, JSON.stringify(s.tasks), s.locationDetails,
     s.attachmentUrl || null, s.status, s.createdAt
   );

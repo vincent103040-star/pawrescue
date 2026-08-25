@@ -8,6 +8,7 @@ import { AiScheduleModal } from './AiScheduleModal';
 import { ShiftCalendarView } from './ShiftCalendarView';
 
 import { authFetch } from '../utils/session';
+import { resolveZone } from '../data/zones';
 interface PositionManagerProps {
   shifts: PositionShift[];
   volunteers: VolunteerProfile[];
@@ -245,7 +246,7 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
             </button>
 
             {Object.keys(ZONE_CONFIGS).map(zKey => {
-              const zConf = ZONE_CONFIGS[zKey];
+              const zConf = resolveZone(zKey);
               return (
                 <button
                   key={zKey}
@@ -278,7 +279,7 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
         /* Shifts Grid */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredShifts.map(shift => {
-            const zoneConf = ZONE_CONFIGS[shift.zone];
+            const zoneConf = resolveZone(shift.zone);
             const isFull = shift.currentCount >= shift.requiredCount;
 
             return (

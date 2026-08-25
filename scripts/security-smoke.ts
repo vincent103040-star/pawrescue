@@ -47,6 +47,12 @@ async function call(method: string, path: string) {
 
 /** Every route that must answer 401 when nobody is signed in. */
 const PROTECTED: Array<[string, string]> = [
+  ['GET', '/api/zones'],
+  ['POST', '/api/admin/zones'],
+  ['PUT', '/api/admin/zones/does-not-exist'],
+  ['GET', '/api/admin/zones/does-not-exist/usage'],
+  ['POST', '/api/admin/zones/does-not-exist/disable'],
+  ['POST', '/api/admin/zones/does-not-exist/restore'],
   ['GET', '/api/shifts'],
   ['POST', '/api/shifts'],
   ['PUT', '/api/shifts/does-not-exist'],

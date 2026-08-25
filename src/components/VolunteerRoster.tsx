@@ -5,6 +5,7 @@ import { Users, Award, Clock, Search, Shield, Phone, Mail, MessageSquare, Star, 
 import { CertificateModal } from './CertificateModal';
 import { authFetch } from '../utils/session';
 
+import { resolveZone } from '../data/zones';
 interface VolunteerRosterProps {
   volunteers: VolunteerProfile[];
   onAddVolunteer?: (vol: VolunteerProfile) => void;
@@ -671,7 +672,7 @@ export const VolunteerRoster: React.FC<VolunteerRosterProps> = ({
                       <label className="text-[11px] font-bold text-[#716053] block mb-1">偏好支援場域（可複選）</label>
                       <div className="flex flex-wrap gap-1">
                         {Object.keys(ZONE_CONFIGS).map(zKey => {
-                          const zConf = ZONE_CONFIGS[zKey];
+                          const zConf = resolveZone(zKey);
                           const picked = editDraft.preferredZones.includes(zKey);
                           return (
                             <button
@@ -747,7 +748,7 @@ export const VolunteerRoster: React.FC<VolunteerRosterProps> = ({
                       <p className="text-[11px] font-bold text-[#716053] uppercase tracking-wider">偏好支援場域：</p>
                       <div className="flex flex-wrap gap-1">
                         {vol.preferredZones.length > 0 ? vol.preferredZones.map(zKey => {
-                          const zConf = ZONE_CONFIGS[zKey];
+                          const zConf = resolveZone(zKey);
                           return (
                             <span
                               key={zKey}

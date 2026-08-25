@@ -4,6 +4,7 @@ import { ZONE_CONFIGS } from '../data/mockData';
 import { Sparkles, Copy, Check, X, RefreshCw, Share2, MessageSquare } from 'lucide-react';
 
 import { authFetch } from '../utils/session';
+import { resolveZone } from '../data/zones';
 interface AiPostModalProps {
   shift: PositionShift;
   locationName: string;
@@ -22,7 +23,7 @@ export const AiPostModal: React.FC<AiPostModalProps> = ({
   const [copied, setCopied] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const zoneConfig = ZONE_CONFIGS[shift.zone];
+  const zoneConfig = resolveZone(shift.zone);
 
   const handleGenerate = async () => {
     setLoading(true);
