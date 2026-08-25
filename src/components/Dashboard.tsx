@@ -28,6 +28,8 @@ interface DashboardProps {
   onOpenCheckInModal?: () => void;
   checkedInCount?: number;
   onSendLineToast?: (msg: string) => void;
+  /** Lets App re-pull attendance after feedback is marked as taken up. */
+  onAttendanceChanged?: () => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -39,7 +41,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onApplyForShift,
   onOpenCheckInModal,
   checkedInCount = 0,
-  onSendLineToast = (_msg?: string) => {}
+  onSendLineToast = (_msg?: string) => {},
+  onAttendanceChanged = () => {}
 }) => {
   const [selectedDateFilter, setSelectedDateFilter] = useState<'all' | 'today' | 'upcoming'>('all');
   const [showUrgentModal, setShowUrgentModal] = useState<boolean>(false);
@@ -194,7 +197,35 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // Feedback Hub state
   const [feedbackRatingFilter, setFeedbackRatingFilter] = useState<'all' | '5' | '4' | 'low'>('all');
   const [feedbackSearchTerm, setFeedbackSearchTerm] = useState<string>('');
-  const [acknowledgedFeedbackIds, setAcknowledgedFeedbackIds] = useState<string[]>([]);
+  // Which rows have a request in flight. Whether feedback *is* acknowledged is
+  // not tracked here any more -- it comes from the record itself, so it
+  // survives a reload and is the same for every coordinator looking at it.
+  const [savingFeedbackIds, setSavingFeedbackIds] = useState<string[]>([]);
+
+  const toggleFeedbackAcknowledged = async (record: AttendanceRecord) => {
+    const next = !record.feedbackAcknowledgedAt;
+    setSavingFeedbackIds(prev => [...prev, record.id]);
+    try {
+      const res = await authFetch(`/api/admin/attendance/${encodeURIComponent(record.id)}/feedback-acknowledged`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ acknowledged: next })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        onSendLineToast(`⚠️ ${data.error || '更新失敗'}`);
+        return;
+      }
+      onAttendanceChanged();
+      if (next) {
+        onSendLineToast(`💬 已將【${record.volunteerName}】之建議註記為社工團隊參採與歸檔！`);
+      }
+    } catch {
+      onSendLineToast('⚠️ 無法連線，參採狀態尚未儲存。');
+    } finally {
+      setSavingFeedbackIds(prev => prev.filter(i => i !== record.id));
+    }
+  };
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -902,7 +933,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
                   return filtered.map(item => {
                     const ratingVal = item.rating || 5;
-                    const isAcknowledged = acknowledgedFeedbackIds.includes(item.id);
+                    const isAcknowledged = !!item.feedbackAcknowledgedAt;
+                    const isSavingAck = savingFeedbackIds.includes(item.id);
 
                     return (
                       <div
@@ -970,22 +1002,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           </div>
 
                           <button
-                            onClick={() => {
-                              if (isAcknowledged) {
-                                setAcknowledgedFeedbackIds(prev => prev.filter(i => i !== item.id));
-                              } else {
-                                setAcknowledgedFeedbackIds(prev => [...prev, item.id]);
-                                onSendLineToast(`💬 已將【${item.volunteerName}】之建議註記為社工團隊參採與歸檔！`);
-                              }
-                            }}
-                            className={`px-2.5 py-1 rounded-xl font-bold transition flex items-center gap-1 cursor-pointer border ${
+                            onClick={() => toggleFeedbackAcknowledged(item)}
+                            disabled={isSavingAck}
+                            title={
+                              isAcknowledged && item.feedbackAcknowledgedBy
+                                ? `由 ${item.feedbackAcknowledgedBy} 於 ${new Date(item.feedbackAcknowledgedAt!).toLocaleString('zh-TW', { hour12: false })} 參採`
+                                : undefined
+                            }
+                            className={`px-2.5 py-1 rounded-xl font-bold transition flex items-center gap-1 cursor-pointer border disabled:opacity-50 ${
                               isAcknowledged
                                 ? 'bg-emerald-700 text-white border-emerald-700'
                                 : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
                             }`}
                           >
                             <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>{isAcknowledged ? '社工已參採 👍' : '標記為已參採'}</span>
+                            <span>
+                              {isSavingAck ? '儲存中...' : isAcknowledged ? '社工已參採 👍' : '標記為已參採'}
+                            </span>
                           </button>
                         </div>
                       </div>

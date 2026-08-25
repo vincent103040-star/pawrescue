@@ -181,6 +181,14 @@ export interface AttendanceRecord {
   rating?: number; // 1 - 5 stars
   feedbackComment?: string;
   feedbackSubmittedAt?: string;
+  /**
+   * When the social work team marked this feedback as taken up, and who did it.
+   * Absent means nobody has. This used to be a useState array that reset on
+   * every reload, so a coordinator could mark a note as handled and have no
+   * record of it anywhere.
+   */
+  feedbackAcknowledgedAt?: string;
+  feedbackAcknowledgedBy?: string;
   lineReminderSent?: boolean; // whether a real LINE push confirming the feedback was sent
   photoUrl?: string; // relative URL to the AI-captioned check-out photo, if one was attached
 }

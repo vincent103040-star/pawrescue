@@ -240,8 +240,9 @@
     <p class="thesis">把「這週要開哪些班、需要幾個人」從收容所人員的腦袋裡搬到系統裡。志工招募不是收容所的額外工作，而是減壓的手段——前提是排班這件事本身不能再花人力。</p>
     <div class="meta">
       <span>浪浪家園 PawRescue 志工系統</span>
-      <span>2026-08-24 草案</span>
+      <span>2026-08-25 草案</span>
       <span>核心功能單一：智慧開缺</span>
+      <span>場域設定與月報已上線</span>
     </div>
   </header>
 
@@ -383,19 +384,79 @@
   </section>
 
   <section>
-    <div class="sec-head"><span class="n">04</span><h2>功能表</h2></div>
+    <div class="sec-head"><span class="n">04</span><h2>名詞界定</h2></div>
+    <p class="prose">「SOP」目前在系統裡同時指三件不同的事，這是「這份資料屬於誰」一直難以回答的根源。三者拆開之後，歸屬問題就自己有了答案。</p>
+
+    <div class="scroller">
+      <table>
+        <caption>表二 — 三個名詞</caption>
+        <thead><tr><th>名稱</th><th>是什麼</th><th>會不會被「完成」</th><th>由誰維護</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="k">SOP 規範</td>
+            <td>收容所寫下來的做法與教材，例如「大狗出籠前要雙扣牽繩」</td>
+            <td>不會。只會被閱讀、檢索、用於教學</td>
+            <td>管理端編輯，志工端閱讀</td>
+          </tr>
+          <tr>
+            <td class="k">勤務項目</td>
+            <td>「誰、在哪、什麼時候、要做什麼、需要幾人、多久」的<strong>定義</strong>，例如「檢視胸背帶與雙扣牽繩牢固度」</td>
+            <td>不會。被完成的是它的實例</td>
+            <td>管理端設定</td>
+          </tr>
+          <tr>
+            <td class="k">勤務完成紀錄</td>
+            <td>「某人在某天完成了某個勤務項目」的<strong>事件</strong></td>
+            <td>這就是完成本身</td>
+            <td>志工或督導在現場產生</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <b>一句話記法：規範是「該怎麼做」，勤務項目是「要做什麼」，完成紀錄是「做了」。</b>
+      <p>沿用「SOP」指規範是刻意的——它本來就是 standard operating procedure，用在規範文件上完全正確。被誤用的是後來把「要做的事」和「做完了」也叫成 SOP。讓正確的用法留著，改動最小。</p>
+    </div>
+
+    <h3>兩個常見問題，其實是同一張表的兩個欄位</h3>
+    <p class="prose">「SOP 清單是每天固定的，還是跟班次綁定的？」和「這是管理人員的工作還是志工的工作？」——這兩題聽起來像是要蓋兩套系統，實際上是勤務項目的兩個欄位：</p>
+    <ul>
+      <li><strong>觸發方式</strong>：每日固定（不論有無班次，例如開園檢查）／場域＋班次類型（大狗放風班帶出牽繩檢查）／特定班次（一次性）</li>
+      <li><strong>負責角色</strong>：管理端督導／志工</li>
+    </ul>
+    <p class="prose">管理人員的每日工作與志工的班次工作，是同一套機制的不同篩選結果，不需要兩套。</p>
+
+    <h3>教育訓練發生在需要它的那一刻</h3>
+    <p class="prose">勤務項目可以指向一則 SOP 規範或一支影片。志工在清單上點開「檢視胸背帶與雙扣牽繩牢固度」，先看三十秒的示範，再打勾完成。</p>
+    <p class="prose">這比任何獨立的教材頁面都有效——人不會為了學而學，但會為了「等一下就要做」而看。所需的影片資料表已經存在，缺的只是「勤務項目 → 教材」這條關聯。</p>
+
+    <div class="callout" style="background: var(--surface-2)">
+      <b>「今日勤務」不是一張資料表。</b>
+      <p>志工打開看到的清單是算出來的：符合今天觸發條件的勤務項目，左接今天的完成紀錄。不要把它存下來——存了就得回答「範本改了，已產生的實例要不要跟著改」，而那個問題沒有好答案。</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="n">05</span><h2>功能表</h2></div>
     <p class="prose">依照「智慧開缺為最重要、其他先不放」的原則排的。右欄是目前這套系統的現況——多數零件已經在了，缺的是把它們串成一條完整的開缺流程。</p>
 
     <div class="scroller">
       <table>
-        <caption>表二 — 第一階段：智慧開缺主線</caption>
+        <caption>表三 — 第一階段：智慧開缺主線</caption>
         <thead><tr><th>功能</th><th>做什麼</th><th>層</th><th>現況</th></tr></thead>
         <tbody>
           <tr>
-            <td class="k">照護量設定</td>
-            <td>各區登記固定照護工作與所需人力（貓舍清潔 2 人／日、大狗放風 3 人／日…）。這是整套推算的輸入。</td>
+            <td class="k">場域設定</td>
+            <td>園區分區可由管理端新增、改名、換色、停用。停用的場域不再出現在新班次選項，既有紀錄仍正常顯示。</td>
             <td><span class="layer-base">基準</span></td>
-            <td><span class="chip none">要新做</span></td>
+            <td><span class="chip have">已完成</span></td>
+          </tr>
+          <tr>
+            <td class="k">照護量設定</td>
+            <td>各區登記固定照護工作與所需人力（貓舍清潔 2 人／日、大狗放風 3 人／日…）。這是整套推算的輸入，也就是<strong>勤務項目</strong>的「需要幾人、多久」兩個欄位——同一張表同時餵養工作清單與排班推算。場域已可編輯，這一步不再有前置阻礙。</td>
+            <td><span class="layer-base">基準</span></td>
+            <td><span class="chip none">下一步</span></td>
           </tr>
           <tr>
             <td class="k">班次範本</td>
@@ -451,7 +512,7 @@
 
     <div class="scroller">
       <table>
-        <caption>表三 — 明確不放進第一階段</caption>
+        <caption>表四 — 明確不放進第一階段</caption>
         <thead><tr><th>項目</th><th>為什麼先不做</th></tr></thead>
         <tbody>
           <tr><td class="k">AI 預測人力需求</td><td>沒有足夠歷史資料可預測，見下一節。</td></tr>
@@ -467,7 +528,7 @@
   </section>
 
   <section>
-    <div class="sec-head"><span class="n">05</span><h2>關於「智慧」：初期建議不要用 AI</h2></div>
+    <div class="sec-head"><span class="n">06</span><h2>關於「智慧」：初期建議不要用 AI</h2></div>
     <p class="prose">這一節可能和「智慧開缺」的字面期待相反，但值得先講清楚，避免第一版就交出看起來聰明、實際上沒有根據的東西。</p>
     <p class="prose">預測需要歷史樣本。目前系統裡累積的是 16 位志工、11 筆出勤紀錄——不足以支撐任何有意義的預測。若現在就接 AI，模型只能靠推測產生數字，而那些數字會以很有說服力的方式呈現出來。現有的缺工預測畫面就是這樣：在沒有資料的情況下，它會回傳「園區共 434 隻浪浪、下週缺 22 人次」這種寫死的示範值。</p>
 
@@ -478,7 +539,7 @@
   </section>
 
   <section>
-    <div class="sec-head"><span class="n">06</span><h2>部署與成本</h2></div>
+    <div class="sec-head"><span class="n">07</span><h2>部署與成本</h2></div>
     <p class="prose">主要有兩個問題要回答：多間收容所怎麼分攤成本，以及資料放哪裡才不會不見。第二個問題比第一個急，因為它有一種會安靜出錯的失敗方式。</p>
 
     <h3>多間收容所：各自架設是可行的</h3>
@@ -487,7 +548,7 @@
 
     <div class="scroller">
       <table>
-        <caption>表四 — 集中一套 vs 各自架設</caption>
+        <caption>表五 — 集中一套 vs 各自架設</caption>
         <thead><tr><th>　</th><th>集中一套（開發者維運）</th><th>各收容所自行架設</th></tr></thead>
         <tbody>
           <tr><td class="k">機器費用</td><td>一份</td><td>各自的免費額度，同樣是零</td></tr>
@@ -511,7 +572,7 @@
 
     <div class="scroller">
       <table>
-        <caption>表五 — 機器選擇與資料存續</caption>
+        <caption>表六 — 機器選擇與資料存續</caption>
         <thead><tr><th>方式</th><th>資料會不會留著</th><th>說明</th></tr></thead>
         <tbody>
           <tr>
@@ -537,21 +598,80 @@
     <p class="prose">附帶一提，雲端硬碟適合當備份的目的地，不適合當資料庫本身：它沒有交易、沒有並行控制、有 API 配額，撐不住多位志工同時簽到。</p>
 
     <h3>給主系統的資料</h3>
-    <p class="prose">主系統只需要 CSV，這讓兩邊的介面單純很多——不需要即時介接，也不需要任何常駐的連線。目前的月報匯出已經是正確的形狀：園區名稱、統計月份、班次數、需求人數、已報名人數、缺工人數、缺工率、總服務時數。<strong>全部是統計數字，沒有任何一欄是個資。</strong>這個原則值得維持：給主系統的是數字，不是名冊。</p>
-    <p class="prose">唯一要改的是產出方式。現在必須有人記得去按匯出，而需要人記得的步驟遲早會被忘記，忘記的時候也不會有人發現。改成排程自動產出，這個問題就消失了。</p>
+    <p class="prose">主系統只需要 CSV，這讓兩邊的介面單純很多——不需要即時介接，也不需要任何常駐的連線。這份月報現在由伺服器產出，已經在正式站上運作。</p>
+    <p class="prose">改成伺服器端產出有三個理由：它可以排程，不必有人記得按按鈕；主系統之後想自己拉也可以；而且它讀的是資料庫，不是「目前這個頁面剛好載入到的資料」。</p>
+
+    <figure>
+      <figcaption>正式站的實際產出（2026-08，數字為測試資料）</figcaption>
+      <div class="scroller">
+        <table>
+          <caption>整體摘要</caption>
+          <thead><tr><th>總班次數</th><th>需求人次</th><th>錄取人次</th><th>待審人次</th><th>實際到勤</th><th>缺工人次</th><th>缺工率</th><th>預計時數</th><th>實際時數</th></tr></thead>
+          <tbody><tr><td class="num">8</td><td class="num">29</td><td class="num">5</td><td class="num">4</td><td class="num">14</td><td class="num">24</td><td class="num">83%</td><td class="num">15</td><td class="num">70.4</td></tr></tbody>
+        </table>
+      </div>
+    </figure>
+
+    <div class="scroller">
+      <table>
+        <caption>各場域（同一份檔案的第二個區塊）</caption>
+        <thead><tr><th>場域</th><th>班次數</th><th>需求人次</th><th>錄取人次</th><th>實際到勤</th><th>缺工率</th></tr></thead>
+        <tbody>
+          <tr><td class="k">貓舍區</td><td class="num">2</td><td class="num">7</td><td class="num">1</td><td class="num">3</td><td class="num">86%</td></tr>
+          <tr><td class="k">大狗運動場</td><td class="num">3</td><td class="num">12</td><td class="num">4</td><td class="num">9</td><td class="num">67%</td></tr>
+          <tr><td class="k">物資與行政</td><td class="num">1</td><td class="num">5</td><td class="num">0</td><td class="num">0</td><td class="num">100%</td></tr>
+          <tr><td class="k">醫療與隔離</td><td class="num">1</td><td class="num">2</td><td class="num">0</td><td class="num">1</td><td class="num">100%</td></tr>
+          <tr><td class="k">幼犬育幼</td><td class="num">1</td><td class="num">3</td><td class="num">0</td><td class="num">1</td><td class="num">100%</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="prose">第三個區塊是每日明細（日期、星期、班次數、需求、錄取、待審、到勤、缺工率、實際時數），這裡略去。</p>
+
+    <div class="callout">
+      <b>三個區塊而不是一列，因為「缺工率 83%」不是能拿來行動的資訊。</b>
+      <p>拆到場域之後，同一個月變成「大狗運動場 67%、物資與行政 100%」——現在它指向某個地方了。原本的匯出只有一列總計，主系統拿到的是一個無從著手的平均值。</p>
+    </div>
+
+    <div class="callout" style="background: var(--surface-2)">
+      <b>時數分成兩欄是刻意的。</b>
+      <p>預計時數是排班算出來的（錄取人數 × 班次長度），實際時數來自簽退紀錄。原本只給前者卻標成「完成服務時數」——那讀起來像事實，實際上是假設。兩者的落差本身才是有用的數字：它是訂好的人力有多少沒到位。</p>
+    </div>
+
+    <p class="prose"><strong>每一欄都是計數或總和，沒有姓名、電話或 Email。</strong>這是跨系統資料的既定原則：給數字，不給名冊。這點是在產出的檔案上驗證的，不是假設。</p>
 
     <p class="prose">Google Cloud 的免費方案條款會調整，正式規劃前請以官方 Free Tier 頁面為準。</p>
   </section>
 
 
   <section>
-    <div class="sec-head"><span class="n">07</span><h2>第一階段要交出什麼</h2></div>
+    <div class="sec-head"><span class="n">08</span><h2>一個要順帶修的既有問題</h2></div>
+    <p class="prose">做月報時發現的：班次上的「已報名人數」是一個獨立維護的計數器，而不是從報名紀錄推導出來的，兩者已經對不上。</p>
+
+    <div class="scroller">
+      <table>
+        <caption>表七 — 同一件事的兩個數字</caption>
+        <thead><tr><th>來源</th><th>數值</th><th>說明</th></tr></thead>
+        <tbody>
+          <tr><td class="k">班次的計數器</td><td class="num">15</td><td>每次有人報名就加一、取消就減一的欄位</td></tr>
+          <tr><td class="k">實際的報名紀錄</td><td class="num">7</td><td>3 筆已錄取 ＋ 4 筆待審</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="prose">差距來自種子資料帶著從未對應真實報名的佔用數，但成因不是重點——<strong>重點是一個推導得出的數字不該有機會跟它的來源打架</strong>。只要它是獨立維護的，就總有一天會漂移，而且漂移時沒有任何地方會報錯。</p>
+    <p class="prose">月報已經改成直接數報名紀錄，所以送給主系統的數字是對的。但畫面上顯示的仍是那個計數器，兩邊會不一致。正確的修法是讓它從報名紀錄算出來，不再單獨儲存。</p>
+    <p class="prose">這件事不大，但值得單獨處理，因為它影響的是「缺工幾人」——也就是智慧開缺整套推算的輸出。</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="n">09</span><h2>第一階段要交出什麼</h2></div>
     <p class="prose">一句話：<strong>收容所人員花十分鐘設定各區照護量，系統產出未來兩週的完整班表草稿，確認後一次發布，志工在 LINE 收到通知開始報名。</strong></p>
     <p class="prose">這條路徑走通，「排班」這件事就從每期數小時的人工作業，變成十分鐘的確認。那才是「減輕收容所壓力」實際兌現的地方；其他功能再好，都不是這句話的答案。</p>
 
     <div class="scroller">
       <table>
-        <caption>表六 — 需要收容所回答的問題</caption>
+        <caption>表八 — 需要收容所回答的問題</caption>
         <thead><tr><th>問題</th><th>為什麼需要</th></tr></thead>
         <tbody>
           <tr><td class="k">園區分成哪幾區？各區每日固定要做哪些照護工作？</td><td>這是基準層推算的唯一輸入。沒有它，自動產生班表就無從算起。</td></tr>
@@ -566,7 +686,7 @@
 
   <footer>
     浪浪家園 PawRescue 志工招募與排班管理系統<br>
-    本文為草案，供內部討論；表二「現況」欄依 2026-08-24 的程式碼實況標註。
+    本文為草案，供內部討論；表三「現況」欄與第七節的 CSV 產出，依 2026-08-25 正式站的實況標註。
   </footer>
 
 </div>

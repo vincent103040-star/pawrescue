@@ -885,6 +885,7 @@ export default function App() {
                 shiftSignups={shiftSignups}
                 shelterLocation={shelterLocation}
                 attendanceRecords={attendanceRecords}
+                onAttendanceChanged={refreshAttendance}
                 onNavigateToTab={(tab) => {
                   if (tab === 'portal') {
                     handleSwitchToVolunteer();
