@@ -100,8 +100,8 @@ export const VolunteerNavbar: React.FC<VolunteerNavbarProps> = ({
                 className="bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 px-3.5 py-2.5 rounded-full text-xs font-bold flex items-center space-x-1.5 shadow-xs transition cursor-pointer whitespace-nowrap shrink-0"
               >
                 <BookOpen className="w-4 h-4 text-amber-700" />
-                <span className="hidden sm:inline">安全守則 PDF</span>
-                <span className="sm:hidden">SOP</span>
+                <span className="hidden sm:inline">規章與使用說明書</span>
+                <span className="sm:hidden">規章說明</span>
               </button>
             )}
           </div>
