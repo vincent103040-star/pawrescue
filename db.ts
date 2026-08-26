@@ -538,13 +538,37 @@ export interface StoredLinePreferences {
   shiftChanges: boolean;
   urgentRecruitment: boolean;
   checkInReminder: boolean;
+  /**
+   * How many hours before a shift the reminder goes out.
+   *
+   * The settings panel has offered this choice since before there was anything
+   * to read it: the value lived in the volunteer's browser and never reached
+   * the server, so it was lost on a new device and no reminder ever consulted
+   * it. Now it is stored beside the switch it belongs to.
+   */
+  reminderTimingHours: number;
 }
+
+/** What the dropdown offers. Anything else is clamped to the nearest of these. */
+export const REMINDER_LEAD_CHOICES = [1, 2, 12, 24] as const;
 
 const DEFAULT_LINE_PREFERENCES: StoredLinePreferences = {
   shiftChanges: true,
   urgentRecruitment: true,
-  checkInReminder: true
+  checkInReminder: true,
+  reminderTimingHours: 1
 };
+
+/** Keeps a stored or submitted lead time to something the scheduler can honour. */
+export function normalizeReminderLead(value: unknown): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return DEFAULT_LINE_PREFERENCES.reminderTimingHours;
+  let best: number = REMINDER_LEAD_CHOICES[0];
+  for (const choice of REMINDER_LEAD_CHOICES) {
+    if (Math.abs(choice - n) < Math.abs(best - n)) best = choice;
+  }
+  return best;
+}
 
 export function setLinePreferences(email: string, prefs: StoredLinePreferences) {
   db.prepare(`UPDATE volunteers SET linePreferences = ? WHERE email = ?`)
@@ -559,10 +583,77 @@ export function getLinePreferences(email: string): StoredLinePreferences {
     .get(email.toLowerCase().trim()) as { linePreferences: string } | undefined;
   if (!row || !row.linePreferences) return DEFAULT_LINE_PREFERENCES;
   try {
-    return { ...DEFAULT_LINE_PREFERENCES, ...JSON.parse(row.linePreferences) };
+    const stored = { ...DEFAULT_LINE_PREFERENCES, ...JSON.parse(row.linePreferences) };
+    // Records written before the lead time was stored have no such field, and a
+    // hand-edited one could hold anything. The sweep divides by this, so it is
+    // pinned to a real choice here rather than trusted.
+    stored.reminderTimingHours = normalizeReminderLead(stored.reminderTimingHours);
+    return stored;
   } catch {
     return DEFAULT_LINE_PREFERENCES;
   }
+}
+
+// ============================================================================
+// Shift reminders
+// ----------------------------------------------------------------------------
+// The settings panel has had a "check-in reminder" switch, and a choice of how
+// many hours' notice, since long before anything sent one. A volunteer could
+// turn it on, pick an hour, and receive nothing -- which is worse than not
+// offering it, because they stop watching for the shift themselves.
+// ============================================================================
+
+/**
+ * One row per reminder actually delivered.
+ *
+ * The sweep runs every few minutes and the window it looks at is hours wide, so
+ * without a record of what has gone out a volunteer would be messaged again on
+ * every tick until their shift began. Keyed by the booking rather than by
+ * volunteer and time, because the thing that must happen once is "this person
+ * was reminded about this shift".
+ */
+db.exec(`
+  CREATE TABLE IF NOT EXISTS reminder_sends (
+    signupId TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'check-in',
+    sentAtUtc TEXT NOT NULL,
+    PRIMARY KEY (signupId, kind)
+  )
+`);
+
+/**
+ * Bookings that could still need a reminder: confirmed, on a live shift, not
+ * already reminded.
+ *
+ * Deliberately not filtered by how soon the shift is. Each volunteer's lead
+ * time is inside their preferences JSON, which SQL here would have to parse;
+ * the caller checks it against the clock instead. The row count is small -- it
+ * is only ever the next couple of days of confirmed bookings.
+ */
+export function getReminderCandidates(fromDate: string): Array<{
+  signupId: string; shiftId: string; volunteerEmail: string; volunteerName: string;
+  title: string; date: string; timeRange: string; zone: string;
+}> {
+  return db.prepare(`
+    SELECT g.id AS signupId, g.shiftId, g.volunteerEmail, g.volunteerName,
+           s.title, s.date, s.timeRange, s.zone
+    FROM shift_signups g
+    JOIN shifts s ON s.id = g.shiftId
+    WHERE g.status = 'approved'
+      AND s.status <> 'cancelled'
+      AND s.date >= ?
+      AND TRIM(COALESCE(g.volunteerEmail, '')) <> ''
+      AND NOT EXISTS (
+        SELECT 1 FROM reminder_sends r WHERE r.signupId = g.id AND r.kind = 'check-in'
+      )
+    ORDER BY s.date, s.timeRange
+  `).all(fromDate) as any[];
+}
+
+/** Recorded only after a push actually succeeded -- see the sweep for why. */
+export function markReminderSent(signupId: string, kind = 'check-in'): void {
+  db.prepare('INSERT OR IGNORE INTO reminder_sends (signupId, kind, sentAtUtc) VALUES (?, ?, ?)')
+    .run(signupId, kind, new Date().toISOString());
 }
 
 // Attendance records (check-in/check-out, feedback rating+comment, check-out photo).
