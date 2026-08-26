@@ -1016,8 +1016,32 @@ export function deleteRagChunks(source: string, sourceId: string): void {
   db.prepare('DELETE FROM rag_chunks WHERE source = ? AND sourceId = ?').run(source, sourceId);
 }
 
+/**
+ * Uploaded manuals, each flagged with whether it can be read online.
+ *
+ * hasText was declared on the type and documented as "true when the manual's
+ * text was extracted at upload time" -- and nothing ever set it, so it was
+ * always undefined. Anything gating a "read online" button on it would have
+ * hidden that button forever, and anything ignoring it offers the reader for
+ * scans that have no extracted text to show.
+ *
+ * It is derived rather than stored: the readable text is the document's rag
+ * chunks, so their existence is the answer, and a stored copy of that answer
+ * would be one more thing that can disagree with its source.
+ */
 export function getAllSopDocuments(): SopDocument[] {
-  return db.prepare('SELECT * FROM sop_documents ORDER BY uploadedAt DESC').all() as any[] as SopDocument[];
+  const rows = db.prepare(`
+    SELECT d.*,
+           EXISTS (
+             SELECT 1 FROM rag_chunks c WHERE c.source = 'pdf' AND c.sourceId = d.id
+           ) AS extracted
+    FROM sop_documents d
+    ORDER BY d.uploadedAt DESC
+  `).all() as any[];
+  return rows.map(row => {
+    const { extracted, ...doc } = row;
+    return { ...doc, hasText: !!extracted } as SopDocument;
+  });
 }
 
 export function insertSopDocument(doc: SopDocument): void {

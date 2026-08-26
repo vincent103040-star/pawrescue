@@ -1,8 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, ShieldAlert, Phone, FileText, Sparkles, MessageCircleQuestion, Loader2, CheckCircle2 } from 'lucide-react';
-import { SopContent } from '../types';
+import { BookOpen, ShieldAlert, Phone, FileText, Sparkles, MessageCircleQuestion, Loader2, CheckCircle2, Download, Video } from 'lucide-react';
+import { SopContent, SopDocument, SopVideo } from '../types';
+import { SopDocumentReader } from './SopDocumentReader';
 
 import { authFetch } from '../utils/session';
+
+/**
+ * Labels a download with what it will actually cost to fetch.
+ *
+ * The shelter's manual is a stack of scans -- the one uploaded so far is 88MB.
+ * A volunteer tapping that on mobile data at the shelter gate deserves to know
+ * before, not after.
+ */
+function formatFileSize(bytes?: number): string {
+  if (bytes == null) return '';
+  if (bytes < 1024 * 1024) return `（${Math.max(1, Math.round(bytes / 1024))} KB）`;
+  return `（${(bytes / 1048576).toFixed(1)} MB）`;
+}
 interface VolunteerSopGuideProps {
   onOpenRulebookModal: () => void;
 }
@@ -27,11 +41,21 @@ export const VolunteerSopGuide: React.FC<VolunteerSopGuideProps> = ({
   // last saved, in the exact same layout as before.
   const [content, setContent] = useState<SopContent | null>(null);
 
+  // The same endpoint has always returned these alongside the content; this
+  // page simply threw them away. So a coordinator would upload a training
+  // manual or a demonstration video, see it listed on their own screen, and
+  // have no idea it never reached a single volunteer.
+  const [documents, setDocuments] = useState<SopDocument[]>([]);
+  const [videos, setVideos] = useState<SopVideo[]>([]);
+  const [readingDoc, setReadingDoc] = useState<SopDocument | null>(null);
+
   useEffect(() => {
     authFetch('/api/sop-content')
       .then(res => res.json())
       .then(data => {
         if (data.success && data.content) setContent(data.content);
+        if (Array.isArray(data.documents)) setDocuments(data.documents);
+        if (Array.isArray(data.videos)) setVideos(data.videos);
       })
       .catch(() => { /* keep showing the loading state if the fetch fails */ });
   }, []);
@@ -168,6 +192,93 @@ export const VolunteerSopGuide: React.FC<VolunteerSopGuideProps> = ({
           );
         })}
       </div>
+
+      {/* Training materials the coordinator uploaded. Rendered only when there
+          are some, so the page does not grow an empty shelf. */}
+      {documents.length > 0 && (
+        <div className="bg-white rounded-[28px] border border-[#716053] p-6 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-[#716053] text-white flex items-center justify-center shrink-0">
+              <FileText className="w-5 h-5 text-amber-300" />
+            </div>
+            <div>
+              <h3 className="font-bold font-serif italic text-slate-900 text-base">教育訓練手冊與文件</h3>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                社工上傳的完整教材。建議先「線上閱讀」——掃描檔很大，但裡面的字不多。
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {documents.map(doc => (
+              <div key={doc.id} className="p-4 rounded-2xl border border-slate-200 bg-[#FFFDF7] space-y-2">
+                <p className="font-bold text-sm text-slate-900">{doc.title}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  {doc.hasText && (
+                    <button
+                      type="button"
+                      onClick={() => setReadingDoc(doc)}
+                      className="bg-[#716053] hover:bg-[#5A4A3F] text-white font-bold px-3 py-1.5 rounded-xl text-[11px] flex items-center gap-1.5 cursor-pointer transition"
+                    >
+                      <BookOpen className="w-3.5 h-3.5 text-amber-300" />
+                      <span>線上閱讀</span>
+                    </button>
+                  )}
+                  <a
+                    href={doc.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-slate-600 hover:text-[#716053] font-bold px-3 py-1.5 rounded-xl text-[11px] flex items-center gap-1.5 border border-[#716053] transition"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>下載原始檔{formatFileSize(doc.fileSize)}</span>
+                  </a>
+                  {doc.fileSize != null && doc.fileSize > 20 * 1024 * 1024 && (
+                    <span className="text-[10px] text-amber-700 font-bold">📶 檔案較大，建議用 Wi-Fi 下載</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {videos.length > 0 && (
+        <div className="bg-white rounded-[28px] border border-[#716053] p-6 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-[#716053] text-white flex items-center justify-center shrink-0">
+              <Video className="w-5 h-5 text-amber-300" />
+            </div>
+            <div>
+              <h3 className="font-bold font-serif italic text-slate-900 text-base">教學影片</h3>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                實際操作示範。出勤前看一次，比讀十遍文字有用。
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {videos.map(video => (
+              <div key={video.id} className="p-4 rounded-2xl border border-slate-200 bg-[#FFFDF7] space-y-2">
+                <video
+                  src={video.fileUrl}
+                  controls
+                  preload="none"
+                  className="w-full rounded-lg bg-black max-h-48"
+                />
+                <p className="font-bold text-sm text-slate-900">{video.title}</p>
+                {video.description && (
+                  <p className="text-[11px] text-slate-600 leading-relaxed">{video.description}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {readingDoc && (
+        <SopDocumentReader doc={readingDoc} onClose={() => setReadingDoc(null)} />
+      )}
 
       {/* Emergency Protocol Bar */}
       <div className="bg-rose-50 border border-rose-200 rounded-[28px] p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
