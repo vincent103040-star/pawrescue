@@ -922,7 +922,12 @@ export default function App() {
                 <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto pt-6">
                   <RollCallPanel
                     onToast={showToast}
-                    onChanged={() => { refreshShiftSignups(); refreshShifts(); refreshAttendance(); }}
+                    // Recording an absence can suspend the volunteer, and the
+                    // toast sends the coordinator to the roster to undo it --
+                    // so the roster has to know before they get there.
+                    onChanged={() => {
+                      refreshShiftSignups(); refreshShifts(); refreshAttendance(); refreshVolunteers();
+                    }}
                   />
                 </div>
                 <ApplicantReview
