@@ -1690,15 +1690,15 @@ ${contextText}
    * published rule to facts a human established -- it does not infer them. And
    * it is one click to undo, which the notification tells the volunteer.
    */
-  async function applyAbsenceRule(volunteerEmail: string): Promise<void> {
+  function applyAbsenceRule(volunteerEmail: string): { name: string; absences: number } | null {
     const email = String(volunteerEmail || '').toLowerCase().trim();
-    if (!email) return;
+    if (!email) return null;
 
     const volunteer = getVolunteerByEmail(email);
-    if (!volunteer || volunteer.accountStatus !== 'active') return;
+    if (!volunteer || volunteer.accountStatus !== 'active') return null;
 
     const absences = getAbsenceCounts().get(email) || 0;
-    if (absences < ABSENCE_SUSPENSION_THRESHOLD) return;
+    if (absences < ABSENCE_SUSPENSION_THRESHOLD) return null;
 
     setVolunteerAccountStatus(
       email,
@@ -1708,12 +1708,17 @@ ${contextText}
     );
     console.log(`SQLite: ${volunteer.name} 因未到場 ${absences} 次已自動停權`);
 
-    await notifyAccountStatus(
+    // The push is the slow part and the only part allowed to fail, so it is the
+    // only part that does not block the coordinator's screen. It logs its own
+    // failures rather than throwing.
+    void notifyAccountStatus(
       email,
       `【浪浪家園】${volunteer.name} 您好，系統記錄您已有 ${absences} 次未到場，` +
       `依志工規章已暫停搶班權限。您仍可登入查看自己的服務紀錄與時數。` +
       `若有特殊情況或已安排代班，請與社工督導聯繫恢復 🐾`
     );
+
+    return { name: volunteer.name, absences };
   }
 
   app.get('/api/admin/roll-call', (req, res) => {
@@ -1738,6 +1743,9 @@ ${contextText}
       return res.json({
         success: true,
         date,
+        // The screen states the rule to the coordinator, so it reads the
+        // threshold from the same constant that enforces it.
+        absenceThreshold: ABSENCE_SUSPENSION_THRESHOLD,
         shifts: withHistory,
         summary: {
           expected: shifts.reduce((n, s) => n + s.expected.length, 0),
@@ -2365,18 +2373,20 @@ ${contextText}
       const updated = updateShiftSignupStatus(req.params.id, status, reviewNotes, decidedBy);
 
       // Confirming a no-show is what moves the count the rulebook's suspension
-      // rule reads. Fire and forget: the notification must not delay the
-      // coordinator's screen, and a failed push is logged rather than fatal.
-      if (status === 'absent' && before.volunteerEmail) {
-        void applyAbsenceRule(before.volunteerEmail);
-      }
+      // rule reads. The state change happens inline so the answer can say
+      // whether this particular click cost somebody their booking rights: the
+      // coordinator who caused it should not have to go looking elsewhere to
+      // find out what they just did.
+      const suspension = status === 'absent' && before.volunteerEmail
+        ? applyAbsenceRule(before.volunteerEmail)
+        : null;
       // Rejecting or marking absent frees the place, but nothing has to be
       // decremented for that to be true: the headcount excludes those statuses,
       // so the shift already reads correctly once the signup is updated.
       const shift = getShift(before.shiftId);
       broadcastChange('signups');
       broadcastChange('shifts');
-      return res.json({ success: true, shiftSignup: updated, shift });
+      return res.json({ success: true, shiftSignup: updated, shift, suspension });
     } catch (error: any) {
       console.error('Update Application Status Error:', error);
       return res.status(500).json({ success: false, error: error.message || '更新報名狀態失敗' });
