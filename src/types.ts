@@ -70,7 +70,41 @@ export interface PositionShift {
   createdAt: string;
 }
 
-export type SignupStatus = 'pending' | 'approved' | 'rejected' | 'attended' | 'absent';
+/**
+ * 'cancelled' is a booking the volunteer pulled out of; 'substituted' is one
+ * they handed to somebody else. Both free the place, and neither deletes the
+ * row -- cancelling used to, which left the shelter unable to tell a shift
+ * nobody wanted from a shift four people dropped out of.
+ */
+export type SignupStatus =
+  | 'pending' | 'approved' | 'rejected' | 'attended' | 'absent'
+  | 'cancelled' | 'substituted';
+
+export type SubstitutionStatus = 'open' | 'taken' | 'withdrawn' | 'expired';
+
+/**
+ * "I cannot make my shift, please could someone take it."
+ *
+ * The rulebook asks volunteers to raise one of these at least 24 hours before
+ * the shift. A late one is recorded as late rather than refused: leaving
+ * somebody no route but silence is worse for the animals than a late warning.
+ */
+export interface SubstitutionRequest {
+  id: string;
+  signupId: string;
+  shiftId: string;
+  requesterEmail: string;
+  requesterName: string;
+  reason: string;
+  status: SubstitutionStatus;
+  /** Raised inside the rulebook's notice period. */
+  raisedLate: boolean;
+  createdAtUtc: string;
+  takenByEmail?: string;
+  takenByName?: string;
+  takenAtUtc?: string;
+  closedAtUtc?: string;
+}
 
 export interface ShiftSignup {
   id: string;

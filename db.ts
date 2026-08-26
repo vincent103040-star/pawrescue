@@ -7,7 +7,7 @@ import path from 'path';
 import { randomUUID, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { VOLUNTEER_PROFILES, INITIAL_ATTENDANCE_RECORDS, INITIAL_SHIFTS, INITIAL_SHIFT_SIGNUPS, DEFAULT_SHELTER_LOCATION, DEFAULT_LINE_OFFICIAL_ACCOUNT } from './src/data/mockData';
 import { RULEBOOK_CORPUS } from './src/data/rulebookCorpus';
-import type { VolunteerProfile, AttendanceRecord, PositionShift, ShiftSignup, SopContent, SopSection, SopDocument, SopVideo, PromotionRequest, ShiftTemplate, ShelterLocation, LineOfficialAccount } from './src/types';
+import type { VolunteerProfile, AttendanceRecord, PositionShift, ShiftSignup, SubstitutionRequest, SopContent, SopSection, SopDocument, SopVideo, PromotionRequest, ShiftTemplate, ShelterLocation, LineOfficialAccount } from './src/types';
 
 const dataDir = path.join(process.cwd(), 'data');
 fs.mkdirSync(dataDir, { recursive: true });
@@ -1989,17 +1989,63 @@ db.exec(`
 `);
 
 /**
+ * Substitution requests: "I cannot make my shift, please could someone take it."
+ *
+ * The rulebook promises volunteers this route -- raise a request at least 24
+ * hours before the shift -- and there was nowhere to raise one. The only way
+ * out of a booking was to cancel it, which deleted the row, so the shelter lost
+ * both the place and any record that the person had tried to do the right
+ * thing.
+ *
+ * The request is a record in its own right rather than a flag on the signup,
+ * because it outlives the signup it came from: once somebody takes it, the
+ * original booking becomes 'substituted' and a new one appears under the
+ * substitute, and the trail from one to the other is the thing a coordinator
+ * needs when they are looking at who was actually meant to be there.
+ */
+db.exec(`
+  CREATE TABLE IF NOT EXISTS substitution_requests (
+    id TEXT PRIMARY KEY,
+    signupId TEXT NOT NULL,
+    shiftId TEXT NOT NULL,
+    requesterEmail TEXT NOT NULL DEFAULT '',
+    requesterName TEXT NOT NULL DEFAULT '',
+    reason TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'open',
+    raisedLate INTEGER NOT NULL DEFAULT 0,
+    createdAtUtc TEXT NOT NULL,
+    takenByEmail TEXT,
+    takenByName TEXT,
+    takenAtUtc TEXT,
+    closedAtUtc TEXT
+  )
+`);
+
+// One live request per booking. Without this, a double-click or two tabs open
+// produces two open requests for the same place, and two volunteers can each
+// believe they have covered it. Partial index, so the closed ones -- which are
+// history and may pile up for the same signup -- are unaffected.
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS substitution_one_open_per_signup
+  ON substitution_requests(signupId) WHERE status = 'open'
+`);
+
+/**
  * How many places a shift is currently holding.
  *
- * Occupying means everything except a signup that was turned down or a
- * volunteer who did not show: pending is a place the coordinator is still
- * considering, approved is a place counted on, attended is a place that was
- * used. That is exactly the set the old counter maintained, so the arithmetic
- * is unchanged -- only where it happens.
+ * Occupying means everything except a place nobody is standing in: pending is
+ * a place the coordinator is still considering, approved is a place counted on,
+ * attended is a place that was used. Turned down, no-show, cancelled and handed
+ * to a substitute are all places that are free again -- and the last two matter
+ * especially, because a cancelled booking now stays in the table instead of
+ * being deleted, and a handed-over one is counted under the person who took it.
+ * Leave either of them in and every substitution would silently fill a shift
+ * twice.
  */
 const HEADCOUNT_SQL = `(
   SELECT COUNT(*) FROM shift_signups g
-  WHERE g.shiftId = shifts.id AND g.status NOT IN ('rejected', 'absent')
+  WHERE g.shiftId = shifts.id
+    AND g.status NOT IN ('rejected', 'absent', 'cancelled', 'substituted')
 )`;
 
 /**
@@ -2217,11 +2263,21 @@ export function getRollCall(date: string): Array<{
     checkedIn: boolean;
     checkInTime?: string;
     reviewedBy?: string;
+    /**
+     * Set when this person asked for a substitute and nobody took it.
+     *
+     * Someone who gave notice and could not find cover is not in the same
+     * position as someone who simply did not appear, and the coordinator
+     * deciding whether to record an absence is the one who needs to know that.
+     */
+    unfilledRequest?: { reason: string; raisedLate: boolean; createdAtUtc: string };
   }>;
 }> {
   const shifts = db
     .prepare('SELECT * FROM shifts WHERE date = ? ORDER BY timeRange')
     .all(date) as any[];
+
+  const requests = getSubstitutionsByDate(date);
 
   return shifts.map(shift => {
     // Everyone still holding a place when the shift came round: approved is the
@@ -2243,15 +2299,27 @@ export function getRollCall(date: string): Array<{
       shiftTitle: shift.title,
       zoneId: shift.zone,
       timeRange: shift.timeRange,
-      expected: signups.map(signup => ({
-        signupId: signup.id,
-        volunteerName: signup.volunteerName,
-        volunteerEmail: signup.volunteerEmail || '',
-        status: signup.status,
-        checkedIn: arrived.has(signup.volunteerName),
-        checkInTime: arrived.get(signup.volunteerName) || undefined,
-        reviewedBy: signup.reviewedBy || undefined
-      }))
+      expected: signups.map(signup => {
+        // Only a request still open counts as unfilled: a taken one has already
+        // moved this place to somebody else, and this row would be theirs.
+        const request = requests.get(signup.id);
+        return {
+          signupId: signup.id,
+          volunteerName: signup.volunteerName,
+          volunteerEmail: signup.volunteerEmail || '',
+          status: signup.status,
+          checkedIn: arrived.has(signup.volunteerName),
+          checkInTime: arrived.get(signup.volunteerName) || undefined,
+          reviewedBy: signup.reviewedBy || undefined,
+          unfilledRequest: request && (request.status === 'open' || request.status === 'expired')
+            ? {
+                reason: request.reason,
+                raisedLate: request.raisedLate,
+                createdAtUtc: request.createdAtUtc
+              }
+            : undefined
+        };
+      })
     };
   });
 }
@@ -2273,11 +2341,249 @@ export function getAbsenceCounts(): Map<string, number> {
   return new Map(rows.map(row => [String(row.volunteerEmail).toLowerCase(), row.c]));
 }
 
-export function deleteShiftSignup(id: string): ShiftSignup | null {
+/**
+ * Cancelling a booking keeps the row.
+ *
+ * This used to be a DELETE. The place came free, which was the point, but the
+ * fact that somebody had booked it and dropped out left no trace -- so the
+ * rulebook's other promise, that cancelling three times in a month costs a
+ * volunteer their booking rights, had nothing to count and could never be
+ * applied. It also meant a coordinator looking at a thin shift could not tell
+ * "nobody ever signed up" from "four people signed up and all pulled out".
+ *
+ * The place is freed by the status, not by the row's absence: HEADCOUNT_SQL
+ * excludes 'cancelled', so the shift reopens exactly as it did before.
+ */
+export function cancelShiftSignup(id: string, cancelledBy = ''): ShiftSignup | null {
   const row = db.prepare('SELECT * FROM shift_signups WHERE id = ?').get(id);
   if (!row) return null;
-  db.prepare('DELETE FROM shift_signups WHERE id = ?').run(id);
-  return rowToShiftSignup(row);
+  const now = new Date();
+  db.prepare(`
+    UPDATE shift_signups
+    SET status = 'cancelled', reviewedAt = ?, reviewedBy = ?, reviewedAtUtc = ?
+    WHERE id = ?
+  `).run(now.toLocaleString('zh-TW', { hour12: false }), cancelledBy, now.toISOString(), id);
+
+  // A booking that is gone cannot still be asking for a substitute.
+  db.prepare(`
+    UPDATE substitution_requests
+    SET status = 'withdrawn', closedAtUtc = ?
+    WHERE signupId = ? AND status = 'open'
+  `).run(now.toISOString(), id);
+
+  const updated = db.prepare('SELECT * FROM shift_signups WHERE id = ?').get(id);
+  return updated ? rowToShiftSignup(updated) : null;
+}
+
+// ============================================================================
+// Substitution requests
+// ============================================================================
+
+/** How much notice the rulebook asks for before a shift. */
+export const SUBSTITUTION_NOTICE_HOURS = 24;
+
+/**
+ * Hours between now and the moment a shift starts.
+ *
+ * Shifts store a Taiwan-local date and a "09:00-11:00" range with no timezone,
+ * because that is how the shelter writes them on the wall. Taiwan has had no
+ * daylight saving since 1979, so pinning +08:00 turns that back into a real
+ * instant without pulling in a timezone library. Returns null when the shift is
+ * missing or its time cannot be read, and every caller treats null as "cannot
+ * tell" rather than guessing.
+ */
+export function hoursUntilShift(shiftId: string): number | null {
+  const row = db.prepare('SELECT date, timeRange FROM shifts WHERE id = ?').get(shiftId) as any;
+  if (!row) return null;
+  const start = String(row.timeRange || '').split('-')[0].trim();
+  if (!/^\d{1,2}:\d{2}$/.test(start)) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(row.date || ''))) return null;
+  const startsAt = new Date(`${row.date}T${start.padStart(5, '0')}:00+08:00`);
+  if (Number.isNaN(startsAt.getTime())) return null;
+  return (startsAt.getTime() - Date.now()) / 3_600_000;
+}
+
+function rowToSubstitution(row: any): SubstitutionRequest {
+  return {
+    id: row.id,
+    signupId: row.signupId,
+    shiftId: row.shiftId,
+    requesterEmail: row.requesterEmail || '',
+    requesterName: row.requesterName || '',
+    reason: row.reason || '',
+    status: row.status,
+    raisedLate: !!row.raisedLate,
+    createdAtUtc: row.createdAtUtc,
+    takenByEmail: row.takenByEmail || undefined,
+    takenByName: row.takenByName || undefined,
+    takenAtUtc: row.takenAtUtc || undefined,
+    closedAtUtc: row.closedAtUtc || undefined
+  };
+}
+
+export function getSubstitutionRequest(id: string): SubstitutionRequest | null {
+  const row = db.prepare('SELECT * FROM substitution_requests WHERE id = ?').get(id);
+  return row ? rowToSubstitution(row) : null;
+}
+
+export function getOpenSubstitutionForSignup(signupId: string): SubstitutionRequest | null {
+  const row = db
+    .prepare("SELECT * FROM substitution_requests WHERE signupId = ? AND status = 'open'")
+    .get(signupId);
+  return row ? rowToSubstitution(row) : null;
+}
+
+/** Every request still waiting for somebody, newest first. */
+export function getOpenSubstitutions(): SubstitutionRequest[] {
+  const rows = db
+    .prepare("SELECT * FROM substitution_requests WHERE status = 'open' ORDER BY createdAtUtc DESC")
+    .all() as any[];
+  return rows.map(rowToSubstitution);
+}
+
+/** Every request attached to a given day's shifts, keyed by the signup it came from. */
+export function getSubstitutionsByDate(date: string): Map<string, SubstitutionRequest> {
+  const rows = db.prepare(`
+    SELECT r.* FROM substitution_requests r
+    JOIN shifts s ON s.id = r.shiftId
+    WHERE s.date = ?
+  `).all(date) as any[];
+  return new Map(rows.map(row => [row.signupId, rowToSubstitution(row)]));
+}
+
+export function createSubstitutionRequest(input: {
+  signupId: string;
+  shiftId: string;
+  requesterEmail: string;
+  requesterName: string;
+  reason?: string;
+}): SubstitutionRequest {
+  const hours = hoursUntilShift(input.shiftId);
+  // Recorded, not enforced. Refusing a late request would leave the volunteer
+  // with no route except silence, and a shift nobody has been warned about is
+  // worse for the animals than a late warning.
+  const raisedLate = hours !== null && hours < SUBSTITUTION_NOTICE_HOURS;
+  const id = randomUUID();
+  db.prepare(`
+    INSERT INTO substitution_requests
+      (id, signupId, shiftId, requesterEmail, requesterName, reason, status, raisedLate, createdAtUtc)
+    VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?)
+  `).run(
+    id, input.signupId, input.shiftId,
+    input.requesterEmail.trim().toLowerCase(), input.requesterName,
+    input.reason || '', raisedLate ? 1 : 0, new Date().toISOString()
+  );
+  return getSubstitutionRequest(id)!;
+}
+
+export function withdrawSubstitutionRequest(id: string): SubstitutionRequest | null {
+  const existing = getSubstitutionRequest(id);
+  if (!existing || existing.status !== 'open') return null;
+  db.prepare("UPDATE substitution_requests SET status = 'withdrawn', closedAtUtc = ? WHERE id = ?")
+    .run(new Date().toISOString(), id);
+  return getSubstitutionRequest(id);
+}
+
+/**
+ * Hand a booking over to whoever offered to cover it.
+ *
+ * Three writes that have to happen together: the request closes, the original
+ * booking steps aside, and the substitute gets a place of their own. Half of
+ * this applied would either leave two people holding one place or leave the
+ * shift a person short with nobody aware of it, so it runs in a transaction.
+ *
+ * The original signup is kept as 'substituted' rather than edited to name the
+ * new person, because on the day it matters who was expected and who actually
+ * came -- and because the requester should not later look like they simply
+ * never turned up.
+ */
+export function takeSubstitutionRequest(
+  id: string,
+  taker: { email: string; name: string; phone?: string; lineId?: string }
+): { request: SubstitutionRequest; signup: ShiftSignup } | { error: string } {
+  const request = getSubstitutionRequest(id);
+  if (!request) return { error: '找不到這筆代班請求' };
+  if (request.status !== 'open') {
+    return { error: request.status === 'taken' ? '這個班已經有人接手了' : '這筆代班請求已經結束' };
+  }
+
+  const email = taker.email.trim().toLowerCase();
+  if (email && email === request.requesterEmail) {
+    return { error: '不能接手自己發起的代班請求' };
+  }
+
+  const original = db.prepare('SELECT * FROM shift_signups WHERE id = ?').get(request.signupId) as any;
+  if (!original) return { error: '原本的報名紀錄已不存在' };
+
+  // Somebody already on this shift cannot cover it as well -- they would be
+  // counted twice and the shift would look staffed when it is not.
+  const clash = db.prepare(`
+    SELECT id FROM shift_signups
+    WHERE shiftId = ? AND LOWER(TRIM(volunteerEmail)) = ?
+      AND status NOT IN ('rejected', 'cancelled', 'substituted', 'absent')
+  `).get(request.shiftId, email);
+  if (clash) return { error: '您已經報名這個班次了' };
+
+  const now = new Date().toISOString();
+  const newSignupId = randomUUID();
+
+  db.exec('BEGIN');
+  try {
+    db.prepare(`
+      UPDATE substitution_requests
+      SET status = 'taken', takenByEmail = ?, takenByName = ?, takenAtUtc = ?, closedAtUtc = ?
+      WHERE id = ?
+    `).run(email, taker.name, now, now, id);
+
+    db.prepare(`
+      UPDATE shift_signups
+      SET status = 'substituted', reviewedAt = ?, reviewedBy = ?, reviewedAtUtc = ?
+      WHERE id = ?
+    `).run(
+      new Date().toLocaleString('zh-TW', { hour12: false }),
+      `代班：${taker.name}`, now, request.signupId
+    );
+
+    db.prepare(`
+      INSERT INTO shift_signups
+        (id, shiftId, volunteerName, volunteerEmail, volunteerPhone, lineId, experienceLevel,
+         appliedZone, status, appliedAt, notes, reviewNotes, reviewedAt, syncToCalendar, syncToLine,
+         situationalQuestion, situationalAnswer, aiReadinessAssessment, reviewedBy, reviewedAtUtc)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?, ?, 1, 1, NULL, NULL, NULL, ?, ?)
+    `).run(
+      newSignupId, request.shiftId, taker.name, email, taker.phone || '', taker.lineId || '',
+      original.experienceLevel, original.appliedZone, now,
+      `代 ${request.requesterName} 的班`, '代班接手，自動錄取',
+      new Date().toLocaleString('zh-TW', { hour12: false }),
+      '系統（代班接手）', now
+    );
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+
+  const signup = db.prepare('SELECT * FROM shift_signups WHERE id = ?').get(newSignupId);
+  return { request: getSubstitutionRequest(id)!, signup: rowToShiftSignup(signup) };
+}
+
+/**
+ * Close requests for shifts that have already happened.
+ *
+ * An open request for last Tuesday is not a request any more, it is a record
+ * that nobody came forward. Leaving it open would keep offering volunteers a
+ * shift they cannot take, and would make the roll call read as though the
+ * matter were still unresolved.
+ */
+export function expireStaleSubstitutions(): number {
+  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' });
+  const result = db.prepare(`
+    UPDATE substitution_requests
+    SET status = 'expired', closedAtUtc = ?
+    WHERE status = 'open'
+      AND shiftId IN (SELECT id FROM shifts WHERE date < ?)
+  `).run(new Date().toISOString(), today);
+  return Number(result.changes || 0);
 }
 
 // Seeded from the original mock data on first run only, same pattern as the

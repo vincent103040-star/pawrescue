@@ -6,7 +6,7 @@ import { writeFileSync, mkdirSync, createWriteStream, statSync, readFileSync, un
 import { gzipSync } from 'zlib';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
-import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, deleteShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, getRollCall, getAbsenceCounts, setVolunteerAccountStatus, sweepStaleSuspensions, ABSENCE_SUSPENSION_THRESHOLD } from './db';
+import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, cancelShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, getRollCall, getAbsenceCounts, setVolunteerAccountStatus, sweepStaleSuspensions, ABSENCE_SUSPENSION_THRESHOLD, createSubstitutionRequest, getSubstitutionRequest, getOpenSubstitutionForSignup, getOpenSubstitutions, takeSubstitutionRequest, withdrawSubstitutionRequest, expireStaleSubstitutions, hoursUntilShift, SUBSTITUTION_NOTICE_HOURS } from './db';
 import { PDFParse } from 'pdf-parse';
 import type { SopContent, SopDocument, SopVideo } from './src/types';
 
@@ -1617,15 +1617,16 @@ ${contextText}
   // ==========================================================================
 
   /**
-   * Tells a volunteer their account state changed.
+   * Tells a volunteer something about their own commitments or account.
    *
    * Sent regardless of their notification preferences. Those cover shift
    * changes, urgent callouts and check-in reminders -- things somebody might
-   * reasonably not want. Being told you can no longer book shifts is not in
-   * that category: the whole process assumes they can ask to be reinstated,
-   * and they cannot ask about something nobody told them.
+   * reasonably not want. Being told you can no longer book shifts, or that
+   * somebody has taken over the shift you are still expecting to work, is not
+   * in that category: each one changes what is being asked of them, and a
+   * person cannot act on what nobody told them.
    */
-  async function notifyAccountStatus(email: string, text: string): Promise<void> {
+  async function notifyVolunteerDirect(email: string, text: string): Promise<void> {
     try {
       const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
       const linked = getLineUserId(email);
@@ -1662,12 +1663,12 @@ ${contextText}
       if (!updated) return res.status(404).json({ success: false, error: '找不到這位志工' });
 
       if (status === 'active') {
-        await notifyAccountStatus(
+        await notifyVolunteerDirect(
           email,
           `【浪浪家園】${updated.name} 您好，您的志工帳號已恢復正常，現在可以重新報名班次了。感謝您繼續陪伴浪浪 🐾`
         );
       } else if (status === 'suspended') {
-        await notifyAccountStatus(
+        await notifyVolunteerDirect(
           email,
           `【浪浪家園】${updated.name} 您好，您的搶班權限已暫停。${reason ? `原因：${reason}。` : ''}` +
           `您仍可登入查看自己的服務紀錄與時數。如需恢復，請與社工督導聯繫。`
@@ -1711,7 +1712,7 @@ ${contextText}
     // The push is the slow part and the only part allowed to fail, so it is the
     // only part that does not block the coordinator's screen. It logs its own
     // failures rather than throwing.
-    void notifyAccountStatus(
+    void notifyVolunteerDirect(
       email,
       `【浪浪家園】${volunteer.name} 您好，系統記錄您已有 ${absences} 次未到場，` +
       `依志工規章已暫停搶班權限。您仍可登入查看自己的服務紀錄與時數。` +
@@ -2393,57 +2394,267 @@ ${contextText}
     }
   });
 
+  /**
+   * Whether the signed-in volunteer owns this booking.
+   *
+   * Normally the email settles it. Bookings made before the server started
+   * stamping the owner can have a blank email though, and refusing those
+   * forever would leave volunteers unable to touch their own shift -- so fall
+   * back to name plus phone, which together are specific enough.
+   */
+  function ownsSignup(req: any, target: any): boolean {
+    if (req.session?.role !== 'volunteer') return false;
+    const norm = (v: unknown) => String(v || '').trim().toLowerCase();
+
+    // The same number is written "+886912345678" on a volunteer record and
+    // "0912-345-678" on a booking form, so compare the digits with the
+    // Taiwan country code folded back into a leading zero.
+    const samePhone = (a: unknown, b: unknown) => {
+      const digits = (v: unknown) => {
+        const d = String(v || '').replace(/\D/g, '');
+        return d.startsWith('886') ? '0' + d.slice(3) : d;
+      };
+      const da = digits(a);
+      return !!da && da === digits(b);
+    };
+
+    const me = getVolunteerByEmail(req.session.identity);
+    return (
+      (!!target.volunteerEmail && norm(target.volunteerEmail) === norm(req.session.identity)) ||
+      (!norm(target.volunteerEmail) && !!me &&
+        norm(target.volunteerName) === norm(me.name) &&
+        samePhone(target.volunteerPhone, me.phone))
+    );
+  }
+
+  /**
+   * Cancelling a booking.
+   *
+   * Two changes from what this used to be. It no longer deletes the row -- see
+   * cancelShiftSignup -- and close to the shift it is no longer the way out.
+   *
+   * The rulebook asks for 24 hours' notice, and a cancel button that works
+   * right up to the start makes that sentence decorative: the shelter finds out
+   * at the same moment either way, except now nobody has been asked to cover.
+   * Inside the window the volunteer is sent to raise a substitution request
+   * instead, which is the route the rulebook actually describes. Coordinators
+   * are not held to it, because they cancel on behalf of people who have rung
+   * up, and the phone call is the notice.
+   */
   app.delete('/api/shift-signups/:id', requireAuth, (req: any, res) => {
     try {
-      // A volunteer may cancel their own signup; anything else is an
-      // admin action. Without this check any signed-in volunteer could cancel
-      // somebody else's shift just by knowing its id.
       const target = getAllShiftSignups().find(a => a.id === req.params.id);
       if (!target) {
         return res.status(404).json({ success: false, error: '找不到該筆報名' });
       }
-      const norm = (v: unknown) => String(v || '').trim().toLowerCase();
 
-      // The same number is written "+886912345678" on a volunteer record and
-      // "0912-345-678" on a booking form, so compare the digits with the
-      // Taiwan country code folded back into a leading zero.
-      const samePhone = (a: unknown, b: unknown) => {
-        const digits = (v: unknown) => {
-          const d = String(v || '').replace(/\D/g, '');
-          return d.startsWith('886') ? '0' + d.slice(3) : d;
-        };
-        const da = digits(a);
-        return !!da && da === digits(b);
-      };
-
-      const me = req.session.role === 'volunteer' ? getVolunteerByEmail(req.session.identity) : null;
-
-      // Normally the email settles it. Bookings made before the server started
-      // stamping the owner can have a blank email though, and refusing those
-      // forever would leave volunteers unable to cancel their own shift -- so
-      // fall back to name plus phone, which together are specific enough.
-      const isOwner = req.session.role === 'volunteer' && (
-        (target.volunteerEmail && norm(target.volunteerEmail) === norm(req.session.identity)) ||
-        (!norm(target.volunteerEmail) && !!me &&
-          norm(target.volunteerName) === norm(me.name) &&
-          samePhone(target.volunteerPhone, me.phone))
-      );
-
-      if (req.session.role !== 'admin' && !isOwner) {
+      if (req.session.role !== 'admin' && !ownsSignup(req, target)) {
         return res.status(403).json({ success: false, error: '只能取消自己的報名。' });
       }
 
-      const removed = deleteShiftSignup(req.params.id);
-      if (!removed) {
+      if (req.session.role !== 'admin') {
+        const hours = hoursUntilShift(target.shiftId);
+        if (hours !== null && hours < 0) {
+          return res.status(409).json({
+            success: false,
+            error: '這個班次已經開始或結束了，無法取消。如果沒有到場，請與社工督導說明。'
+          });
+        }
+        if (hours !== null && hours < SUBSTITUTION_NOTICE_HOURS) {
+          return res.status(409).json({
+            success: false,
+            needsSubstitution: true,
+            error: `距離班次開始不到 ${SUBSTITUTION_NOTICE_HOURS} 小時，依志工規章不能直接取消。`
+              + `請改為發起「代班請求」，讓其他志工有機會接手。`
+          });
+        }
+      }
+
+      const cancelledBy = String(req.session?.displayName || req.session?.identity || '');
+      const cancelled = cancelShiftSignup(req.params.id, cancelledBy);
+      if (!cancelled) {
         return res.status(404).json({ success: false, error: '找不到該筆報名' });
       }
-      const shift = getShift(removed.shiftId);
+      const shift = getShift(cancelled.shiftId);
       broadcastChange('signups');
       broadcastChange('shifts');
-      return res.json({ success: true, shiftSignup: removed, shift });
+      return res.json({ success: true, shiftSignup: cancelled, shift });
     } catch (error: any) {
-      console.error('Delete Application Error:', error);
+      console.error('Cancel Signup Error:', error);
       return res.status(500).json({ success: false, error: error.message || '取消報名失敗' });
+    }
+  });
+
+  // ==========================================================================
+  // Substitution requests
+  // --------------------------------------------------------------------------
+  // The rulebook told volunteers to raise one of these 24 hours before a shift
+  // they could not make. There was nowhere to raise one, so the only way out of
+  // a booking was to cancel it -- which freed the place silently and asked
+  // nobody to cover it.
+  // ==========================================================================
+
+  /** Everything still waiting for somebody, with enough of the shift to render it. */
+  app.get('/api/substitutions', (req: any, res) => {
+    try {
+      const requests = getOpenSubstitutions()
+        .map(request => {
+          const shift = getShift(request.shiftId);
+          if (!shift) return null;
+          return {
+            ...request,
+            hoursUntil: hoursUntilShift(request.shiftId),
+            shift: {
+              id: shift.id, title: shift.title, zone: shift.zone,
+              date: shift.date, timeRange: shift.timeRange
+            }
+          };
+        })
+        .filter(Boolean)
+        // A shift that has already started cannot be covered; expireStaleSubstitutions
+        // closes those overnight, this keeps them out of the list in the meantime.
+        .filter((r: any) => r.hoursUntil === null || r.hoursUntil > 0);
+
+      return res.json({ success: true, requests, noticeHours: SUBSTITUTION_NOTICE_HOURS });
+    } catch (error: any) {
+      console.error('List Substitutions Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '讀取代班請求失敗' });
+    }
+  });
+
+  /**
+   * Raise a request against one of your own bookings.
+   *
+   * Suspended volunteers may still do this. They cannot take new shifts, but
+   * they may well be holding one booked before the suspension, and handing it
+   * over is precisely what the shelter wants them to do with it.
+   */
+  app.post('/api/shift-signups/:id/substitution', async (req: any, res) => {
+    try {
+      const target = getAllShiftSignups().find(a => a.id === req.params.id);
+      if (!target) {
+        return res.status(404).json({ success: false, error: '找不到該筆報名' });
+      }
+      if (req.session.role !== 'admin' && !ownsSignup(req, target)) {
+        return res.status(403).json({ success: false, error: '只能為自己的報名發起代班請求。' });
+      }
+      if (target.status !== 'approved') {
+        return res.status(409).json({
+          success: false,
+          error: target.status === 'pending'
+            ? '這筆報名還在審核中，錄取之後才需要代班。'
+            : '這筆報名已經結束，不需要代班。'
+        });
+      }
+      if (getOpenSubstitutionForSignup(target.id)) {
+        return res.status(409).json({ success: false, error: '這個班次已經有一筆進行中的代班請求了。' });
+      }
+      const hours = hoursUntilShift(target.shiftId);
+      if (hours !== null && hours < 0) {
+        return res.status(409).json({ success: false, error: '這個班次已經開始或結束了。' });
+      }
+
+      const request = createSubstitutionRequest({
+        signupId: target.id,
+        shiftId: target.shiftId,
+        requesterEmail: target.volunteerEmail || String(req.session.identity || ''),
+        requesterName: target.volunteerName,
+        reason: String(req.body?.reason || '').trim().slice(0, 200)
+      });
+
+      broadcastChange('signups');
+      broadcastChange('shifts');
+      return res.json({ success: true, request, noticeHours: SUBSTITUTION_NOTICE_HOURS });
+    } catch (error: any) {
+      console.error('Create Substitution Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '發起代班請求失敗' });
+    }
+  });
+
+  /** Take somebody's shift. */
+  app.post('/api/substitutions/:id/take', async (req: any, res) => {
+    try {
+      const request = getSubstitutionRequest(req.params.id);
+      if (!request) {
+        return res.status(404).json({ success: false, error: '找不到這筆代班請求' });
+      }
+
+      // An admin filing it for somebody who rang up needs to say who; a
+      // volunteer is always taking it themselves.
+      const email = isAdmin(req)
+        ? String(req.body?.email || '').trim().toLowerCase()
+        : sessionEmail(req);
+      if (!email) {
+        return res.status(400).json({ success: false, error: '缺少接手志工的識別' });
+      }
+      const taker = getVolunteerByEmail(email);
+      if (!taker) {
+        return res.status(404).json({ success: false, error: '找不到這位志工的資料' });
+      }
+      // Same rule as booking: a suspended account cannot take a place.
+      if (taker.accountStatus && taker.accountStatus !== 'active') {
+        return res.status(403).json({
+          success: false,
+          error: taker.accountStatus === 'suspended'
+            ? '此志工帳號目前為停權狀態，無法接手班次。請與社工督導聯繫恢復。'
+            : '此志工帳號目前為離退狀態，請與社工督導聯繫。'
+        });
+      }
+
+      const result = takeSubstitutionRequest(request.id, {
+        email, name: taker.name, phone: taker.phone, lineId: taker.lineId
+      });
+      if ('error' in result) {
+        return res.status(409).json({ success: false, error: result.error });
+      }
+
+      const shift = getShift(request.shiftId);
+      const when = shift ? `${shift.date} ${shift.timeRange}${shift.title ? `（${shift.title}）` : ''}` : '';
+
+      // The person who asked has been waiting to find out whether they are
+      // still expected. Telling them is the whole point of the feature.
+      void notifyVolunteerDirect(
+        request.requesterEmail,
+        `【浪浪家園】${request.requesterName} 您好，您 ${when} 的班次已由 ${taker.name} 接手，`
+        + `您不需要再出席，這次不會列入未到紀錄。感謝您提前告知 🐾`
+      );
+      void notifyVolunteerDirect(
+        email,
+        `【浪浪家園】${taker.name} 您好，感謝您接下 ${request.requesterName} 的班次：${when}。`
+        + `班次已加入您的排班，請準時到場並記得掃碼簽到 🐾`
+      );
+
+      broadcastChange('signups');
+      broadcastChange('shifts');
+      return res.json({ success: true, request: result.request, shiftSignup: result.signup, shift });
+    } catch (error: any) {
+      console.error('Take Substitution Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '接手代班失敗' });
+    }
+  });
+
+  /** Call it off -- the requester found their own cover, or can come after all. */
+  app.post('/api/substitutions/:id/withdraw', (req: any, res) => {
+    try {
+      const request = getSubstitutionRequest(req.params.id);
+      if (!request) {
+        return res.status(404).json({ success: false, error: '找不到這筆代班請求' });
+      }
+      const isOwner = req.session.role === 'volunteer' &&
+        sessionEmail(req) === request.requesterEmail;
+      if (!isAdmin(req) && !isOwner) {
+        return res.status(403).json({ success: false, error: '只能撤回自己發起的代班請求。' });
+      }
+      const updated = withdrawSubstitutionRequest(request.id);
+      if (!updated) {
+        return res.status(409).json({ success: false, error: '這筆代班請求已經結束了。' });
+      }
+      broadcastChange('signups');
+      broadcastChange('shifts');
+      return res.json({ success: true, request: updated });
+    } catch (error: any) {
+      console.error('Withdraw Substitution Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '撤回代班請求失敗' });
     }
   });
 
@@ -3739,10 +3950,30 @@ ${contextText}
     }
   }
 
+  /**
+   * Closes substitution requests for shifts that have already been and gone.
+   *
+   * An open request for last Tuesday is not a request, it is a record that
+   * nobody came forward -- and left open it would keep offering volunteers a
+   * shift they cannot take.
+   */
+  function runSubstitutionSweep() {
+    try {
+      const closed = expireStaleSubstitutions();
+      if (closed > 0) {
+        console.log(`SQLite: ${closed} 筆代班請求因班次已過期而關閉（無人接手）`);
+      }
+    } catch (error: any) {
+      console.error('Substitution Sweep Error:', error?.message || error);
+    }
+  }
+
   runBackup();
   runSuspensionSweep();
+  runSubstitutionSweep();
   setInterval(runBackup, BACKUP_INTERVAL_MS).unref();
   setInterval(runSuspensionSweep, BACKUP_INTERVAL_MS).unref();
+  setInterval(runSubstitutionSweep, BACKUP_INTERVAL_MS).unref();
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🐾 Animal Shelter Volunteer HR Server running on http://localhost:${PORT}`);
