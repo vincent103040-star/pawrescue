@@ -14,7 +14,9 @@
  *
  * The running absence count travels with each row on purpose, so the person
  * deciding can see that this would be someone's second miss before making it
- * their second.
+ * their second -- and when a click does cross the threshold, the answer says so,
+ * because a suspension the coordinator did not notice causing is one they cannot
+ * reconsider.
  */
 import React, { useEffect, useState } from 'react';
 import { ClipboardCheck, Loader2, Check, UserX, AlertTriangle, CalendarDays } from 'lucide-react';
@@ -53,6 +55,7 @@ export const RollCallPanel: React.FC<RollCallPanelProps> = ({ onToast, onChanged
   const [date, setDate] = useState(shelterToday);
   const [shifts, setShifts] = useState<RollCallShift[]>([]);
   const [summary, setSummary] = useState({ expected: 0, arrived: 0, unresolved: 0 });
+  const [threshold, setThreshold] = useState(2);
   const [isLoading, setIsLoading] = useState(true);
   const [busyIds, setBusyIds] = useState<string[]>([]);
 
@@ -64,6 +67,7 @@ export const RollCallPanel: React.FC<RollCallPanelProps> = ({ onToast, onChanged
         if (!data.success) return;
         setShifts(data.shifts);
         setSummary(data.summary);
+        if (typeof data.absenceThreshold === 'number') setThreshold(data.absenceThreshold);
       })
       .catch(() => onToast('⚠️ 讀取點名表失敗，請稍後再試。'))
       .finally(() => setIsLoading(false));
@@ -86,9 +90,18 @@ export const RollCallPanel: React.FC<RollCallPanelProps> = ({ onToast, onChanged
       });
       const data = await res.json();
       if (!data.success) { onToast(`⚠️ ${data.error || '記錄失敗'}`); return; }
-      onToast(status === 'absent'
-        ? `已記錄【${person.volunteerName}】未到（累計第 ${person.absencesSoFar + 1} 次）`
-        : `已記錄【${person.volunteerName}】到勤`);
+      // Whether the rule fired is the server's answer, not this screen's guess
+      // from the count it happens to be holding.
+      if (data.suspension) {
+        onToast(
+          `已記錄【${person.volunteerName}】未到（累計 ${data.suspension.absences} 次），` +
+          `依規章已暫停其搶班權限並以 LINE 通知本人。可到「志工名冊」恢復。`
+        );
+      } else {
+        onToast(status === 'absent'
+          ? `已記錄【${person.volunteerName}】未到（累計第 ${person.absencesSoFar + 1} 次）`
+          : `已記錄【${person.volunteerName}】到勤`);
+      }
       await load(date);
       onChanged?.();
     } catch {
@@ -244,7 +257,8 @@ export const RollCallPanel: React.FC<RollCallPanelProps> = ({ onToast, onChanged
       )}
 
       <p className="text-[11px] text-slate-400 border-t border-slate-100 pt-3">
-        記錄為「未到」會累計在該志工的缺席次數上。規章的停權規則尚未實作，目前只會累計數字，不會自動限制任何人。
+        記錄為「未到」會累計在該志工的缺席次數上；累計滿 {threshold} 次會依規章自動暫停其搶班權限，並以 LINE 通知本人。
+        停權不會影響已累積的服務時數與出勤紀錄，督導可在「志工名冊」隨時恢復。
       </p>
     </div>
   );
