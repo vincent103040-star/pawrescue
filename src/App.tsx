@@ -18,6 +18,8 @@ import { ZoneManager } from './components/ZoneManager';
 import { DutyItemManager } from './components/DutyItemManager';
 import { RollCallPanel } from './components/RollCallPanel';
 import { VolunteerRoster } from './components/VolunteerRoster';
+import { SubstitutionBoard, OpenSubstitution } from './components/SubstitutionBoard';
+import { SubstitutionWatchlist } from './components/SubstitutionWatchlist';
 import { AiPostModal } from './components/AiPostModal';
 import { VolunteerCheckInModal } from './components/VolunteerCheckInModal';
 import { VolunteerSelfCheckIn } from './components/VolunteerSelfCheckIn';
@@ -139,6 +141,17 @@ export default function App() {
       .catch(() => { /* keep what's on screen if the backend is unreachable */ });
   };
 
+  // Shifts other volunteers cannot make. Everyone signed in may read these --
+  // answering one is the whole point -- so unlike the roster there is no role
+  // guard here.
+  const [substitutions, setSubstitutions] = useState<OpenSubstitution[]>([]);
+
+  const refreshSubstitutions = () =>
+    authFetch('/api/substitutions')
+      .then(res => res.json())
+      .then(data => { if (data.success && Array.isArray(data.requests)) setSubstitutions(data.requests); })
+      .catch(() => { /* keep what's on screen if the backend is unreachable */ });
+
   // The shelter's areas, which used to be five values compiled into the
   // frontend. applyZones updates the module-level lookup that sixteen
   // components already read from; the state below exists so that updating it
@@ -174,6 +187,7 @@ export default function App() {
     refreshShiftSignups();
     refreshAttendance();
     refreshVolunteers();
+    refreshSubstitutions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userRole]);
 
@@ -185,7 +199,7 @@ export default function App() {
     const stop = subscribeToLiveUpdates(kind => {
       if (kind === 'attendance') refreshAttendance();
       else if (kind === 'shifts') refreshShifts();
-      else if (kind === 'signups') refreshShiftSignups();
+      else if (kind === 'signups') { refreshShiftSignups(); refreshSubstitutions(); }
       else if (kind === 'volunteers') refreshVolunteers();
       else if (kind === 'promotions') setPromotionsRevision(n => n + 1);
       else if (kind === 'zones') refreshZones();
@@ -714,23 +728,79 @@ export default function App() {
       const data = await res.json();
 
       if (!data.success) {
-        showToast(`⚠️ 取消報名失敗：${data.error || '未知錯誤'}`);
+        // Inside the rulebook's notice period the server sends people to the
+        // other route rather than just refusing, so say which one.
+        showToast(data.needsSubstitution
+          ? `🤝 ${data.error} 請在此班次上按「找人代班」。`
+          : `⚠️ 取消報名失敗：${data.error || '未知錯誤'}`);
         return;
       }
 
-      setShiftSignups(prev => prev.filter(a => a.id !== appId));
-      if (targetApp.status !== 'rejected') {
-        setShifts(sPrev => sPrev.map(s => {
-          if (s.id !== targetApp.shiftId) return s;
-          const newCount = Math.max(0, s.currentCount - 1);
-          return { ...s, currentCount: newCount, status: newCount < s.requiredCount ? 'active' : s.status };
-        }));
-      }
-      showToast('🗑️ 已成功取消該班次報名，名額已重新釋出。');
+      // The booking is not removed any more, it is marked cancelled -- so the
+      // page re-reads rather than deleting the row it can see. Guessing the new
+      // headcount locally is what the derived count exists to stop.
+      showToast('🗑️ 已取消該班次報名，名額已重新釋出。');
+      refreshShiftSignups();
+      refreshShifts();
+      refreshSubstitutions();
+    } catch {
+      showToast('⚠️ 取消報名失敗：無法連線到伺服器，請稍後再試。');
+    }
+  };
+
+  const handleRequestSubstitution = async (appId: string, reason: string) => {
+    try {
+      const res = await authFetch(`/api/shift-signups/${encodeURIComponent(appId)}/substitution`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason })
+      });
+      const data = await res.json();
+      if (!data.success) { showToast(`⚠️ ${data.error || '發起代班請求失敗'}`); return; }
+      showToast(data.request?.raisedLate
+        ? '🤝 已發出代班請求。距離班次不到 24 小時，這筆會標記為急件，也請一併在 LINE 群組說一聲。'
+        : '🤝 已發出代班請求，其他夥伴看得到了。有人接手時會通知您。');
+      refreshSubstitutions();
+      refreshShiftSignups();
+    } catch {
+      showToast('⚠️ 無法連線，代班請求尚未送出。');
+    }
+  };
+
+  const handleWithdrawSubstitution = async (requestId: string) => {
+    try {
+      const res = await authFetch(`/api/substitutions/${encodeURIComponent(requestId)}/withdraw`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (!data.success) { showToast(`⚠️ ${data.error || '撤回失敗'}`); return; }
+      showToast('✅ 已撤回代班請求，這個班次仍然是您的。');
+      refreshSubstitutions();
+      refreshShiftSignups();
+    } catch {
+      showToast('⚠️ 無法連線，撤回尚未完成。');
+    }
+  };
+
+  const [takingSubstitutionId, setTakingSubstitutionId] = useState<string | null>(null);
+
+  const handleTakeSubstitution = async (requestId: string) => {
+    if (takingSubstitutionId) return;
+    setTakingSubstitutionId(requestId);
+    try {
+      const res = await authFetch(`/api/substitutions/${encodeURIComponent(requestId)}/take`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (!data.success) { showToast(`⚠️ ${data.error || '接手失敗'}`); refreshSubstitutions(); return; }
+      showToast('🤝 已接下這個班次，已加入您的排班。請記得當天掃碼簽到！');
+      refreshSubstitutions();
       refreshShiftSignups();
       refreshShifts();
     } catch {
-      showToast('⚠️ 取消報名失敗：無法連線到伺服器，請稍後再試。');
+      showToast('⚠️ 無法連線，接手尚未完成。');
+    } finally {
+      setTakingSubstitutionId(null);
     }
   };
 
@@ -919,7 +989,8 @@ export default function App() {
 
             {adminActiveTab === 'signups' && (
               <div className="space-y-6">
-                <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto pt-6">
+                <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto pt-6 space-y-6">
+                  <SubstitutionWatchlist requests={substitutions} />
                   <RollCallPanel
                     onToast={showToast}
                     // Recording an absence can suspend the volunteer, and the
@@ -995,16 +1066,29 @@ export default function App() {
             )}
 
             {volunteerActiveTab === 'myshifts' && (
-              <VolunteerMyShifts
-                shifts={shifts}
-                shiftSignups={shiftSignups}
-                shelterLocation={shelterLocation}
-                attendanceRecords={attendanceRecords}
-                currentUser={volunteerSession}
-                onOpenCheckInModal={() => setIsCheckInModalOpen(true)}
-                onSendLineToast={showToast}
-                onCancelSignup={handleCancelShiftSignup}
-              />
+              <div className="space-y-6">
+                <VolunteerMyShifts
+                  shifts={shifts}
+                  shiftSignups={shiftSignups}
+                  shelterLocation={shelterLocation}
+                  attendanceRecords={attendanceRecords}
+                  currentUser={volunteerSession}
+                  onOpenCheckInModal={() => setIsCheckInModalOpen(true)}
+                  onSendLineToast={showToast}
+                  onCancelSignup={handleCancelShiftSignup}
+                  substitutions={substitutions}
+                  onRequestSubstitution={handleRequestSubstitution}
+                  onWithdrawSubstitution={handleWithdrawSubstitution}
+                />
+                <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
+                  <SubstitutionBoard
+                    requests={substitutions}
+                    myEmail={volunteerSession?.email || ''}
+                    busyId={takingSubstitutionId}
+                    onTake={handleTakeSubstitution}
+                  />
+                </div>
+              </div>
             )}
 
             {volunteerActiveTab === 'growth' && (
