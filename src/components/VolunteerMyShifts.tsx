@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { PositionShift, ShiftSignup, ShelterLocation, AttendanceRecord, VolunteerUserSession } from '../types';
+import { PositionShift, ShiftSignup, ShelterLocation, AttendanceRecord, VolunteerUserSession, SubstitutionRequest } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
-import { Calendar, Clock, MapPin, CheckCircle2, AlertCircle, QrCode, Star, ArrowUpRight, Award, ExternalLink, ShieldCheck, Heart, FileText, Check, ChevronRight } from 'lucide-react';
+import { Calendar, Clock, MapPin, CheckCircle2, AlertCircle, QrCode, Star, ArrowUpRight, Award, ExternalLink, ShieldCheck, Heart, FileText, Check, ChevronRight, Handshake, XCircle, Undo2 } from 'lucide-react';
 import { CertificateModal } from './CertificateModal';
 import { buildGoogleCalendarLink } from '../utils/googleCalendar';
+import { hoursUntilShift, SUBSTITUTION_NOTICE_HOURS, timeUntilLabel } from '../utils/shiftTime';
 
 interface VolunteerMyShiftsProps {
   shifts: PositionShift[];
@@ -14,6 +15,10 @@ interface VolunteerMyShiftsProps {
   onOpenCheckInModal: () => void;
   onSendLineToast: (msg: string) => void;
   onCancelSignup?: (appId: string) => void;
+  /** Open substitution requests, so a booking can show that it is already asking for cover. */
+  substitutions?: SubstitutionRequest[];
+  onRequestSubstitution?: (appId: string, reason: string) => void;
+  onWithdrawSubstitution?: (requestId: string) => void;
 }
 
 export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
@@ -24,9 +29,14 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
   currentUser,
   onOpenCheckInModal,
   onSendLineToast,
-  onCancelSignup
+  onCancelSignup,
+  substitutions = [],
+  onRequestSubstitution,
+  onWithdrawSubstitution
 }) => {
   const [cancelConfirmAppId, setCancelConfirmAppId] = useState<string | null>(null);
+  const [subFormAppId, setSubFormAppId] = useState<string | null>(null);
+  const [subReason, setSubReason] = useState('');
   const [activeSubTab, setActiveSubTab] = useState<'all' | 'upcoming' | 'completed' | 'pending'>('all');
   const [showCertificateModal, setShowCertificateModal] = useState(false);
 
@@ -260,6 +270,27 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
                         未錄取 (名額額滿)
                       </span>
                     )}
+
+                    {app.status === 'cancelled' && (
+                      <span className="text-xs font-extrabold px-3 py-1 bg-slate-100 text-slate-600 rounded-full flex items-center gap-1">
+                        <XCircle className="w-3.5 h-3.5 text-slate-400" />
+                        <span>已取消報名</span>
+                      </span>
+                    )}
+
+                    {app.status === 'substituted' && (
+                      <span className="text-xs font-extrabold px-3 py-1 bg-violet-100 text-violet-800 rounded-full flex items-center gap-1">
+                        <Handshake className="w-3.5 h-3.5 text-violet-600" />
+                        <span>已由夥伴代班</span>
+                      </span>
+                    )}
+
+                    {app.status === 'absent' && (
+                      <span className="text-xs font-extrabold px-3 py-1 bg-rose-100 text-rose-800 rounded-full flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                        <span>紀錄為未到場</span>
+                      </span>
+                    )}
                   </div>
 
                   {/* Shift Title */}
@@ -329,10 +360,100 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
                       </a>
                     )}
 
+                    {app.status === 'approved' && onRequestSubstitution && (() => {
+                      const open = substitutions.find(
+                        s => s.signupId === app.id && s.status === 'open'
+                      );
+                      const hours = hoursUntilShift(shift?.date, shift?.timeRange);
+                      const past = hours !== null && hours < 0;
+                      if (past) return null;
+
+                      if (open) {
+                        return (
+                          <div className="w-full bg-violet-50 border border-violet-200 rounded-2xl px-3 py-2 flex items-center justify-between gap-2 flex-wrap">
+                            <span className="text-xs text-violet-900 font-bold flex items-center gap-1.5">
+                              <Handshake className="w-3.5 h-3.5 text-violet-600" />
+                              代班請求進行中，等待夥伴接手
+                              {open.reason && <span className="font-normal">（{open.reason}）</span>}
+                            </span>
+                            {onWithdrawSubstitution && (
+                              <button
+                                type="button"
+                                onClick={() => onWithdrawSubstitution(open.id)}
+                                className="text-xs text-violet-700 hover:text-violet-900 hover:underline font-bold flex items-center gap-1 cursor-pointer"
+                              >
+                                <Undo2 className="w-3.5 h-3.5" />
+                                <span>我可以來了，撤回</span>
+                              </button>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      if (subFormAppId === app.id) {
+                        return (
+                          <div className="w-full bg-violet-50 border border-violet-200 rounded-2xl p-3 space-y-2 animate-fade-in">
+                            <label className="text-xs font-bold text-violet-900 block">
+                              簡單說明原因（選填，其他夥伴看得到）
+                            </label>
+                            <input
+                              type="text"
+                              value={subReason}
+                              maxLength={200}
+                              onChange={e => setSubReason(e.target.value)}
+                              placeholder="例如：家裡臨時有事"
+                              className="w-full px-3 py-2 rounded-xl border border-violet-200 text-xs"
+                            />
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onRequestSubstitution(app.id, subReason.trim());
+                                  setSubFormAppId(null);
+                                  setSubReason('');
+                                }}
+                                className="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs font-black transition cursor-pointer"
+                              >
+                                送出代班請求
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { setSubFormAppId(null); setSubReason(''); }}
+                                className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-600 rounded-lg text-xs font-bold border border-slate-200 transition cursor-pointer"
+                              >
+                                再想想
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      const urgent = hours !== null && hours < SUBSTITUTION_NOTICE_HOURS;
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => { setSubFormAppId(app.id); setSubReason(''); }}
+                          className={`text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                            urgent ? 'text-violet-700 hover:text-violet-900' : 'text-[#716053] hover:text-slate-900'
+                          } hover:underline`}
+                        >
+                          <Handshake className="w-3.5 h-3.5" />
+                          <span>{urgent ? `來不及了？找人代班（${timeUntilLabel(hours)}）` : '找人代班'}</span>
+                        </button>
+                      );
+                    })()}
+
                     {(app.status === 'pending' || app.status === 'approved') && onCancelSignup && (
                       cancelConfirmAppId === app.id ? (
-                        <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-xl animate-fade-in">
-                          <span className="text-xs text-rose-800 font-bold">確定取消此班次？</span>
+                        <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-xl animate-fade-in flex-wrap">
+                          <span className="text-xs text-rose-800 font-bold">
+                            {(() => {
+                              const hours = hoursUntilShift(shift?.date, shift?.timeRange);
+                              return hours !== null && hours >= 0 && hours < SUBSTITUTION_NOTICE_HOURS
+                                ? `距離開始${timeUntilLabel(hours)}，依規章請改為找人代班`
+                                : '確定取消此班次？名額會重新釋出。';
+                            })()}
+                          </span>
                           <button
                             type="button"
                             onClick={() => {

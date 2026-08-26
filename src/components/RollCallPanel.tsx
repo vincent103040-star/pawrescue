@@ -19,7 +19,7 @@
  * reconsider.
  */
 import React, { useEffect, useState } from 'react';
-import { ClipboardCheck, Loader2, Check, UserX, AlertTriangle, CalendarDays } from 'lucide-react';
+import { ClipboardCheck, Loader2, Check, UserX, AlertTriangle, CalendarDays, Handshake } from 'lucide-react';
 import { authFetch } from '../utils/session';
 import { resolveZone } from '../data/zones';
 
@@ -32,6 +32,8 @@ interface ExpectedPerson {
   checkInTime?: string;
   reviewedBy?: string;
   absencesSoFar: number;
+  /** Set when this person asked for a substitute and nobody took it. */
+  unfilledRequest?: { reason: string; raisedLate: boolean; createdAtUtc: string };
 }
 
 interface RollCallShift {
@@ -216,6 +218,25 @@ export const RollCallPanel: React.FC<RollCallPanelProps> = ({ onToast, onChanged
                             </span>
                           )}
                         </div>
+                        {person.unfilledRequest && (
+                          <div className="mt-1.5 px-2.5 py-1.5 rounded-lg bg-violet-50 border border-violet-200">
+                            <p className="text-[11px] text-violet-900 font-bold flex items-center gap-1 flex-wrap">
+                              <Handshake className="w-3 h-3 shrink-0" />
+                              <span>曾發起代班請求，但沒有夥伴接手</span>
+                              {person.unfilledRequest.raisedLate && (
+                                <span className="px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">
+                                  未滿 24 小時
+                                </span>
+                              )}
+                            </p>
+                            {person.unfilledRequest.reason && (
+                              <p className="text-[11px] text-violet-700 mt-0.5">
+                                原因：{person.unfilledRequest.reason}
+                              </p>
+                            )}
+                          </div>
+                        )}
+
                         <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-500 flex-wrap">
                           {person.absencesSoFar > 0 && (
                             <span className={`flex items-center gap-1 font-bold ${
@@ -259,6 +280,7 @@ export const RollCallPanel: React.FC<RollCallPanelProps> = ({ onToast, onChanged
       <p className="text-[11px] text-slate-400 border-t border-slate-100 pt-3">
         記錄為「未到」會累計在該志工的缺席次數上；累計滿 {threshold} 次會依規章自動暫停其搶班權限，並以 LINE 通知本人。
         停權不會影響已累積的服務時數與出勤紀錄，督導可在「志工名冊」隨時恢復。
+        標示「曾發起代班請求」的夥伴事先告知過但沒人接手 —— 這跟直接沒出現不是同一件事，請斟酌後再記錄。
       </p>
     </div>
   );
