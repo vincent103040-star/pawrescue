@@ -22,12 +22,24 @@ import {
 interface RulebookManualModalProps {
   onClose: () => void;
   onSendLineToast?: (msg: string) => void;
+  /**
+   * Which half of the manual to show.
+   *
+   * The coordinator half describes the roster, the shortage board and the
+   * broadcast tools -- screens a volunteer has no route to. Printing them in a
+   * volunteer's handbook does not expose anything (the API refuses them either
+   * way), but it does describe an application they are not using, which makes
+   * the part that is theirs harder to find.
+   */
+  role?: 'admin' | 'volunteer';
 }
 
 export const RulebookManualModal: React.FC<RulebookManualModalProps> = ({
   onClose,
-  onSendLineToast
+  onSendLineToast,
+  role = 'admin'
 }) => {
+  const showAdminGuide = role === 'admin';
   const [activeSubTab, setActiveSubTab] = useState<'rulebook' | 'manual'>('rulebook');
 
   // Trigger browser print to save/download cleanly formatted PDF
@@ -218,7 +230,8 @@ export const RulebookManualModal: React.FC<RulebookManualModalProps> = ({
                 <span className="text-xs font-mono text-slate-400">Section 2</span>
               </div>
 
-              {/* 2.1 管理者社工功能 */}
+              {/* 2.1 管理者社工功能 -- 僅管理端 */}
+              {showAdminGuide && (
               <div className="space-y-3">
                 <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
                   <span className="px-2.5 py-0.5 rounded-lg bg-slate-800 text-white font-mono text-xs">A</span>
@@ -267,54 +280,125 @@ export const RulebookManualModal: React.FC<RulebookManualModalProps> = ({
                   </div>
                 </div>
               </div>
+              )}
 
-              {/* 2.2 志工夥伴功能 */}
+              {/* 2.2 志工夥伴功能 -- 依志工端五個分頁排序 */}
               <div className="space-y-3">
                 <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
                   <span className="px-2.5 py-0.5 rounded-lg bg-[#716053] text-white font-mono text-xs">B</span>
                   <span>志工夥伴 (Volunteer Guide)</span>
                 </h4>
+                <p className="text-xs text-slate-500">
+                  下列編號對應志工端上方的五個分頁，順序一致。
+                </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+
                   <div className="bg-[#FFFDF7] p-4 rounded-2xl border border-slate-200 space-y-1.5">
                     <div className="flex items-center gap-2 font-bold text-slate-900">
                       <PawPrint className="w-4 h-4 text-purple-600" />
-                      <span>1. 志工線上搶班門戶</span>
+                      <span>1. 職位與班次時間表（排班月曆與搶班）</span>
                     </div>
                     <p className="text-slate-600 leading-relaxed">
-                      切換至「🐾 志工線上搶班門戶」，選擇意向院區與場域班次，填寫基本資料即可即時預約報名，並收到 LINE 自動確認通知。
+                      瀏覽已發布的班次，按場域或日期篩選，直接報名。同一時段已有班次時會即時提醒衝突。錄取後會收到 LINE 通知，並可一鍵加入 Google 日曆。
+                    </p>
+                  </div>
+
+                  <div className="bg-[#FFFDF7] p-4 rounded-2xl border border-slate-200 space-y-1.5">
+                    <div className="flex items-center gap-2 font-bold text-slate-900">
+                      <Calendar className="w-4 h-4 text-emerald-600" />
+                      <span>2. 我的排班與出勤紀錄</span>
+                    </div>
+                    <p className="text-slate-600 leading-relaxed">
+                      查看審核進度、即將出勤的班次與過去的服務紀錄。這也是取消報名與發起代班的地方（見下一項）。
+                    </p>
+                  </div>
+
+                  <div className="bg-amber-50 p-4 rounded-2xl border border-amber-300 space-y-1.5 md:col-span-2">
+                    <div className="flex items-center gap-2 font-bold text-slate-900">
+                      <Users className="w-4 h-4 text-amber-700" />
+                      <span>2-1. 來不了時怎麼辦：取消報名與「找人代班」</span>
+                    </div>
+                    <p className="text-slate-600 leading-relaxed">
+                      距離班次開始 <strong>超過 24 小時</strong>：可以直接「取消報名」，名額會重新釋出。
+                    </p>
+                    <p className="text-slate-600 leading-relaxed">
+                      距離班次開始 <strong>不到 24 小時</strong>：依志工規章不能直接取消，請改按「<strong>找人代班</strong>」。填一行原因送出後，其他夥伴會在自己的「我的排班」頁面看到這個班，有人接手時您會收到 LINE 通知，這次也<strong>不會列入未到紀錄</strong>。
+                    </p>
+                    <p className="text-slate-600 leading-relaxed">
+                      自己又可以來了？在同一個班次上按「我可以來了，撤回」即可。
+                    </p>
+                    <p className="text-amber-900 leading-relaxed font-bold">
+                      注意：發出代班請求不等於免除出席。沒有人接手的話，這個班仍然是您的。
                     </p>
                   </div>
 
                   <div className="bg-[#FFFDF7] p-4 rounded-2xl border border-slate-200 space-y-1.5">
                     <div className="flex items-center gap-2 font-bold text-slate-900">
                       <QrCode className="w-4 h-4 text-emerald-600" />
-                      <span>2. 現場 QR Code 簽到與簽退打卡</span>
+                      <span>2-2. 現場 QR Code 簽到與簽退</span>
                     </div>
                     <p className="text-slate-600 leading-relaxed">
-                      抵達園區後點擊「志工掃碼簽到」，輸入姓名選擇今日班次進行打卡；服務結束後填寫體驗評分並打卡簽退，時數自動累加。
+                      抵達園區後點擊上方「手機掃碼簽到 / 簽退」，選擇今日班次打卡；服務結束後填寫體驗評分並簽退，時數自動累加。<strong>簽到需要定位權限與現場簽到碼。</strong>
                     </p>
                   </div>
 
                   <div className="bg-[#FFFDF7] p-4 rounded-2xl border border-slate-200 space-y-1.5">
                     <div className="flex items-center gap-2 font-bold text-slate-900">
                       <Award className="w-4 h-4 text-amber-600" />
-                      <span>3. 志工成長軌跡與數位服務證明</span>
+                      <span>3. 志工成長晉升歷程</span>
                     </div>
                     <p className="text-slate-600 leading-relaxed">
-                      於個人資料頁查看『志工成長軌跡』進度條，逐步打勾解鎖實習/正式/資深志工考核項目；時數符合條件可線上下載列印官方服務證明。
+                      查看實習 / 正式 / 資深志工的考核進度條與已達成項目，達標後可送出晉升申請交給社工審核；時數符合條件可線上下載官方服務證明。
+                    </p>
+                  </div>
+
+                  <div className="bg-[#FFFDF7] p-4 rounded-2xl border border-slate-200 space-y-1.5">
+                    <div className="flex items-center gap-2 font-bold text-slate-900">
+                      <Heart className="w-4 h-4 text-rose-600" />
+                      <span>4. LINE 通知與個人設定</span>
+                    </div>
+                    <p className="text-slate-600 leading-relaxed">
+                      維護個人資料、緊急聯絡人與擅長技能，並選擇要不要收「班次異動」、「緊急招募」、「簽到提醒」推播。完成 LINE 帳號連結後，下次可以直接用 LINE 登入。
+                    </p>
+                    <p className="text-slate-500 leading-relaxed">
+                      （「簽到提醒」目前尚未自動發送，正在製作中——<strong>請勿依賴它提醒您出勤</strong>。）
+                    </p>
+                  </div>
+
+                  <div className="bg-[#FFFDF7] p-4 rounded-2xl border border-slate-200 space-y-1.5">
+                    <div className="flex items-center gap-2 font-bold text-slate-900">
+                      <BookOpen className="w-4 h-4 text-indigo-600" />
+                      <span>5. 園區安全守則與 SOP</span>
+                    </div>
+                    <p className="text-slate-600 leading-relaxed">
+                      閱讀各區的安全規範、下載社工上傳的 SOP 文件與教學影片，並可向「手冊 AI 小幫手」提問。它只根據社工實際寫進來的內容回答。
                     </p>
                   </div>
 
                   <div className="bg-[#FFFDF7] p-4 rounded-2xl border border-slate-200 space-y-1.5">
                     <div className="flex items-center gap-2 font-bold text-slate-900">
                       <CheckCircle2 className="w-4 h-4 text-indigo-600" />
-                      <span>4. 勤務看板 SOP 現場執行打勾</span>
+                      <span>6. 每日勤務看板打勾</span>
                     </div>
                     <p className="text-slate-600 leading-relaxed">
-                      在首頁「每日志工勤務看板」查看當日值班 SOP（如給水、出犬檢查、貓房消毒），每完成一項點擊打勾核銷，系統同步紀錄。
+                      在首頁看到當日值班要做的勤務項目（給水、出犬檢查、貓房消毒…），每完成一項點選核銷，系統同步紀錄是誰、什麼時候完成的。
                     </p>
                   </div>
+
+                </div>
+
+                <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-xs space-y-1.5">
+                  <div className="flex items-center gap-2 font-bold text-rose-900">
+                    <AlertTriangle className="w-4 h-4 text-rose-600" />
+                    <span>與認真出勤有關的兩件事</span>
+                  </div>
+                  <p className="text-rose-800 leading-relaxed">
+                    <strong>累計未到場 2 次，搶班權限會被暫停。</strong>未到場是由社工督導在點名時確認後才記錄的，不是系統自己判斷——沒簽到不等於沒來，園區裡手機常常沒訊號。
+                  </p>
+                  <p className="text-rose-800 leading-relaxed">
+                    被暫停時您會收到 LINE 通知。<strong>已累積的服務時數與出勤紀錄不會消失</strong>，與社工督導聯繫後可隨時恢復。有事來不了，<strong>提前發代班請求就是正確的做法</strong>。
+                  </p>
                 </div>
               </div>
 
@@ -324,7 +408,7 @@ export const RulebookManualModal: React.FC<RulebookManualModalProps> = ({
           {/* Footer Signature on print */}
           <div className="pt-6 border-t border-slate-200 text-xs text-slate-500 flex justify-between items-center print:pt-4">
             <span>🐾 浪浪家園 PawRescue 志工服務團隊 敬啟</span>
-            <span className="font-mono">版本號: 2026-08-05-V2</span>
+            <span className="font-mono">版本號: 2026-08-26-V3</span>
           </div>
 
         </div>

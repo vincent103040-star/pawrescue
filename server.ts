@@ -895,7 +895,8 @@ ${contextText}
     }
   });
 
-  // API endpoint (admin only, enforced client-side by the tab it's wired into):
+  // API endpoint (admin only -- the /api/admin default-deny middleware enforces
+  // it on the server; the tab it is wired into is merely where it is reached from):
   // save the SOP guide content, and re-embed every section + the emergency block
   // for RAG. Sections that changed get fresh vectors; the "static" background
   // chunks (admin/volunteer process descriptions, seeded from the original

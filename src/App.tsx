@@ -1242,6 +1242,7 @@ export default function App() {
         <RulebookManualModal
           onClose={() => setIsRulebookModalOpen(false)}
           onSendLineToast={showToast}
+          role={userRole === 'admin' ? 'admin' : 'volunteer'}
         />
       )}
 
