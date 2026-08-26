@@ -36,6 +36,45 @@ export const VolunteerRoster: React.FC<VolunteerRosterProps> = ({
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [deletingEmail, setDeletingEmail] = useState<string | null>(null);
 
+  const [statusBusy, setStatusBusy] = useState<string[]>([]);
+
+  /**
+   * Suspends or restores a volunteer's booking rights.
+   *
+   * Restoring is the common case and is why this control exists at all: the
+   * suspension rule assumes somebody can ask to be reinstated, so a coordinator
+   * needs a way to say yes. The server notifies the volunteer either way.
+   */
+  const changeAccountStatus = async (
+    vol: VolunteerProfile,
+    status: 'active' | 'suspended' | 'inactive',
+    reason: string
+  ) => {
+    if (statusBusy.includes(vol.email)) return;
+    setStatusBusy(prev => [...prev, vol.email]);
+    try {
+      const res = await authFetch(`/api/admin/volunteers/${encodeURIComponent(vol.email)}/account-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, reason })
+      });
+      const data = await res.json();
+      if (!data.success) { onSendLineToast?.(`⚠️ ${data.error || '更新失敗'}`); return; }
+      onSendLineToast?.(
+        status === 'active'
+          ? `✅ 已恢復【${vol.name}】的搶班權限，並已通知本人。`
+          : status === 'suspended'
+            ? `已暫停【${vol.name}】的搶班權限，並已通知本人。`
+            : `已將【${vol.name}】設為離退，紀錄與時數都保留。`
+      );
+      onVolunteersChanged?.();
+    } catch {
+      onSendLineToast?.('⚠️ 無法連線，狀態尚未更新。');
+    } finally {
+      setStatusBusy(prev => prev.filter(e => e !== vol.email));
+    }
+  };
+
   const startEditing = (vol: VolunteerProfile) => {
     setEditingEmail(vol.email);
     setEditDraft({
@@ -607,6 +646,43 @@ export const VolunteerRoster: React.FC<VolunteerRosterProps> = ({
                     </div>
                   </div>
                 </div>
+
+                {/* Account state -- only shown when it is not the ordinary one,
+                    so a roster of active volunteers stays uncluttered. */}
+                {vol.accountStatus && vol.accountStatus !== 'active' && (
+                  <div className={`rounded-2xl p-3 text-xs border ${
+                    vol.accountStatus === 'suspended'
+                      ? 'bg-rose-50 border-rose-200'
+                      : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className={`font-bold ${
+                        vol.accountStatus === 'suspended' ? 'text-rose-800' : 'text-slate-600'
+                      }`}>
+                        {vol.accountStatus === 'suspended' ? '⛔ 已停權（無法搶班）' : '📁 已離退'}
+                      </span>
+                      <button
+                        onClick={() => changeAccountStatus(vol, 'active', '由督導恢復')}
+                        disabled={statusBusy.includes(vol.email)}
+                        className="px-2.5 py-1 rounded-xl bg-emerald-600 text-white text-[11px] font-bold hover:bg-emerald-700 disabled:opacity-50 transition"
+                      >
+                        {statusBusy.includes(vol.email) ? '處理中...' : '恢復權限'}
+                      </button>
+                    </div>
+                    {vol.statusReason && (
+                      <p className="text-[10px] text-slate-500 mt-1.5">{vol.statusReason}</p>
+                    )}
+                    {vol.statusChangedBy && (
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        由 {vol.statusChangedBy === 'system' ? '系統' : vol.statusChangedBy} 設定
+                        {vol.statusChangedAt && ` · ${new Date(vol.statusChangedAt).toLocaleDateString('zh-TW')}`}
+                      </p>
+                    )}
+                    <p className="text-[10px] text-emerald-700 mt-1.5">
+                      服務時數與出勤紀錄都保留，恢復後即可繼續報名。
+                    </p>
+                  </div>
+                )}
 
                 {/* Hours & Shifts Stats */}
                 <div className="grid grid-cols-2 gap-2 bg-[#FAF6EE] p-3.5 rounded-2xl text-xs border border-[#716053]">
