@@ -6,7 +6,7 @@ import { writeFileSync, mkdirSync, createWriteStream, statSync, readFileSync, un
 import { gzipSync } from 'zlib';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
-import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, cancelShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, getRollCall, getAbsenceCounts, setVolunteerAccountStatus, sweepStaleSuspensions, ABSENCE_SUSPENSION_THRESHOLD, createSubstitutionRequest, getSubstitutionRequest, getOpenSubstitutionForSignup, getOpenSubstitutions, takeSubstitutionRequest, withdrawSubstitutionRequest, expireStaleSubstitutions, hoursUntilShift, SUBSTITUTION_NOTICE_HOURS } from './db';
+import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, cancelShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, getRollCall, getAbsenceCounts, setVolunteerAccountStatus, sweepStaleSuspensions, ABSENCE_SUSPENSION_THRESHOLD, createSubstitutionRequest, getSubstitutionRequest, getOpenSubstitutionForSignup, getOpenSubstitutions, takeSubstitutionRequest, withdrawSubstitutionRequest, expireStaleSubstitutions, hoursUntilShift, SUBSTITUTION_NOTICE_HOURS, getReminderCandidates, markReminderSent, normalizeReminderLead } from './db';
 import { PDFParse } from 'pdf-parse';
 import type { SopContent, SopDocument, SopVideo } from './src/types';
 
@@ -1338,7 +1338,10 @@ ${contextText}
         setLinePreferences(email, {
           shiftChanges: !!linePreferences.shiftChanges,
           urgentRecruitment: !!linePreferences.urgentRecruitment,
-          checkInReminder: !!linePreferences.checkInReminder
+          checkInReminder: !!linePreferences.checkInReminder,
+          // Stored rather than dropped: the sweep reads this to decide when to
+          // send, and it used to live only in the volunteer's browser.
+          reminderTimingHours: normalizeReminderLead(linePreferences.reminderTimingHours)
         });
       }
 
@@ -1627,21 +1630,30 @@ ${contextText}
    * in that category: each one changes what is being asked of them, and a
    * person cannot act on what nobody told them.
    */
-  async function notifyVolunteerDirect(email: string, text: string): Promise<void> {
+  async function notifyVolunteerDirect(email: string, text: string): Promise<boolean> {
     try {
       const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
       const linked = getLineUserId(email);
-      if (!token || !linked) return; // not bound to LINE yet -- nothing to send to
-      await fetch('https://api.line.me/v2/bot/message/push', {
+      if (!token || !linked) return false; // not bound to LINE yet -- nothing to send to
+      const res = await fetch('https://api.line.me/v2/bot/message/push', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ to: linked.lineUserId, messages: [{ type: 'text', text }] })
       });
+      // LINE answers 200 on delivery and 4xx on a bad token or unreachable
+      // recipient. Callers that need to know -- the reminder sweep, which must
+      // not record a send that did not happen -- read this.
+      if (!res.ok) {
+        console.warn('LINE push rejected:', email, res.status);
+        return false;
+      }
+      return true;
     } catch (error: any) {
       // Best effort: a push that fails must not stop the state change, but it
       // should be visible, because a suspension nobody was told about is the
       // failure mode this whole notification exists to prevent.
       console.warn('Account status notification failed:', email, error?.message || error);
+      return false;
     }
   }
 
@@ -3925,6 +3937,7 @@ ${contextText}
   // day after that; backupDatabase keeps the newest 14 and drops the rest.
   // ==========================================================================
   const BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+  const REMINDER_SWEEP_MS = 5 * 60 * 1000;
 
   function runBackup() {
     try {
@@ -3969,12 +3982,68 @@ ${contextText}
     }
   }
 
+  /**
+   * Sends the shift reminder the settings panel has been promising.
+   *
+   * Runs every few minutes rather than daily, because the lead times on offer
+   * are as short as one hour -- a once-a-day pass would miss most of them.
+   *
+   * Three things this deliberately does:
+   *
+   * It honours the volunteer's preference. Unlike a suspension notice, a
+   * reminder is exactly the kind of message somebody may reasonably not want,
+   * and the switch to decline it already exists.
+   *
+   * It records a send only after LINE accepted it. Recording first would mean a
+   * push that failed is never retried; recording after means a transient
+   * failure is picked up on the next tick, and the window closes by itself once
+   * the shift starts.
+   *
+   * It skips volunteers with no LINE binding rather than marking them done, so
+   * somebody who links their account later still gets reminded.
+   */
+  async function runReminderSweep() {
+    try {
+      const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' });
+      let sent = 0;
+      for (const candidate of getReminderCandidates(today)) {
+        const hours = hoursUntilShift(candidate.shiftId);
+        if (hours === null || hours <= 0) continue;
+
+        const prefs = getLinePreferences(candidate.volunteerEmail);
+        if (!prefs.checkInReminder) continue;
+        if (hours > prefs.reminderTimingHours) continue;
+
+        const whenLeft = hours < 1
+          ? `${Math.max(1, Math.round(hours * 60))} 分鐘`
+          : `${Math.round(hours)} 小時`;
+        const delivered = await notifyVolunteerDirect(
+          candidate.volunteerEmail,
+          `⏰【浪浪家園】${candidate.volunteerName} 您好，提醒您的志工班次即將開始：\n`
+          + `${candidate.title}\n${candidate.date} ${candidate.timeRange}（約剩 ${whenLeft}）\n`
+          + `抵達園區後請開啟「手機掃碼簽到」完成報到。路上小心，浪浪等你 🐾`
+        );
+        if (delivered) {
+          markReminderSent(candidate.signupId);
+          sent++;
+        }
+      }
+      if (sent > 0) console.log(`LINE: 已送出 ${sent} 則出勤提醒`);
+    } catch (error: any) {
+      console.error('Reminder Sweep Error:', error?.message || error);
+    }
+  }
+
   runBackup();
   runSuspensionSweep();
   runSubstitutionSweep();
+  void runReminderSweep();
   setInterval(runBackup, BACKUP_INTERVAL_MS).unref();
   setInterval(runSuspensionSweep, BACKUP_INTERVAL_MS).unref();
   setInterval(runSubstitutionSweep, BACKUP_INTERVAL_MS).unref();
+  // Its own cadence: the shortest lead time on offer is one hour, so a daily
+  // pass would deliver most reminders after the shift they were about.
+  setInterval(() => void runReminderSweep(), REMINDER_SWEEP_MS).unref();
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🐾 Animal Shelter Volunteer HR Server running on http://localhost:${PORT}`);

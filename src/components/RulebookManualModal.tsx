@@ -362,7 +362,7 @@ export const RulebookManualModal: React.FC<RulebookManualModalProps> = ({
                       維護個人資料、緊急聯絡人與擅長技能，並選擇要不要收「班次異動」、「緊急招募」、「簽到提醒」推播。完成 LINE 帳號連結後，下次可以直接用 LINE 登入。
                     </p>
                     <p className="text-slate-500 leading-relaxed">
-                      （「簽到提醒」目前尚未自動發送，正在製作中——<strong>請勿依賴它提醒您出勤</strong>。）
+                      （「簽到提醒」會在班次開始前依您設定的時數自動發送，可選 1／2／12／24 小時。需要先完成 LINE 帳號連結。）
                     </p>
                   </div>
 

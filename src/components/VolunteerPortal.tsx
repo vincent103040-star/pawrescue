@@ -532,7 +532,10 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
           linePreferences: {
             shiftChanges: linePreferences.shiftChanges,
             urgentRecruitment: linePreferences.urgentRecruitment,
-            checkInReminder: linePreferences.checkInReminder
+            checkInReminder: linePreferences.checkInReminder,
+            // Sent now. This choice used to stay in localStorage, so it was lost
+            // on a new device -- and nothing on the server read it anyway.
+            reminderTimingHours: linePreferences.reminderTimingHours || 1
           }
         })
       }).catch(() => { /* best-effort sync, ignore network errors */ });
@@ -1485,7 +1488,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                             <option value={1}>出班前 1 小時</option>
                             <option value={2}>出班前 2 小時</option>
                             <option value={12}>出班前 12 小時</option>
-                            <option value={24}>前一日晚間 20:00</option>
+                            <option value={24}>出班前 24 小時</option>
                           </select>
                         </div>
                       )}
