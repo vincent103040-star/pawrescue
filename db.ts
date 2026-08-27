@@ -7,6 +7,10 @@ import path from 'path';
 import { randomUUID, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { VOLUNTEER_PROFILES, INITIAL_ATTENDANCE_RECORDS, INITIAL_SHIFTS, INITIAL_SHIFT_SIGNUPS, DEFAULT_SHELTER_LOCATION, DEFAULT_LINE_OFFICIAL_ACCOUNT } from './src/data/mockData';
 import { RULEBOOK_CORPUS } from './src/data/rulebookCorpus';
+// Shared with the duty form rather than reimplemented -- the first version had
+// a copy in each and the same off-by-empty-string bug in both.
+import { parseWeekdays, serializeWeekdays } from './src/utils/weekdays';
+export { parseWeekdays, serializeWeekdays } from './src/utils/weekdays';
 import type { VolunteerProfile, AttendanceRecord, PositionShift, ShiftSignup, SubstitutionRequest, SopContent, SopSection, SopDocument, SopVideo, PromotionRequest, ShiftTemplate, ShelterLocation, LineOfficialAccount } from './src/types';
 
 const dataDir = path.join(process.cwd(), 'data');
@@ -1742,6 +1746,9 @@ db.exec(`
     requiredPeople INTEGER NOT NULL DEFAULT 1,
     estimatedMinutes INTEGER NOT NULL DEFAULT 30,
     timeWindow TEXT NOT NULL DEFAULT '',
+    weekdays TEXT NOT NULL DEFAULT '',
+    startTime TEXT NOT NULL DEFAULT '',
+    endTime TEXT NOT NULL DEFAULT '',
     isRequired INTEGER NOT NULL DEFAULT 1,
     sopSectionId TEXT NOT NULL DEFAULT '',
     sopVideoId TEXT NOT NULL DEFAULT '',
@@ -1789,6 +1796,17 @@ export interface DutyItem {
   responsibleRole: DutyRole;
   requiredPeople: number;
   estimatedMinutes: number;
+  /** "HH:MM", empty when the shelter has not pinned the duty to a time yet. */
+  startTime: string;
+  endTime: string;
+  /**
+   * Which days it runs, as "0,6" (0 = Sunday). Empty means every day.
+   *
+   * Empty has to mean "no restriction": every row that existed before this
+   * column did is empty, and the other reading would have emptied the roster.
+   */
+  weekdays: string;
+  /** Derived from startTime/endTime for display. Never stored -- see the migration. */
   timeWindow: string;
   isRequired: boolean;
   sopSectionId: string;
@@ -1820,7 +1838,12 @@ function rowToDutyItem(row: any): DutyItem {
     responsibleRole: row.responsibleRole,
     requiredPeople: row.requiredPeople,
     estimatedMinutes: row.estimatedMinutes,
-    timeWindow: row.timeWindow,
+    startTime: row.startTime || '',
+    endTime: row.endTime || '',
+    weekdays: row.weekdays || '',
+    // Composed here rather than stored, so the two spellings of the same fact
+    // cannot disagree. The daily task board reads this to show the window.
+    timeWindow: row.startTime && row.endTime ? `${row.startTime} - ${row.endTime}` : '',
     isRequired: !!row.isRequired,
     sopSectionId: row.sopSectionId,
     sopVideoId: row.sopVideoId,
@@ -1865,11 +1888,13 @@ if (dutySeedCount.c === 0) {
     db.prepare(`
       INSERT INTO duty_items
         (id, zoneId, title, description, category, triggerType, shiftId, responsibleRole,
-         requiredPeople, estimatedMinutes, timeWindow, isRequired, sopSectionId, sopVideoId,
+         requiredPeople, estimatedMinutes, timeWindow, startTime, endTime, weekdays,
+         isRequired, sopSectionId, sopVideoId,
          status, sortOrder, organizationId, createdAt, updatedAt)
-      VALUES (?, ?, ?, '', ?, 'daily', '', 'volunteer', 1, ?, ?, ?, '', '', 'active', ?, ?, ?, ?)
+      VALUES (?, ?, ?, '', ?, 'daily', '', 'volunteer', 1, ?, '', ?, ?, '', ?, '', '', 'active', ?, ?, ?, ?)
     `).run(
-      `duty-${index + 1}`, zoneId, title, category, minutes, timeWindow,
+      `duty-${index + 1}`, zoneId, title, category, minutes,
+      String(timeWindow).split('-')[0].trim(), String(timeWindow).split('-')[1].trim(),
       optional.has(title) ? 0 : 1, index, currentOrganizationId(), seededAt, seededAt
     );
   });
@@ -1897,13 +1922,15 @@ export function createDutyItem(input: Omit<DutyItem, 'id' | 'status' | 'sortOrde
   db.prepare(`
     INSERT INTO duty_items
       (id, zoneId, title, description, category, triggerType, shiftId, responsibleRole,
-       requiredPeople, estimatedMinutes, timeWindow, isRequired, sopSectionId, sopVideoId,
+       requiredPeople, estimatedMinutes, timeWindow, startTime, endTime, weekdays,
+       isRequired, sopSectionId, sopVideoId,
        status, sortOrder, organizationId, createdAt, updatedAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
   `).run(
     id, input.zoneId, input.title, input.description, input.category, input.triggerType,
     input.shiftId, input.responsibleRole, input.requiredPeople, input.estimatedMinutes,
-    input.timeWindow, input.isRequired ? 1 : 0, input.sopSectionId, input.sopVideoId,
+    normalizeClock(input.startTime), normalizeClock(input.endTime), serializeWeekdays(input.weekdays),
+    input.isRequired ? 1 : 0, input.sopSectionId, input.sopVideoId,
     next.n, currentOrganizationId(), now, now
   );
   return getDutyItem(id)!;
@@ -1916,13 +1943,15 @@ export function updateDutyItem(id: string, updates: Partial<DutyItem>): DutyItem
   db.prepare(`
     UPDATE duty_items SET
       zoneId = ?, title = ?, description = ?, category = ?, triggerType = ?, shiftId = ?,
-      responsibleRole = ?, requiredPeople = ?, estimatedMinutes = ?, timeWindow = ?,
+      responsibleRole = ?, requiredPeople = ?, estimatedMinutes = ?,
+      startTime = ?, endTime = ?, weekdays = ?,
       isRequired = ?, sopSectionId = ?, sopVideoId = ?, updatedAt = ?
     WHERE id = ?
   `).run(
     merged.zoneId, merged.title, merged.description, merged.category, merged.triggerType,
     merged.shiftId, merged.responsibleRole, merged.requiredPeople, merged.estimatedMinutes,
-    merged.timeWindow, merged.isRequired ? 1 : 0, merged.sopSectionId, merged.sopVideoId,
+    normalizeClock(merged.startTime), normalizeClock(merged.endTime), serializeWeekdays(merged.weekdays),
+    merged.isRequired ? 1 : 0, merged.sopSectionId, merged.sopVideoId,
     new Date().toISOString(), id
   );
   return getDutyItem(id);
@@ -1991,23 +2020,112 @@ export function uncompleteDuty(dutyItemId: string, date: string, shiftId: string
  * personSlots is how many volunteer places a day of that area needs;
  * personHours is what those places add up to in time.
  */
+// Migration: which weekdays a duty runs, and its window as two real times.
+//
+// Both are correctness fixes rather than conveniences.
+//
+// Without weekdays every duty counted as daily. The shelter's adoption event
+// runs on Saturdays, so registering it made the workload panel report five
+// volunteers for eight hours every single day -- 560 of the fortnight's 672
+// hours were work nobody was ever going to do, and the roster would have opened
+// a shift for it on all fourteen days.
+//
+// The window was one free-text field ("09:00 - 09:30") that the roster had to
+// parse with a regex, so a space or a full-width colon in the wrong place meant
+// the duty silently vanished from the schedule with nothing reported.
+try {
+  db.exec(`ALTER TABLE duty_items ADD COLUMN weekdays TEXT NOT NULL DEFAULT ''`);
+} catch { /* column already exists */ }
+try {
+  db.exec(`ALTER TABLE duty_items ADD COLUMN startTime TEXT NOT NULL DEFAULT ''`);
+} catch { /* column already exists */ }
+try {
+  db.exec(`ALTER TABLE duty_items ADD COLUMN endTime TEXT NOT NULL DEFAULT ''`);
+} catch { /* column already exists */ }
+
+try {
+  const needsSplit = db.prepare(`
+    SELECT id, timeWindow FROM duty_items
+    WHERE TRIM(COALESCE(timeWindow, '')) <> '' AND TRIM(COALESCE(startTime, '')) = ''
+  `).all() as any[];
+  if (needsSplit.length > 0) {
+    const setTimes = db.prepare('UPDATE duty_items SET startTime = ?, endTime = ? WHERE id = ?');
+    let moved = 0;
+    for (const row of needsSplit) {
+      const m = String(row.timeWindow).match(/(\d{1,2})\s*[:：]\s*(\d{2})\s*[-~–—到至]\s*(\d{1,2})\s*[:：]\s*(\d{2})/);
+      if (!m) continue;
+      const pad = (h: string, mm: string) => `${h.padStart(2, '0')}:${mm}`;
+      setTimes.run(pad(m[1], m[2]), pad(m[3], m[4]), row.id);
+      moved++;
+    }
+    if (moved > 0) console.log(`SQLite: 已將 ${moved} 筆勤務的時間範圍拆成起訖兩欄`);
+  }
+} catch (error: any) {
+  console.warn('SQLite: 勤務時間拆欄失敗，維持原樣：', error?.message || error);
+}
+
+/**
+ * Accepts what a time input sends and stores "HH:MM", or "" for no time.
+ *
+ * The window used to be one free-text field, so a stray space or a full-width
+ * colon made the roster's regex miss the duty entirely with nothing reported.
+ */
+export function normalizeClock(value: unknown): string {
+  const m = String(value || '').trim().match(/^(\d{1,2})\s*[:：]\s*(\d{2})/);
+  if (!m) return '';
+  const hours = Number(m[1]);
+  const minutes = Number(m[2]);
+  if (hours > 23 || minutes > 59) return '';
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+/** Taiwan-local day of week for a YYYY-MM-DD. */
+export function weekdayOf(date: string): number {
+  return new Date(`${date}T12:00:00+08:00`).getDay();
+}
+
+export function dutyRunsOn(weekdays: unknown, date: string): boolean {
+  const days = parseWeekdays(weekdays);
+  return days.length === 0 || days.includes(weekdayOf(date));
+}
+
 export function getZoneWorkload(): Array<{
   zoneId: string; items: number; personSlots: number; personHours: number;
 }> {
-  const rows = db.prepare(`
-    SELECT zoneId,
-           COUNT(*) AS items,
-           SUM(requiredPeople) AS personSlots,
-           SUM(requiredPeople * estimatedMinutes) AS personMinutes
+  // Walked day by day rather than multiplied by fourteen, because a duty that
+  // only runs on Saturdays contributes on two of those days and not the other
+  // twelve. Multiplying a daily figure was what reported an adoption event as
+  // forty hours every day of the week.
+  const duties = db.prepare(`
+    SELECT zoneId, weekdays, requiredPeople, estimatedMinutes
     FROM duty_items
     WHERE status = 'active' AND triggerType = 'daily'
-    GROUP BY zoneId
   `).all() as any[];
-  return rows.map(row => ({
-    zoneId: row.zoneId,
-    items: row.items,
-    personSlots: row.personSlots || 0,
-    personHours: Math.round(((row.personMinutes || 0) / 60) * 10) / 10
+
+  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' });
+  const start = new Date(`${today}T12:00:00+08:00`);
+  const dates: string[] = [];
+  for (let i = 0; i < 14; i++) {
+    dates.push(new Date(start.getTime() + i * 86400000)
+      .toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' }));
+  }
+
+  const byZone = new Map<string, { items: number; slots: number; minutes: number }>();
+  for (const duty of duties) {
+    const entry = byZone.get(duty.zoneId) || { items: 0, slots: 0, minutes: 0 };
+    entry.items += 1;
+    const runs = dates.filter(date => dutyRunsOn(duty.weekdays, date)).length;
+    const people = Math.max(1, Number(duty.requiredPeople) || 1);
+    entry.slots += people * runs;
+    entry.minutes += people * (Number(duty.estimatedMinutes) || 0) * runs;
+    byZone.set(duty.zoneId, entry);
+  }
+
+  return [...byZone.entries()].map(([zoneId, entry]) => ({
+    zoneId,
+    items: entry.items,
+    personSlots: entry.slots,
+    personHours: Math.round((entry.minutes / 60) * 10) / 10
   }));
 }
 
@@ -2402,21 +2520,24 @@ export interface PlannedShift {
 export function planShiftsForRange(startDate: string, days: number): PlannedShift[] {
   const zones = getActiveZones();
   const duties = db.prepare(`
-    SELECT zoneId, title, timeWindow, requiredPeople, estimatedMinutes
+    SELECT zoneId, title, startTime, endTime, weekdays, requiredPeople, estimatedMinutes
     FROM duty_items
     WHERE status = 'active' AND triggerType = 'daily'
   `).all() as any[];
 
-  const byZone = new Map<string, Array<{ start: number; end: number; people: number; title: string; minutes: number }>>();
+  const byZone = new Map<string, Array<{
+    start: number; end: number; people: number; title: string; minutes: number; weekdays: string;
+  }>>();
   for (const duty of duties) {
-    const window = parseWindow(duty.timeWindow);
-    if (!window) continue; // no time window -- nothing to schedule it into
+    const window = parseWindow(`${duty.startTime}-${duty.endTime}`);
+    if (!window) continue; // no usable times -- nothing to schedule it into
     const list = byZone.get(duty.zoneId) || [];
     list.push({
       start: window[0], end: window[1],
       people: Math.max(1, Number(duty.requiredPeople) || 1),
       title: duty.title,
-      minutes: Math.max(0, Number(duty.estimatedMinutes) || 0)
+      minutes: Math.max(0, Number(duty.estimatedMinutes) || 0),
+      weekdays: String(duty.weekdays || '')
     });
     byZone.set(duty.zoneId, list);
   }
@@ -2430,7 +2551,12 @@ export function planShiftsForRange(startDate: string, days: number): PlannedShif
       .toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' });
 
     for (const zone of zones) {
-      const items = (byZone.get(zone.id) || []).slice().sort((a, b) => a.start - b.start);
+      // Only the duties that actually run on this weekday. Without this the
+      // Saturday adoption event would open a shift on all fourteen days.
+      const items = (byZone.get(zone.id) || [])
+        .filter(item => dutyRunsOn(item.weekdays, date))
+        .slice()
+        .sort((a, b) => a.start - b.start);
       if (items.length === 0) continue;
 
       // Merge into blocks. A short gap stays inside one shift: a volunteer who

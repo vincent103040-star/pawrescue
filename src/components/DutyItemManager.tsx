@@ -18,6 +18,7 @@ import {
   AlertTriangle, Users, Clock, CalendarRange
 } from 'lucide-react';
 import { authFetch } from '../utils/session';
+import { parseWeekdays, describeWeekdays, WEEKDAY_NAMES, WEEKDAY_DISPLAY_ORDER } from '../utils/weekdays';
 import { resolveZone, type ZoneRecord } from '../data/zones';
 
 interface DutyItem {
@@ -31,6 +32,11 @@ interface DutyItem {
   responsibleRole: 'staff' | 'volunteer';
   requiredPeople: number;
   estimatedMinutes: number;
+  startTime: string;
+  endTime: string;
+  /** "0,6" -- 0 is Sunday. Empty means every day. */
+  weekdays: string;
+  /** Composed by the server from startTime/endTime, for display only. */
   timeWindow: string;
   isRequired: boolean;
   status: 'active' | 'disabled';
@@ -60,9 +66,14 @@ const EMPTY_DRAFT = {
   responsibleRole: 'volunteer' as DutyItem['responsibleRole'],
   requiredPeople: 1,
   estimatedMinutes: 30,
+  startTime: '',
+  endTime: '',
+  weekdays: '',
   timeWindow: '',
   isRequired: true
 };
+
+const WEEKDAYS = WEEKDAY_DISPLAY_ORDER.map(value => ({ value, label: WEEKDAY_NAMES[value] }));
 
 const TRIGGER_LABELS: Record<DutyItem['triggerType'], string> = {
   daily: '每天固定',
@@ -97,7 +108,7 @@ export const DutyItemManager: React.FC<DutyItemManagerProps> = ({ zones, onToast
       if (itemsRes.success) setItems(itemsRes.dutyItems);
       if (workloadRes.success) {
         setWorkload(workloadRes.workload);
-        setTotals(workloadRes.totals);
+        setTotals(workloadRes.daily);
         setFortnight(workloadRes.fortnight);
       }
     } catch {
@@ -115,7 +126,9 @@ export const DutyItemManager: React.FC<DutyItemManagerProps> = ({ zones, onToast
       zoneId: item.zoneId, title: item.title, description: item.description,
       category: item.category, triggerType: item.triggerType,
       responsibleRole: item.responsibleRole, requiredPeople: item.requiredPeople,
-      estimatedMinutes: item.estimatedMinutes, timeWindow: item.timeWindow,
+      estimatedMinutes: item.estimatedMinutes,
+      startTime: item.startTime || '', endTime: item.endTime || '',
+      weekdays: item.weekdays || '', timeWindow: item.timeWindow,
       isRequired: item.isRequired
     });
     setEditingId(item.id);
@@ -209,7 +222,7 @@ export const DutyItemManager: React.FC<DutyItemManagerProps> = ({ zones, onToast
 
         <div className="grid sm:grid-cols-2 gap-3">
           <div className="bg-white rounded-xl p-3 border border-emerald-200">
-            <p className="text-[11px] text-slate-500 font-bold">每日合計</p>
+            <p className="text-[11px] text-slate-500 font-bold">平均每日</p>
             <p className="text-lg font-bold text-slate-900 mt-0.5">
               {totals.personSlots} <span className="text-xs font-normal text-slate-500">人次</span>
               <span className="mx-1.5 text-slate-300">/</span>
@@ -233,8 +246,8 @@ export const DutyItemManager: React.FC<DutyItemManagerProps> = ({ zones, onToast
                 <tr className="text-slate-500 border-b border-emerald-200">
                   <th className="text-left py-1.5 font-bold">場域</th>
                   <th className="text-right py-1.5 font-bold">勤務數</th>
-                  <th className="text-right py-1.5 font-bold">每日人次</th>
-                  <th className="text-right py-1.5 font-bold">每日時數</th>
+                  <th className="text-right py-1.5 font-bold">兩週人次</th>
+                  <th className="text-right py-1.5 font-bold">兩週時數</th>
                 </tr>
               </thead>
               <tbody>
@@ -343,15 +356,67 @@ export const DutyItemManager: React.FC<DutyItemManagerProps> = ({ zones, onToast
               />
             </label>
 
-            <label className="block">
-              <span className="text-xs font-bold text-slate-600">建議時段（顯示用，可留空）</span>
-              <input
-                value={draft.timeWindow}
-                onChange={e => setDraft({ ...draft, timeWindow: e.target.value })}
-                placeholder="09:00 - 09:30"
-                className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"
-              />
-            </label>
+            <div className="block sm:col-span-2 space-y-1">
+              <span className="text-xs font-bold text-slate-600">
+                時段 <span className="font-normal text-slate-400">（排班依據；留空的勤務不會被排進班表）</span>
+              </span>
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Native time inputs: a wheel picker on phones, typeable on a
+                    keyboard, and no extra dependency to keep working. */}
+                <input
+                  type="time"
+                  value={draft.startTime}
+                  onChange={e => setDraft({ ...draft, startTime: e.target.value })}
+                  className="px-3 py-2 rounded-xl border border-slate-300 text-sm font-mono"
+                />
+                <span className="text-slate-400 text-sm">到</span>
+                <input
+                  type="time"
+                  value={draft.endTime}
+                  onChange={e => setDraft({ ...draft, endTime: e.target.value })}
+                  className="px-3 py-2 rounded-xl border border-slate-300 text-sm font-mono"
+                />
+                {draft.startTime && draft.endTime && draft.endTime <= draft.startTime && (
+                  <span className="text-[11px] text-rose-700 font-bold">結束時間要晚於開始時間</span>
+                )}
+              </div>
+            </div>
+
+            <div className="block sm:col-span-2 space-y-1">
+              <span className="text-xs font-bold text-slate-600">
+                星期幾要做 <span className="font-normal text-slate-400">（不選＝每天）</span>
+              </span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {WEEKDAYS.map(day => {
+                  const days = parseWeekdays(draft.weekdays);
+                  const on = days.includes(day.value);
+                  return (
+                    <button
+                      key={day.value}
+                      type="button"
+                      onClick={() => {
+                        const next = on ? days.filter(d => d !== day.value) : [...days, day.value];
+                        setDraft({ ...draft, weekdays: next.sort((a, b) => a - b).join(',') });
+                      }}
+                      className={`w-9 h-9 rounded-full text-xs font-bold border transition cursor-pointer ${
+                        on
+                          ? 'bg-[#716053] text-white border-[#716053]'
+                          : 'bg-white text-slate-500 border-slate-300 hover:border-[#716053]'
+                      }`}
+                    >
+                      {day.label}
+                    </button>
+                  );
+                })}
+                <span className="text-[11px] text-slate-500 ml-1">
+                  目前：<strong>{describeWeekdays(draft.weekdays)}</strong>
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                只在特定日子做的工作（例如週六的送養活動）務必選起來——
+                不選的話系統會當成每天都要做，人力需求會被高估好幾倍。
+              </p>
+            </div>
 
             <label className="flex items-center gap-2 sm:col-span-2 pt-1">
               <input
@@ -424,6 +489,9 @@ export const DutyItemManager: React.FC<DutyItemManagerProps> = ({ zones, onToast
                   <span>{TRIGGER_LABELS[item.triggerType]}</span>
                   <span>{ROLE_LABELS[item.responsibleRole]}</span>
                   {item.timeWindow && <span className="font-mono">{item.timeWindow}</span>}
+                  <span className={parseWeekdays(item.weekdays).length ? 'font-bold text-[#716053]' : ''}>
+                    {describeWeekdays(item.weekdays)}
+                  </span>
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0">
