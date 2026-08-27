@@ -38,6 +38,9 @@ interface DutyItem {
   weekdays: string;
   /** Composed by the server from startTime/endTime, for display only. */
   timeWindow: string;
+  /** Optional teaching material shown to the volunteer before they tick it off. */
+  sopSectionId: string;
+  sopVideoId: string;
   isRequired: boolean;
   status: 'active' | 'disabled';
   sortOrder: number;
@@ -70,6 +73,8 @@ const EMPTY_DRAFT = {
   endTime: '',
   weekdays: '',
   timeWindow: '',
+  sopSectionId: '',
+  sopVideoId: '',
   isRequired: true
 };
 
@@ -97,6 +102,32 @@ export const DutyItemManager: React.FC<DutyItemManagerProps> = ({ zones, onToast
   const [isAdding, setIsAdding] = useState(false);
   const [draft, setDraft] = useState(EMPTY_DRAFT);
   const [confirmDisable, setConfirmDisable] = useState<DutyItem | null>(null);
+
+  /**
+   * The material a duty can point at.
+   *
+   * Fetched here so the picker offers what actually exists rather than asking
+   * a coordinator to remember ids. A duty whose material was later deleted
+   * still stores the id; the server resolves it to null, so the volunteer sees
+   * no link rather than a broken one.
+   */
+  const [materials, setMaterials] = useState<{
+    sections: Array<{ id: string; title: string }>;
+    videos: Array<{ id: string; title: string }>;
+  }>({ sections: [], videos: [] });
+
+  useEffect(() => {
+    authFetch('/api/sop-content')
+      .then(res => res.json())
+      .then(data => {
+        if (!data.success) return;
+        setMaterials({
+          sections: (data.content?.sections || []).map((x: any) => ({ id: x.id, title: x.title })),
+          videos: (data.videos || []).map((x: any) => ({ id: x.id, title: x.title }))
+        });
+      })
+      .catch(() => { /* the pickers just stay empty */ });
+  }, []);
 
   const load = async () => {
     setIsLoading(true);
@@ -129,6 +160,7 @@ export const DutyItemManager: React.FC<DutyItemManagerProps> = ({ zones, onToast
       estimatedMinutes: item.estimatedMinutes,
       startTime: item.startTime || '', endTime: item.endTime || '',
       weekdays: item.weekdays || '', timeWindow: item.timeWindow,
+      sopSectionId: item.sopSectionId || '', sopVideoId: item.sopVideoId || '',
       isRequired: item.isRequired
     });
     setEditingId(item.id);
@@ -312,6 +344,39 @@ export const DutyItemManager: React.FC<DutyItemManagerProps> = ({ zones, onToast
               />
             </label>
 
+            <div className="block sm:col-span-2 space-y-1">
+              <span className="text-xs font-bold text-slate-600">
+                出勤前要看的教材 <span className="font-normal text-slate-400">（選填）</span>
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <select
+                  value={draft.sopSectionId}
+                  onChange={e => setDraft({ ...draft, sopSectionId: e.target.value })}
+                  className="px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white"
+                >
+                  <option value="">不指定手冊章節</option>
+                  {materials.sections.map(section => (
+                    <option key={section.id} value={section.id}>📖 {section.title}</option>
+                  ))}
+                </select>
+                <select
+                  value={draft.sopVideoId}
+                  onChange={e => setDraft({ ...draft, sopVideoId: e.target.value })}
+                  className="px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white"
+                >
+                  <option value="">不指定教學影片</option>
+                  {materials.videos.map(video => (
+                    <option key={video.id} value={video.id}>🎬 {video.title}</option>
+                  ))}
+                </select>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                指定之後，志工在勤務看板上打勾前會看到「先看示範」——
+                <strong>人不會為了學而學，但會為了「等一下就要做」而看</strong>。
+                {materials.videos.length === 0 && '（目前還沒有上傳任何教學影片）'}
+              </p>
+            </div>
+
             <label className="block">
               <span className="text-xs font-bold text-slate-600">什麼時候要做</span>
               <select
@@ -492,6 +557,11 @@ export const DutyItemManager: React.FC<DutyItemManagerProps> = ({ zones, onToast
                   <span className={parseWeekdays(item.weekdays).length ? 'font-bold text-[#716053]' : ''}>
                     {describeWeekdays(item.weekdays)}
                   </span>
+                  {(item.sopSectionId || item.sopVideoId) && (
+                    <span className="text-indigo-700 font-bold">
+                      {item.sopSectionId && '📖'}{item.sopVideoId && '🎬'} 附教材
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0">

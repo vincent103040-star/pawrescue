@@ -2104,18 +2104,37 @@ ${contextText}
         return shiftId ? item.shiftId === shiftId : shiftsToday.some(s => s.id === item.shiftId);
       });
 
+      // The teaching material a duty points at, resolved here rather than left
+      // as two ids for the page to look up. It is the one place that knows
+      // whether the section or video still exists -- a duty pointing at a
+      // deleted one comes back as null instead of a dead link.
+      const sopSections = new Map(getSopContent().sections.map(section => [section.id, section]));
+      const sopVideos = new Map(getAllSopVideos().map(video => [video.id, video]));
+
       const duties = items.map(item => {
         // A duty tied to a specific shift is completed against that shift; a
         // daily one is completed once for the day regardless of shifts.
         const against = item.triggerType === 'specific_shift' ? item.shiftId : '';
         const done = byKey.get(completionKey(item.id, against));
+        const section = item.sopSectionId ? sopSections.get(item.sopSectionId) : undefined;
+        const video = item.sopVideoId ? sopVideos.get(item.sopVideoId) : undefined;
         return {
           ...item,
           completionShiftId: against,
           isCompleted: !!done,
           completedBy: done?.completedBy,
           completedAt: done?.completedAt,
-          completionMethod: done?.method
+          completionMethod: done?.method,
+          // Training reaches the volunteer at the moment they are about to do
+          // the thing, which is the only moment they have a reason to watch it.
+          material: (section || video) ? {
+            section: section
+              ? { id: section.id, title: section.title, items: section.items }
+              : null,
+            video: video
+              ? { id: video.id, title: video.title, description: video.description || '', fileUrl: video.fileUrl }
+              : null
+          } : null
         };
       });
 
