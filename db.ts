@@ -213,7 +213,8 @@ function rowToProfile(row: any): VolunteerProfile {
     accountStatus: (row.accountStatus || 'active') as VolunteerProfile['accountStatus'],
     statusChangedAt: row.statusChangedAt || undefined,
     statusChangedBy: row.statusChangedBy || undefined,
-    statusReason: row.statusReason || undefined
+    statusReason: row.statusReason || undefined,
+    absencesResetAt: row.absencesResetAt || undefined
   };
 }
 
@@ -296,7 +297,35 @@ export const ABSENCE_SUSPENSION_THRESHOLD = 2;
  * active roster so the list stays about people who are actually volunteering.
  * A coordinator can bring them back at any time.
  */
-export const SUSPENSION_TO_INACTIVE_DAYS = 14;
+/**
+ * How long a suspension lasts before it lifts on its own.
+ *
+ * The rulebook says thirty days, and it now means it. The first version left a
+ * suspension in place until a coordinator removed it, which sounds stricter but
+ * lands the burden on the volunteer least likely to carry it: somebody already
+ * embarrassed about missing shifts has to ask to be let back in. The ones who
+ * do not ask are not disciplined, they are quietly lost.
+ *
+ * A coordinator can still lift it the moment they have spoken to the person.
+ * Thirty days is the ceiling, not a sentence to be served in full.
+ */
+export const SUSPENSION_DAYS = 30;
+
+// Migration: when a volunteer's absence count last started over.
+//
+// Absences were counted over a volunteer's whole history and nothing ever reset
+// them, so being reinstated put somebody permanently one absence from being
+// suspended again -- and the coordinator pressing 恢復 had no way to know that
+// is what they were restoring them into. "達 2 次" read like a penalty you
+// serve; it behaved like a lifetime tally.
+//
+// The absences themselves are never deleted: the roll call and the record of
+// what happened stay intact. Only what counts toward the rule moves.
+try {
+  db.exec(`ALTER TABLE volunteers ADD COLUMN absencesResetAt TEXT NOT NULL DEFAULT ''`);
+} catch {
+  // column already exists
+}
 
 export function setVolunteerAccountStatus(
   email: string,
@@ -307,11 +336,19 @@ export function setVolunteerAccountStatus(
   const normalized = email.toLowerCase().trim();
   if (!db.prepare('SELECT email FROM volunteers WHERE email = ?').get(normalized)) return null;
 
+  const now = new Date().toISOString();
   db.prepare(`
     UPDATE volunteers
     SET accountStatus = ?, statusChangedAt = ?, statusChangedBy = ?, statusReason = ?
     WHERE email = ?
-  `).run(status, new Date().toISOString(), changedBy, reason, normalized);
+  `).run(status, now, changedBy, reason, normalized);
+
+  // Coming back to active starts the count again. Without this, the next single
+  // absence takes the lifetime tally past the threshold and suspends them on
+  // the spot -- so a reinstated volunteer would be on one strike forever.
+  if (status === 'active') {
+    db.prepare('UPDATE volunteers SET absencesResetAt = ? WHERE email = ?').run(now, normalized);
+  }
 
   // A suspended account keeps its session: they should be able to sign in and
   // see why, and their own history. Only booking is blocked, at the point of
@@ -325,29 +362,37 @@ export function setVolunteerAccountStatus(
  * Runs on startup and once a day. Returns who was moved so the caller can log
  * it -- a state change nobody asked for should at least be visible.
  */
-export function sweepStaleSuspensions(): Array<{ email: string; name: string; days: number }> {
-  const cutoff = new Date(Date.now() - SUSPENSION_TO_INACTIVE_DAYS * 24 * 60 * 60 * 1000).toISOString();
-  const stale = db.prepare(`
+/**
+ * Lifts suspensions that have served their thirty days.
+ *
+ * This replaced a sweep that moved a suspension to 'inactive' after fourteen
+ * days. That sweep and the rulebook's thirty days could not both be true: the
+ * account would have been filed away as departed a fortnight before the
+ * suspension it was serving was due to end.
+ *
+ * 'inactive' still exists and a coordinator can still use it. It is now only
+ * ever a decision somebody makes, never something that happens to a volunteer
+ * because nobody got round to them.
+ */
+export function expireServedSuspensions(): Array<{ email: string; name: string; days: number }> {
+  const cutoff = new Date(Date.now() - SUSPENSION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const served = db.prepare(`
     SELECT email, name, statusChangedAt FROM volunteers
     WHERE accountStatus = 'suspended' AND statusChangedAt <> '' AND statusChangedAt < ?
   `).all(cutoff) as any[];
 
-  const moved: Array<{ email: string; name: string; days: number }> = [];
-  for (const row of stale) {
+  const restored: Array<{ email: string; name: string; days: number }> = [];
+  for (const row of served) {
     const days = Math.floor((Date.now() - new Date(row.statusChangedAt).getTime()) / 86400000);
-    db.prepare(`
-      UPDATE volunteers
-      SET accountStatus = 'inactive', statusChangedAt = ?, statusChangedBy = 'system',
-          statusReason = ?
-      WHERE email = ?
-    `).run(
-      new Date().toISOString(),
-      `停權滿 ${SUSPENSION_TO_INACTIVE_DAYS} 天未處理，自動轉為離退（可隨時恢復）`,
-      row.email
+    // Through setVolunteerAccountStatus so the absence count is reset the same
+    // way a coordinator's reinstatement resets it -- one route, one behaviour.
+    setVolunteerAccountStatus(
+      row.email, 'active', 'system',
+      `停權滿 ${SUSPENSION_DAYS} 天，依規章自動恢復（缺席次數重新計算）`
     );
-    moved.push({ email: row.email, name: row.name, days });
+    restored.push({ email: row.email, name: row.name, days });
   }
-  return moved;
+  return restored;
 }
 
 export function getAllVolunteers(): VolunteerProfile[] {
@@ -2808,12 +2853,31 @@ export function getRollCall(date: string): Array<{
  * reason a shift's headcount is: a tally kept alongside the thing it counts
  * eventually disagrees with it, and nothing reports that it has.
  */
+/**
+ * Absences that count toward the rulebook's threshold.
+ *
+ * Only the ones since the volunteer's count was last reset -- which happens
+ * when a suspension is lifted, whether by a coordinator or by the thirty days
+ * running out. The older absences are still in the table and still visible in
+ * the record; they have simply been answered for.
+ *
+ * Counted from the signups rather than stored on the volunteer, for the same
+ * reason a shift's headcount is: a tally kept alongside the thing it counts
+ * eventually disagrees with it, and nothing reports that it has.
+ */
 export function getAbsenceCounts(): Map<string, number> {
   const rows = db.prepare(`
-    SELECT volunteerEmail, COUNT(*) AS c
-    FROM shift_signups
-    WHERE status = 'absent' AND TRIM(COALESCE(volunteerEmail, '')) <> ''
-    GROUP BY volunteerEmail
+    SELECT g.volunteerEmail, COUNT(*) AS c
+    FROM shift_signups g
+    LEFT JOIN volunteers v ON LOWER(TRIM(v.email)) = LOWER(TRIM(g.volunteerEmail))
+    WHERE g.status = 'absent'
+      AND TRIM(COALESCE(g.volunteerEmail, '')) <> ''
+      AND (
+        COALESCE(v.absencesResetAt, '') = ''
+        OR COALESCE(g.reviewedAtUtc, '') = ''
+        OR g.reviewedAtUtc > v.absencesResetAt
+      )
+    GROUP BY g.volunteerEmail
   `).all() as any[];
   return new Map(rows.map(row => [String(row.volunteerEmail).toLowerCase(), row.c]));
 }

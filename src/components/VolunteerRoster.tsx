@@ -678,9 +678,29 @@ export const VolunteerRoster: React.FC<VolunteerRosterProps> = ({
                         {vol.statusChangedAt && ` · ${new Date(vol.statusChangedAt).toLocaleDateString('zh-TW')}`}
                       </p>
                     )}
+                    {vol.accountStatus === 'suspended' && vol.statusChangedAt && (() => {
+                      // Says when it lifts by itself. A coordinator deciding whether
+                      // to make the call should know the clock is already running --
+                      // and that reinstating early is a kindness, not a reprieve
+                      // from something otherwise permanent.
+                      const endsAt = new Date(new Date(vol.statusChangedAt).getTime() + 30 * 86400000);
+                      const daysLeft = Math.max(0, Math.ceil((endsAt.getTime() - Date.now()) / 86400000));
+                      return (
+                        <p className="text-[10px] text-amber-800 mt-1 font-bold">
+                          {daysLeft > 0
+                            ? `還有 ${daysLeft} 天自動恢復（${endsAt.toLocaleDateString('zh-TW')}），也可以現在就恢復`
+                            : '已滿 30 天，下次系統掃描時會自動恢復'}
+                        </p>
+                      );
+                    })()}
                     <p className="text-[10px] text-emerald-700 mt-1.5">
-                      服務時數與出勤紀錄都保留，恢復後即可繼續報名。
+                      服務時數與出勤紀錄都保留。恢復時缺席次數會重新計算，不會一直累積。
                     </p>
+                    {vol.absencesResetAt && (
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        缺席次數自 {new Date(vol.absencesResetAt).toLocaleDateString('zh-TW')} 起重新計算
+                      </p>
+                    )}
                   </div>
                 )}
 

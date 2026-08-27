@@ -6,7 +6,7 @@ import { writeFileSync, mkdirSync, createWriteStream, statSync, readFileSync, un
 import { gzipSync } from 'zlib';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
-import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, cancelShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, getRollCall, getAbsenceCounts, setVolunteerAccountStatus, sweepStaleSuspensions, ABSENCE_SUSPENSION_THRESHOLD, createSubstitutionRequest, getSubstitutionRequest, getOpenSubstitutionForSignup, getOpenSubstitutions, takeSubstitutionRequest, withdrawSubstitutionRequest, expireStaleSubstitutions, hoursUntilShift, SUBSTITUTION_NOTICE_HOURS, getReminderCandidates, markReminderSent, normalizeReminderLead, planShiftsForRange, generateDraftShifts, publishDraftShifts, discardDraftShifts, SHIFT_MERGE_GAP_MINUTES } from './db';
+import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, cancelShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, getRollCall, getAbsenceCounts, setVolunteerAccountStatus, expireServedSuspensions, ABSENCE_SUSPENSION_THRESHOLD, SUSPENSION_DAYS, createSubstitutionRequest, getSubstitutionRequest, getOpenSubstitutionForSignup, getOpenSubstitutions, takeSubstitutionRequest, withdrawSubstitutionRequest, expireStaleSubstitutions, hoursUntilShift, SUBSTITUTION_NOTICE_HOURS, getReminderCandidates, markReminderSent, normalizeReminderLead, planShiftsForRange, generateDraftShifts, publishDraftShifts, discardDraftShifts, SHIFT_MERGE_GAP_MINUTES } from './db';
 import { PDFParse } from 'pdf-parse';
 import type { SopContent, SopDocument, SopVideo } from './src/types';
 
@@ -1804,7 +1804,7 @@ ${contextText}
       email,
       'suspended',
       'system',
-      `未到場達 ${absences} 次（規章門檻 ${ABSENCE_SUSPENSION_THRESHOLD} 次）`
+      `未到場達 ${absences} 次（規章門檻 ${ABSENCE_SUSPENSION_THRESHOLD} 次），${SUSPENSION_DAYS} 天後自動恢復`
     );
     console.log(`SQLite: ${volunteer.name} 因未到場 ${absences} 次已自動停權`);
 
@@ -1814,8 +1814,9 @@ ${contextText}
     void notifyVolunteerDirect(
       email,
       `【浪浪家園】${volunteer.name} 您好，系統記錄您已有 ${absences} 次未到場，` +
-      `依志工規章已暫停搶班權限。您仍可登入查看自己的服務紀錄與時數。` +
-      `若有特殊情況或已安排代班，請與社工督導聯繫恢復 🐾`
+      `依志工規章已暫停搶班權限 ${SUSPENSION_DAYS} 天，期滿會自動恢復，缺席次數也會重新計算。` +
+      `您仍可登入查看自己的服務紀錄與時數。若有特殊情況或已安排代班，` +
+      `與社工督導聯繫後可以提早恢復 🐾`
     );
 
     return { name: volunteer.name, absences };
@@ -4165,8 +4166,15 @@ ${contextText}
    */
   function runSuspensionSweep() {
     try {
-      for (const moved of sweepStaleSuspensions()) {
-        console.log(`SQLite: ${moved.name} 停權已 ${moved.days} 天未處理，轉為離退（可隨時恢復）`);
+      for (const restored of expireServedSuspensions()) {
+        console.log(`SQLite: ${restored.name} 停權已滿 ${restored.days} 天，自動恢復搶班權限`);
+        // Being let back in is not much use to somebody who does not know it
+        // happened -- they would go on believing they are still shut out.
+        void notifyVolunteerDirect(
+          restored.email,
+          `【浪浪家園】${restored.name} 您好，您的停權已滿 ${SUSPENSION_DAYS} 天並自動解除，`
+          + `現在可以重新報名班次了。缺席次數也已重新計算。期待再見到您 🐾`
+        );
       }
     } catch (error: any) {
       console.error('Suspension Sweep Error:', error?.message || error);

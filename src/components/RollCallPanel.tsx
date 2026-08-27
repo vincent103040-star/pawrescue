@@ -279,7 +279,7 @@ export const RollCallPanel: React.FC<RollCallPanelProps> = ({ onToast, onChanged
 
       <p className="text-[11px] text-slate-400 border-t border-slate-100 pt-3">
         記錄為「未到」會累計在該志工的缺席次數上；累計滿 {threshold} 次會依規章自動暫停其搶班權限，並以 LINE 通知本人。
-        停權不會影響已累積的服務時數與出勤紀錄，督導可在「志工名冊」隨時恢復。
+        停權為 30 天，期滿自動恢復，督導也可在「志工名冊」提早恢復；恢復時缺席次數會重新計算。停權不影響已累積的服務時數與出勤紀錄。
         標示「曾發起代班請求」的夥伴事先告知過但沒人接手 —— 這跟直接沒出現不是同一件事，請斟酌後再記錄。
       </p>
     </div>

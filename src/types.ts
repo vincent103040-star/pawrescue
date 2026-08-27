@@ -192,6 +192,13 @@ export interface VolunteerProfile {
   statusChangedAt?: string;
   statusChangedBy?: string;
   statusReason?: string;
+  /**
+   * When this volunteer's absence count last started over.
+   *
+   * Surfaced so "累計未到 1 次" is not ambiguous: a coordinator can tell whether
+   * that is a lifetime figure or one since a suspension was answered for.
+   */
+  absencesResetAt?: string;
 }
 
 export interface ServiceFeedback {
