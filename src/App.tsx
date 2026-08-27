@@ -14,6 +14,7 @@ import { VolunteerPortal } from './components/VolunteerPortal';
 import { VolunteerMyShifts } from './components/VolunteerMyShifts';
 import { VolunteerSopGuide } from './components/VolunteerSopGuide';
 import { AdminSopManager } from './components/AdminSopManager';
+import { AiServiceStatus } from './components/AiServiceStatus';
 import { ZoneManager } from './components/ZoneManager';
 import { DutyItemManager } from './components/DutyItemManager';
 import { RollCallPanel } from './components/RollCallPanel';
@@ -1034,6 +1035,7 @@ export default function App() {
                 <div className="space-y-6 pt-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
                   <ZoneManager onToast={showToast} onZonesChanged={() => { refreshZones(); refreshShifts(); }} />
                   <DutyItemManager zones={zones} onToast={showToast} />
+                  <AiServiceStatus />
                 </div>
                 <AdminSopManager onSendLineToast={showToast} />
               </>

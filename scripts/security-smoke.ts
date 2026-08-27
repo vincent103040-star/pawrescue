@@ -60,6 +60,7 @@ const PROTECTED: Array<[string, string]> = [
   ['POST', '/api/duties/does-not-exist/complete'],
   ['POST', '/api/duties/does-not-exist/uncomplete'],
   ['GET', '/api/admin/workload'],
+  ['GET', '/api/admin/ai-status'],
   ['POST', '/api/admin/schedule/preview'],
   ['POST', '/api/admin/schedule/generate'],
   ['POST', '/api/admin/schedule/publish'],

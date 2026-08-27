@@ -192,7 +192,14 @@ export const AdminSopManager: React.FC<AdminSopManagerProps> = ({ onSendLineToas
       const data = await res.json();
       if (data.success) {
         setContent(data.content);
-        onSendLineToast('✅ 手冊內容已儲存，並已同步更新 AI 問答的向量參考資料！');
+        // "Saved" and "the AI can answer from it" are two different facts. The
+        // save succeeds either way -- volunteers must see the shelter's words
+        // even when the AI is down -- so the message has to distinguish them,
+        // or the assistant goes on quoting replaced material with nobody aware.
+        onSendLineToast(data.embedFailed > 0
+          ? `⚠️ 手冊內容已儲存，志工看得到了；但有 ${data.embedFailed} 個章節沒能更新 AI 問答的索引`
+            + `${data.embedError ? `（${data.embedError}）` : ''}。AI 會繼續用舊內容回答，請到「AI 服務狀態」查看。`
+          : `✅ 手冊內容已儲存，${data.embedded} 個章節也已更新 AI 問答的參考資料。`);
       } else {
         onSendLineToast(`⚠️ 儲存失敗：${data.error || '未知錯誤'}`);
       }
