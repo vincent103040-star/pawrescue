@@ -26,6 +26,31 @@ interface RulebookEmbeddingEntry {
 // changes this. Kept as an in-memory cache (refreshed after any mutation) rather
 // than querying the DB on every single question, since it's read far more often
 // than it changes.
+/**
+ * Which Gemini models to call.
+ *
+ * These were written into eight separate call sites. Models get retired, and
+ * when this one does, the shelter's only route was to edit source, rebuild and
+ * redeploy -- and to miss one of the eight would leave a single feature quietly
+ * broken. A model name is not a secret, so it belongs in configuration.
+ */
+const AI_TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || 'gemini-3.6-flash';
+const AI_EMBED_MODEL = process.env.GEMINI_EMBED_MODEL || 'gemini-embedding-001';
+
+/**
+ * What happened the last time the server tried to turn text into a vector.
+ *
+ * In memory, not stored: it answers "is the AI working right now", and a
+ * restart is exactly when that question should be asked afresh.
+ *
+ * It exists because embedding failure is silent by design -- saving SOP content
+ * succeeds either way, since the volunteers' copy must update even when the AI
+ * is unavailable. Silent is right for the save and wrong for the shelter, which
+ * otherwise has no way to discover that the AI has been answering from stale
+ * material since the quota ran out.
+ */
+let lastEmbedding: { at: string; ok: boolean; error?: string } | null = null;
+
 let rulebookEmbeddings: RulebookEmbeddingEntry[] = [];
 function refreshRulebookEmbeddings() {
   rulebookEmbeddings = getAllRagChunks().map(c => ({ id: c.sourceId, title: c.title, text: c.text, embedding: c.embedding }));
@@ -459,7 +484,7 @@ async function startServer() {
 4. 結尾請用充滿愛心號召力的語氣，長度約 250-350 字。`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.6-flash',
+        model: AI_TEXT_MODEL,
         contents: prompt
       });
 
@@ -519,7 +544,7 @@ async function startServer() {
 5. 長度約 150-250 字，適合在手機 LINE 螢幕上快速閱讀。`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.6-flash',
+        model: AI_TEXT_MODEL,
         contents: prompt
       });
 
@@ -593,7 +618,7 @@ ${JSON.stringify(shelterData, null, 2)}
 }`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.6-flash',
+        model: AI_TEXT_MODEL,
         contents: prompt
       });
 
@@ -688,7 +713,7 @@ ${JSON.stringify(shelterData, null, 2)}
 只回傳題目文字本身（1 句話，繁體中文，50 字以內），不要加任何標題、編號或額外說明。`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.6-flash',
+        model: AI_TEXT_MODEL,
         contents: prompt
       });
 
@@ -739,7 +764,7 @@ ${JSON.stringify(shelterData, null, 2)}
 }`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.6-flash',
+        model: AI_TEXT_MODEL,
         contents: prompt
       });
 
@@ -812,7 +837,7 @@ ${JSON.stringify(shelterData, null, 2)}
       });
 
       const embedRes = await ai.models.embedContent({
-        model: 'gemini-embedding-001',
+        model: AI_EMBED_MODEL,
         contents: question
       });
       const questionVector = embedRes.embeddings?.[0]?.values;
@@ -835,7 +860,7 @@ ${contextText}
 志工問題：${question}`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.6-flash',
+        model: AI_TEXT_MODEL,
         contents: prompt
       });
 
@@ -867,16 +892,63 @@ ${contextText}
   // whether that's fatal for their specific operation.
   async function embedText(text: string): Promise<number[] | null> {
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) return null;
+    if (!apiKey) {
+      lastEmbedding = { at: new Date().toISOString(), ok: false, error: '尚未設定 GEMINI_API_KEY' };
+      return null;
+    }
     try {
       const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { 'User-Agent': 'aistudio-build' } } });
-      const res = await ai.models.embedContent({ model: 'gemini-embedding-001', contents: text });
-      return res.embeddings?.[0]?.values || null;
+      const res = await ai.models.embedContent({ model: AI_EMBED_MODEL, contents: text });
+      const values = res.embeddings?.[0]?.values || null;
+      lastEmbedding = values
+        ? { at: new Date().toISOString(), ok: true }
+        : { at: new Date().toISOString(), ok: false, error: '模型回應沒有向量內容' };
+      return values;
     } catch (error: any) {
-      console.warn('Embed Text Error:', error?.message || error);
+      const message = String(error?.message || error);
+      lastEmbedding = { at: new Date().toISOString(), ok: false, error: message.slice(0, 200) };
+      console.warn('Embed Text Error:', message);
       return null;
     }
   }
+
+  /**
+   * Whether the AI is actually working, and on what.
+   *
+   * Read-only, and it never returns the key -- only whether one is set. A key
+   * that is attached to somebody's billing account does not belong in a page,
+   * an HTTP response, or a browser's memory; the way to change it is to edit
+   * .env.local on the machine and restart.
+   */
+  app.get('/api/admin/ai-status', (req, res) => {
+    try {
+      const sections = getSopContent().sections;
+      const chunks = getAllRagChunks();
+      const bySource: Record<string, number> = {};
+      for (const chunk of chunks) bySource[chunk.source] = (bySource[chunk.source] || 0) + 1;
+
+      // The question the shelter actually has: can the assistant answer from
+      // what the social workers wrote? Comparing the two counts is what turns
+      // "it saved" into "it is being used".
+      const sectionIds = new Set(sections.map(section => section.id));
+      const embeddedSections = chunks.filter(
+        chunk => chunk.source === 'section' && sectionIds.has(chunk.sourceId)
+      ).length;
+
+      return res.json({
+        success: true,
+        keyConfigured: !!process.env.GEMINI_API_KEY,
+        textModel: AI_TEXT_MODEL,
+        embedModel: AI_EMBED_MODEL,
+        lastEmbedding,
+        chunks: { total: chunks.length, bySource },
+        sections: { total: sections.length, embedded: embeddedSections }
+      });
+    } catch (error: any) {
+      console.error('AI Status Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '讀取 AI 狀態失敗' });
+    }
+  });
 
   // API endpoint: the volunteer rulebook/SOP content -- read by both the
   // volunteer-facing SOP guide page and the admin content editor, so they're
@@ -916,14 +988,22 @@ ${contextText}
         if (!keptSectionIds.has(existing.sourceId)) deleteRagChunks('section', existing.sourceId);
       }
 
+      // Counted rather than ignored. The content itself saves regardless --
+      // volunteers must see the shelter's words even when the AI is down -- but
+      // "saved" and "the AI can answer from it" are two different facts, and
+      // reporting only the first is how the assistant ends up quoting material
+      // that was replaced weeks ago with nobody aware.
+      let embedded = 0;
+      let embedFailed = 0;
       for (const section of content.sections) {
         const text = `${section.title}\n${section.items.map(i => `${i.label}：${i.text}`).join('\n')}`;
         const embedding = await embedText(text);
         if (embedding) {
           replaceRagChunks('section', section.id, [{ title: section.title, text, embedding }]);
+          embedded++;
+        } else {
+          embedFailed++;
         }
-        // If embedding fails (no API key / quota), the old vectors for this
-        // section just stay as-is -- the displayed content still updates either way.
       }
 
       const emergencyText = `${content.emergencyTitle}\n${content.emergencyText}\n值班社工專線：${content.emergencyPhone}`;
@@ -933,7 +1013,13 @@ ${contextText}
       }
 
       refreshRulebookEmbeddings();
-      return res.json({ success: true, content: getSopContent() });
+      return res.json({
+        success: true,
+        content: getSopContent(),
+        embedded,
+        embedFailed,
+        embedError: embedFailed > 0 ? (lastEmbedding?.error || '') : ''
+      });
     } catch (error: any) {
       console.error('Save SOP Content Error:', error);
       return res.status(500).json({ success: false, error: error.message || '儲存手冊內容失敗' });
@@ -1218,7 +1304,7 @@ ${contextText}
       const prompt = `你是流浪動物之家的志工社群小編。這張照片是志工今天在「${shiftTitle || '園區'}」（場域：${zone || '未指定'}）服務時拍的。請根據照片實際內容，寫一段 60-100 字的溫暖第一人稱心得文字，適合放進志工的服務紀錄與領養牆故事。語氣真誠、具體描述照片中看到的畫面，不要空泛通用，也不要編造照片裡沒有的細節。只回傳心得文字本身，不要加任何標題或引號。`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.6-flash',
+        model: AI_TEXT_MODEL,
         contents: [
           { text: prompt },
           { inlineData: { mimeType, data: imageBase64 } }
