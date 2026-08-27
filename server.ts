@@ -2318,6 +2318,7 @@ ${contextText}
       const endDate = rangeEnd(startDate, days);
       const published = publishDraftShifts(startDate, endDate);
       if (published > 0) broadcastChange('shifts');
+      console.log(`SQLite: 發布 ${published} 個班次（${startDate} ~ ${endDate}）`);
       return res.json({ success: true, published, startDate, endDate });
     } catch (error: any) {
       console.error('Schedule Publish Error:', error);
@@ -2333,6 +2334,10 @@ ${contextText}
       const endDate = rangeEnd(startDate, days);
       const discarded = discardDraftShifts(startDate, endDate);
       if (discarded > 0) broadcastChange('shifts');
+      // Logged for the same reason the generate is: without it, reading the log
+      // later cannot tell "generated twice" from "generated, discarded,
+      // generated" -- and those mean very different things.
+      console.log(`SQLite: 清除 ${discarded} 個未發布草稿（${startDate} ~ ${endDate}）`);
       return res.json({ success: true, discarded, startDate, endDate });
     } catch (error: any) {
       console.error('Schedule Discard Error:', error);
