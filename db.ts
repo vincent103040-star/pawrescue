@@ -2080,6 +2080,31 @@ try {
   // already dropped, or a fresh database that never had it
 }
 
+// Migration: no stored 'full'.
+//
+// 'full' is worked out from the headcount on the way out (shiftStatusFrom), so
+// it should never be a value in this column. insertShift normalises it now, but
+// that normalisation was added later than the seed data -- and INITIAL_SHIFTS
+// carries a shift marked 'full' -- so databases seeded before it kept the
+// stored copy.
+//
+// It causes no wrong answer today, because the derived value is what callers
+// see. It is cleaned up because it is the same shape as the currentCount bug:
+// a derived value written down, sitting there looking authoritative until
+// somebody trusts it.
+try {
+  const stale = db.prepare(
+    "SELECT COUNT(*) AS c FROM shifts WHERE status NOT IN ('active', 'cancelled', 'draft')"
+  ).get() as { c: number };
+  if (stale.c > 0) {
+    db.exec("UPDATE shifts SET status = 'active' WHERE status NOT IN ('active', 'cancelled', 'draft')");
+    console.log(`SQLite: 已將 ${stale.c} 筆班次的儲存狀態正規化（full 應為推導值，不該存檔）`);
+  }
+} catch {
+  // fresh database -- the shifts table is created above, so this cannot fail
+  // for a missing table, but a locked one should not stop the server booting
+}
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS shift_signups (
     id TEXT PRIMARY KEY,
