@@ -2172,6 +2172,9 @@ const HEADCOUNT_SQL = `(
  */
 function shiftStatusFrom(row: any, headcount: number): PositionShift['status'] {
   if (row.status === 'cancelled') return 'cancelled';
+  // A draft has not been published, so "full" is not a question that applies to
+  // it yet -- and reporting it as active is what would leak it to volunteers.
+  if (row.status === 'draft') return 'draft';
   return headcount >= row.requiredCount ? 'full' : 'active';
 }
 
@@ -2235,7 +2238,7 @@ export function insertShift(s: PositionShift): PositionShift {
   `).run(
     s.id, s.title, s.zone, s.date, s.timeRange, s.shiftType, s.requiredCount,
     s.skillRequired, s.description, JSON.stringify(s.tasks), s.locationDetails,
-    s.attachmentUrl || null, s.status === 'cancelled' ? 'cancelled' : 'active', s.createdAt
+    s.attachmentUrl || null, storableShiftStatus(s.status), s.createdAt
   );
   return getShift(s.id) || s;
 }
@@ -2250,7 +2253,7 @@ export function updateShift(s: PositionShift): PositionShift | null {
   `).run(
     s.title, s.zone, s.date, s.timeRange, s.shiftType, s.requiredCount,
     s.skillRequired, s.description, JSON.stringify(s.tasks), s.locationDetails,
-    s.attachmentUrl || null, s.status === 'cancelled' ? 'cancelled' : 'active', s.id
+    s.attachmentUrl || null, storableShiftStatus(s.status), s.id
   );
   const row = db.prepare(`SELECT *, ${HEADCOUNT_SQL} AS headcount FROM shifts WHERE id = ?`).get(s.id);
   return row ? rowToShift(row) : null;
@@ -2283,6 +2286,214 @@ export function deleteShift(id: string): boolean {
 export function getShift(shiftId: string): PositionShift | null {
   const row = db.prepare(`SELECT *, ${HEADCOUNT_SQL} AS headcount FROM shifts WHERE id = ?`).get(shiftId);
   return row ? rowToShift(row) : null;
+}
+
+/**
+ * The three states a shift is actually stored in.
+ *
+ * 'full' never reaches the database -- it is worked out from the headcount on
+ * the way out (see shiftStatusFrom), and writing it down would be the same
+ * stored-vs-derived mistake that currentCount was.
+ */
+function storableShiftStatus(status: unknown): 'active' | 'cancelled' | 'draft' {
+  if (status === 'cancelled') return 'cancelled';
+  if (status === 'draft') return 'draft';
+  return 'active';
+}
+
+// ============================================================================
+// Generating a period's draft roster from the shelter's care workload
+// ----------------------------------------------------------------------------
+// The plan calls this the main source of relief: instead of filling in a form
+// per shift per day, the coordinator states each zone's daily care work once,
+// and a fortnight of shifts falls out of it.
+//
+// The duty items already carry everything needed -- which zone, what time
+// window, how many people -- so they are the single input. Shift templates are
+// deliberately not consulted: two sources for the same number eventually
+// disagree, and nothing reports it when they do.
+// ============================================================================
+
+/** Duty windows this far apart or closer become one shift. */
+export const SHIFT_MERGE_GAP_MINUTES = 60;
+
+/** "09:30 - 11:30" -> [570, 690]. Returns null for anything unparseable. */
+function parseWindow(window: string): [number, number] | null {
+  const match = String(window || '').match(/(\d{1,2})\s*[:：]\s*(\d{2})\s*[-~–—到至]\s*(\d{1,2})\s*[:：]\s*(\d{2})/);
+  if (!match) return null;
+  const start = Number(match[1]) * 60 + Number(match[2]);
+  const end = Number(match[3]) * 60 + Number(match[4]);
+  if (!(end > start)) return null;
+  return [start, end];
+}
+
+const hhmm = (minutes: number) =>
+  `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+
+/**
+ * How many people the shelter needs on site at the busiest moment of a block.
+ *
+ * Not the sum. Three duties of one person each, run one after another, need one
+ * volunteer for three hours -- summing would open a shift for three people and
+ * report a shortage of two that does not exist. Two duties that overlap do need
+ * two people, and a sweep over the window boundaries is what tells them apart.
+ */
+function peakConcurrent(items: Array<{ start: number; end: number; people: number }>): number {
+  const edges: Array<[number, number]> = [];
+  for (const item of items) {
+    edges.push([item.start, item.people]);
+    edges.push([item.end, -item.people]);
+  }
+  // Ends before starts at the same instant: a duty finishing at 11:30 frees its
+  // volunteer for one starting at 11:30.
+  edges.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  let running = 0;
+  let peak = 0;
+  for (const [, delta] of edges) {
+    running += delta;
+    if (running > peak) peak = running;
+  }
+  return Math.max(1, peak);
+}
+
+export interface PlannedShift {
+  zoneId: string;
+  zoneName: string;
+  date: string;
+  timeRange: string;
+  requiredCount: number;
+  tasks: string[];
+  /** Person-hours the duties in this block actually add up to. */
+  personHours: number;
+}
+
+/**
+ * What a period's roster would look like, without writing anything.
+ *
+ * Split out from the write so the same rule produces both the preview and the
+ * saved drafts -- a preview computed separately is a preview that can disagree
+ * with what you get.
+ */
+export function planShiftsForRange(startDate: string, days: number): PlannedShift[] {
+  const zones = getActiveZones();
+  const duties = db.prepare(`
+    SELECT zoneId, title, timeWindow, requiredPeople, estimatedMinutes
+    FROM duty_items
+    WHERE status = 'active' AND triggerType = 'daily'
+  `).all() as any[];
+
+  const byZone = new Map<string, Array<{ start: number; end: number; people: number; title: string; minutes: number }>>();
+  for (const duty of duties) {
+    const window = parseWindow(duty.timeWindow);
+    if (!window) continue; // no time window -- nothing to schedule it into
+    const list = byZone.get(duty.zoneId) || [];
+    list.push({
+      start: window[0], end: window[1],
+      people: Math.max(1, Number(duty.requiredPeople) || 1),
+      title: duty.title,
+      minutes: Math.max(0, Number(duty.estimatedMinutes) || 0)
+    });
+    byZone.set(duty.zoneId, list);
+  }
+
+  const planned: PlannedShift[] = [];
+  const start = new Date(`${startDate}T00:00:00+08:00`);
+  if (Number.isNaN(start.getTime())) return planned;
+
+  for (let day = 0; day < days; day++) {
+    const date = new Date(start.getTime() + day * 86400000)
+      .toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' });
+
+    for (const zone of zones) {
+      const items = (byZone.get(zone.id) || []).slice().sort((a, b) => a.start - b.start);
+      if (items.length === 0) continue;
+
+      // Merge into blocks. A short gap stays inside one shift: a volunteer who
+      // is already on site does not go home for thirty minutes and come back.
+      let block: typeof items = [];
+      let blockEnd = -1;
+      const flush = () => {
+        if (block.length === 0) return;
+        const from = Math.min(...block.map(i => i.start));
+        const to = Math.max(...block.map(i => i.end));
+        planned.push({
+          zoneId: zone.id,
+          zoneName: zone.name,
+          date,
+          timeRange: `${hhmm(from)}-${hhmm(to)}`,
+          requiredCount: peakConcurrent(block),
+          tasks: block.map(i => i.title),
+          personHours: Math.round(block.reduce((n, i) => n + i.people * i.minutes, 0) / 6) / 10
+        });
+        block = [];
+      };
+
+      for (const item of items) {
+        if (block.length > 0 && item.start - blockEnd > SHIFT_MERGE_GAP_MINUTES) flush();
+        block.push(item);
+        blockEnd = Math.max(blockEnd, item.end);
+      }
+      flush();
+    }
+  }
+  return planned;
+}
+
+/**
+ * Writes the plan as drafts, and says what it did.
+ *
+ * Only ever inserts. An existing shift at the same zone, date and start time is
+ * left exactly as it is -- published or not, booked or not -- because the
+ * coordinator may have adjusted it, and regenerating a period should never be
+ * able to undo that or to double-book a day.
+ */
+export function generateDraftShifts(startDate: string, days: number): {
+  created: PlannedShift[]; skipped: PlannedShift[];
+} {
+  const created: PlannedShift[] = [];
+  const skipped: PlannedShift[] = [];
+
+  for (const plan of planShiftsForRange(startDate, days)) {
+    const id = `auto-${plan.zoneId}-${plan.date}-${plan.timeRange.slice(0, 5).replace(':', '')}`;
+    const clash = db.prepare(
+      'SELECT id FROM shifts WHERE id = ? OR (zone = ? AND date = ? AND timeRange = ?)'
+    ).get(id, plan.zoneId, plan.date, plan.timeRange);
+    if (clash) { skipped.push(plan); continue; }
+
+    insertShift({
+      id,
+      title: `${plan.zoneName}日常照護`,
+      zone: plan.zoneId as any,
+      date: plan.date,
+      timeRange: plan.timeRange,
+      shiftType: 'regular' as any,
+      requiredCount: plan.requiredCount,
+      skillRequired: '' as any,
+      description: `依「${plan.zoneName}」的每日勤務項目自動產生，發布前可調整。`,
+      tasks: plan.tasks,
+      locationDetails: '',
+      status: 'draft',
+      createdAt: new Date().toISOString()
+    } as any);
+    created.push(plan);
+  }
+  return { created, skipped };
+}
+
+/** Publishes every draft in a date range. Returns how many went live. */
+export function publishDraftShifts(startDate: string, endDate: string): number {
+  const result = db.prepare(
+    "UPDATE shifts SET status = 'active' WHERE status = 'draft' AND date >= ? AND date <= ?"
+  ).run(startDate, endDate);
+  return Number(result.changes || 0);
+}
+
+/** Throws away unpublished drafts in a range, so a period can be regenerated. */
+export function discardDraftShifts(startDate: string, endDate: string): number {
+  const result = db.prepare(
+    "DELETE FROM shifts WHERE status = 'draft' AND date >= ? AND date <= ?"
+  ).run(startDate, endDate);
+  return Number(result.changes || 0);
 }
 
 export function getAllShiftSignups(): ShiftSignup[] {
