@@ -39,6 +39,62 @@ export const VolunteerRoster: React.FC<VolunteerRosterProps> = ({
   const [statusBusy, setStatusBusy] = useState<string[]>([]);
 
   /**
+   * How many times each suspended volunteer has been suspended, and whether
+   * they have been in touch since the current one.
+   *
+   * Fetched per suspended volunteer rather than carried on the roster payload,
+   * because it only matters for the few people in that state and it is derived
+   * from the account history rather than stored on the row.
+   */
+  const [accountHistory, setAccountHistory] = useState<Record<string, {
+    suspensions: number; appealedSinceSuspension: boolean; appealWindowDays: number;
+  }>>({});
+
+  const loadHistory = React.useCallback((email: string) => {
+    authFetch(`/api/admin/volunteers/${encodeURIComponent(email)}/status-history`)
+      .then(res => res.json())
+      .then(data => {
+        if (!data.success) return;
+        setAccountHistory(prev => ({
+          ...prev,
+          [email]: {
+            suspensions: data.suspensions,
+            appealedSinceSuspension: data.appealedSinceSuspension,
+            appealWindowDays: data.appealWindowDays
+          }
+        }));
+      })
+      .catch(() => { /* the block still renders without it */ });
+  }, []);
+
+  useEffect(() => {
+    for (const vol of volunteers) {
+      if (vol.accountStatus === 'suspended') loadHistory(vol.email);
+    }
+  }, [volunteers, loadHistory]);
+
+  /** Notes that the volunteer got in touch, without lifting the suspension. */
+  const recordAppeal = async (vol: VolunteerProfile) => {
+    if (statusBusy.includes(vol.email)) return;
+    setStatusBusy(prev => [...prev, vol.email]);
+    try {
+      const res = await authFetch(`/api/admin/volunteers/${encodeURIComponent(vol.email)}/appeal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: '志工已與督導聯繫' })
+      });
+      const data = await res.json();
+      if (!data.success) { onSendLineToast(`⚠️ ${data.error || '記錄失敗'}`); return; }
+      onSendLineToast(`✅ 已記錄【${vol.name}】與督導聯繫過，不會再自動轉為離退。`);
+      loadHistory(vol.email);
+    } catch {
+      onSendLineToast('⚠️ 無法連線，這次記錄尚未儲存。');
+    } finally {
+      setStatusBusy(prev => prev.filter(e => e !== vol.email));
+    }
+  };
+
+  /**
    * Suspends or restores a volunteer's booking rights.
    *
    * Restoring is the common case and is why this control exists at all: the
@@ -679,16 +735,46 @@ export const VolunteerRoster: React.FC<VolunteerRosterProps> = ({
                       </p>
                     )}
                     {vol.accountStatus === 'suspended' && vol.statusChangedAt && (() => {
+                      const info = accountHistory[vol.email];
+                      const repeat = (info?.suspensions || 0) >= 2;
+                      const since = new Date(vol.statusChangedAt).getTime();
+                      const daysLeftTo = (span: number) =>
+                        Math.max(0, Math.ceil((since + span * 86400000 - Date.now()) / 86400000));
+
+                      // A repeat suspension is on a different clock, and the one
+                      // that matters is the shorter one: fourteen days to make
+                      // contact, or the account is filed away.
+                      if (repeat && !info?.appealedSinceSuspension) {
+                        const left = daysLeftTo(info?.appealWindowDays ?? 14);
+                        return (
+                          <div className="mt-1.5 px-2.5 py-1.5 rounded-lg bg-rose-100 border border-rose-300 space-y-1">
+                            <p className="text-[10px] text-rose-900 font-bold">
+                              第 {info?.suspensions} 次停權 ·{' '}
+                              {left > 0
+                                ? `還有 ${left} 天須與督導聯繫，否則轉為離退`
+                                : '已超過聯繫期限，下次系統掃描時會轉為離退'}
+                            </p>
+                            <button
+                              onClick={() => recordAppeal(vol)}
+                              disabled={statusBusy.includes(vol.email)}
+                              className="px-2.5 py-1 rounded-xl bg-white border border-rose-300 text-rose-800 text-[11px] font-bold hover:bg-rose-50 disabled:opacity-50 transition cursor-pointer"
+                            >
+                              已收到申訴／已聯繫上
+                            </button>
+                          </div>
+                        );
+                      }
+
                       // Says when it lifts by itself. A coordinator deciding whether
                       // to make the call should know the clock is already running --
                       // and that reinstating early is a kindness, not a reprieve
                       // from something otherwise permanent.
-                      const endsAt = new Date(new Date(vol.statusChangedAt).getTime() + 30 * 86400000);
-                      const daysLeft = Math.max(0, Math.ceil((endsAt.getTime() - Date.now()) / 86400000));
+                      const left = daysLeftTo(30);
                       return (
                         <p className="text-[10px] text-amber-800 mt-1 font-bold">
-                          {daysLeft > 0
-                            ? `還有 ${daysLeft} 天自動恢復（${endsAt.toLocaleDateString('zh-TW')}），也可以現在就恢復`
+                          {repeat && <span className="text-rose-800">第 {info?.suspensions} 次停權 · 已聯繫過 · </span>}
+                          {left > 0
+                            ? `還有 ${left} 天自動恢復（${new Date(since + 30 * 86400000).toLocaleDateString('zh-TW')}），也可以現在就恢復`
                             : '已滿 30 天，下次系統掃描時會自動恢復'}
                         </p>
                       );

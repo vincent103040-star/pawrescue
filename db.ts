@@ -311,6 +311,100 @@ export const ABSENCE_SUSPENSION_THRESHOLD = 2;
  */
 export const SUSPENSION_DAYS = 30;
 
+/**
+ * How long a repeat suspension leaves for the volunteer to make contact.
+ *
+ * A first suspension serves its thirty days and lifts itself; nobody has to do
+ * anything. A second one asks for a conversation, because twice is a pattern
+ * and the shelter cannot fix a pattern it has not heard the reason for.
+ *
+ * If that fortnight passes with no word, the account is filed away as departed
+ * rather than left suspended indefinitely -- which is the honest reading of
+ * somebody who has been suspended twice and not replied.
+ */
+export const APPEAL_WINDOW_DAYS = 14;
+
+/**
+ * Every account-state change, kept.
+ *
+ * The volunteer row holds only the latest status, so "is this their second
+ * suspension?" had no answer -- and the rule the shelter asked for is entirely
+ * about which time this is. Deriving the count from the events beats storing a
+ * counter for the usual reason: a tally kept beside the thing it counts
+ * eventually disagrees with it and nothing reports that it has.
+ *
+ * It doubles as the record of a decision that costs somebody their place, which
+ * ought to be reviewable rather than overwritten.
+ *
+ * 'appeal' is here too. It is not a state -- the account stays suspended -- it
+ * is the shelter noting that the volunteer got in touch, which is exactly what
+ * stops the fortnight running out on them.
+ */
+db.exec(`
+  CREATE TABLE IF NOT EXISTS account_status_events (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    changedBy TEXT NOT NULL DEFAULT '',
+    reason TEXT NOT NULL DEFAULT '',
+    atUtc TEXT NOT NULL
+  )
+`);
+db.exec('CREATE INDEX IF NOT EXISTS account_status_events_email ON account_status_events(email, atUtc)');
+
+function recordStatusEvent(email: string, kind: string, changedBy: string, reason: string): void {
+  db.prepare(`
+    INSERT INTO account_status_events (id, email, kind, changedBy, reason, atUtc)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(randomUUID(), email.toLowerCase().trim(), kind, changedBy, reason, new Date().toISOString());
+}
+
+/** How many times this volunteer has been suspended, ever. */
+export function countSuspensions(email: string): number {
+  const row = db.prepare(
+    "SELECT COUNT(*) AS c FROM account_status_events WHERE email = ? AND kind = 'suspended'"
+  ).get(email.toLowerCase().trim()) as { c: number };
+  return row?.c || 0;
+}
+
+/** The volunteer's own record of what happened to their account, newest first. */
+export function getStatusHistory(email: string): Array<{
+  kind: string; changedBy: string; reason: string; atUtc: string;
+}> {
+  return db.prepare(`
+    SELECT kind, changedBy, reason, atUtc FROM account_status_events
+    WHERE email = ? ORDER BY atUtc DESC
+  `).all(email.toLowerCase().trim()) as any[];
+}
+
+/**
+ * Notes that the volunteer got in touch about their current suspension.
+ *
+ * Separate from reinstating them. A coordinator who has heard the reason may
+ * still decide the suspension should run its course -- and without a way to say
+ * "they did reply", that volunteer would be filed away at fourteen days for
+ * doing exactly what they were asked to do.
+ */
+export function recordAppeal(email: string, changedBy: string, note: string): boolean {
+  const normalized = email.toLowerCase().trim();
+  if (!db.prepare('SELECT email FROM volunteers WHERE email = ?').get(normalized)) return false;
+  recordStatusEvent(normalized, 'appeal', changedBy, note);
+  return true;
+}
+
+/** Whether they have been in touch since their account was last suspended. */
+export function hasAppealedSinceSuspension(email: string): boolean {
+  const normalized = email.toLowerCase().trim();
+  const lastSuspension = db.prepare(
+    "SELECT atUtc FROM account_status_events WHERE email = ? AND kind = 'suspended' ORDER BY atUtc DESC LIMIT 1"
+  ).get(normalized) as { atUtc: string } | undefined;
+  if (!lastSuspension) return false;
+  const appeal = db.prepare(
+    "SELECT atUtc FROM account_status_events WHERE email = ? AND kind = 'appeal' AND atUtc > ? LIMIT 1"
+  ).get(normalized, lastSuspension.atUtc);
+  return !!appeal;
+}
+
 // Migration: when a volunteer's absence count last started over.
 //
 // Absences were counted over a volunteer's whole history and nothing ever reset
@@ -343,6 +437,8 @@ export function setVolunteerAccountStatus(
     WHERE email = ?
   `).run(status, now, changedBy, reason, normalized);
 
+  recordStatusEvent(normalized, status, changedBy, reason);
+
   // Coming back to active starts the count again. Without this, the next single
   // absence takes the lifetime tally past the threshold and suspends them on
   // the spot -- so a reinstated volunteer would be on one strike forever.
@@ -374,25 +470,45 @@ export function setVolunteerAccountStatus(
  * ever a decision somebody makes, never something that happens to a volunteer
  * because nobody got round to them.
  */
-export function expireServedSuspensions(): Array<{ email: string; name: string; days: number }> {
-  const cutoff = new Date(Date.now() - SUSPENSION_DAYS * 24 * 60 * 60 * 1000).toISOString();
-  const served = db.prepare(`
+export function sweepSuspensions(): {
+  restored: Array<{ email: string; name: string; days: number }>;
+  filed: Array<{ email: string; name: string; days: number }>;
+} {
+  const suspended = db.prepare(`
     SELECT email, name, statusChangedAt FROM volunteers
-    WHERE accountStatus = 'suspended' AND statusChangedAt <> '' AND statusChangedAt < ?
-  `).all(cutoff) as any[];
+    WHERE accountStatus = 'suspended' AND statusChangedAt <> ''
+  `).all() as any[];
 
   const restored: Array<{ email: string; name: string; days: number }> = [];
-  for (const row of served) {
+  const filed: Array<{ email: string; name: string; days: number }> = [];
+
+  for (const row of suspended) {
     const days = Math.floor((Date.now() - new Date(row.statusChangedAt).getTime()) / 86400000);
-    // Through setVolunteerAccountStatus so the absence count is reset the same
-    // way a coordinator's reinstatement resets it -- one route, one behaviour.
-    setVolunteerAccountStatus(
-      row.email, 'active', 'system',
-      `停權滿 ${SUSPENSION_DAYS} 天，依規章自動恢復（缺席次數重新計算）`
-    );
-    restored.push({ email: row.email, name: row.name, days });
+    const repeat = countSuspensions(row.email) >= 2;
+
+    // A repeat suspension with no word back is the one case that ends in the
+    // roster rather than in reinstatement. Checked before the thirty days,
+    // because the fortnight comes first.
+    if (repeat && days >= APPEAL_WINDOW_DAYS && !hasAppealedSinceSuspension(row.email)) {
+      setVolunteerAccountStatus(
+        row.email, 'inactive', 'system',
+        `第二次停權後 ${APPEAL_WINDOW_DAYS} 天未與督導聯繫，轉為離退（服務紀錄保留，可隨時恢復）`
+      );
+      filed.push({ email: row.email, name: row.name, days });
+      continue;
+    }
+
+    if (days >= SUSPENSION_DAYS) {
+      // Through setVolunteerAccountStatus so the absence count is reset the same
+      // way a coordinator's reinstatement resets it -- one route, one behaviour.
+      setVolunteerAccountStatus(
+        row.email, 'active', 'system',
+        `停權滿 ${SUSPENSION_DAYS} 天，依規章自動恢復（缺席次數重新計算）`
+      );
+      restored.push({ email: row.email, name: row.name, days });
+    }
   }
-  return restored;
+  return { restored, filed };
 }
 
 export function getAllVolunteers(): VolunteerProfile[] {

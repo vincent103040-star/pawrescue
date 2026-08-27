@@ -49,6 +49,8 @@ async function call(method: string, path: string) {
 const PROTECTED: Array<[string, string]> = [
   ['POST', '/api/admin/attendance/does-not-exist/feedback-acknowledged'],
   ['POST', '/api/admin/volunteers/nobody@example.com/account-status'],
+  ['POST', '/api/admin/volunteers/nobody@example.com/appeal'],
+  ['GET', '/api/admin/volunteers/nobody@example.com/status-history'],
   ['GET', '/api/admin/roll-call'],
   ['GET', '/api/admin/reports/monthly.csv?month=2026-08'],
   ['GET', '/api/duty-items'],
