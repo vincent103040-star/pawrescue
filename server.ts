@@ -6,7 +6,7 @@ import { writeFileSync, mkdirSync, createWriteStream, statSync, readFileSync, un
 import { gzipSync } from 'zlib';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
-import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, cancelShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, getRollCall, getAbsenceCounts, setVolunteerAccountStatus, sweepStaleSuspensions, ABSENCE_SUSPENSION_THRESHOLD, createSubstitutionRequest, getSubstitutionRequest, getOpenSubstitutionForSignup, getOpenSubstitutions, takeSubstitutionRequest, withdrawSubstitutionRequest, expireStaleSubstitutions, hoursUntilShift, SUBSTITUTION_NOTICE_HOURS, getReminderCandidates, markReminderSent, normalizeReminderLead, planShiftsForRange, generateDraftShifts, publishDraftShifts, discardDraftShifts, SHIFT_MERGE_GAP_MINUTES } from './db';
+import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, cancelShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, getRollCall, getAbsenceCounts, setVolunteerAccountStatus, sweepSuspensions, countSuspensions, recordAppeal, getStatusHistory, hasAppealedSinceSuspension, ABSENCE_SUSPENSION_THRESHOLD, SUSPENSION_DAYS, APPEAL_WINDOW_DAYS, createSubstitutionRequest, getSubstitutionRequest, getOpenSubstitutionForSignup, getOpenSubstitutions, takeSubstitutionRequest, withdrawSubstitutionRequest, expireStaleSubstitutions, hoursUntilShift, SUBSTITUTION_NOTICE_HOURS, getReminderCandidates, markReminderSent, normalizeReminderLead, planShiftsForRange, generateDraftShifts, publishDraftShifts, discardDraftShifts, SHIFT_MERGE_GAP_MINUTES } from './db';
 import { PDFParse } from 'pdf-parse';
 import type { SopContent, SopDocument, SopVideo } from './src/types';
 
@@ -1783,6 +1783,48 @@ ${contextText}
   });
 
   /**
+   * Notes that a suspended volunteer got in touch.
+   *
+   * Separate from reinstating them, because a coordinator who has heard the
+   * reason may still decide the suspension should run its course. Without this,
+   * a volunteer who did exactly what the notice asked would be filed away at
+   * fourteen days for it.
+   */
+  app.post('/api/admin/volunteers/:email/appeal', (req: any, res) => {
+    try {
+      const email = decodeURIComponent(req.params.email);
+      const actor = String(req.session?.displayName || req.session?.identity || 'Admin');
+      const note = String(req.body?.note || '').trim().slice(0, 200);
+      if (!recordAppeal(email, actor, note || '志工已與督導聯繫')) {
+        return res.status(404).json({ success: false, error: '找不到該志工' });
+      }
+      broadcastChange('volunteers');
+      return res.json({ success: true, appealed: true });
+    } catch (error: any) {
+      console.error('Record Appeal Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '記錄申訴失敗' });
+    }
+  });
+
+  /** A volunteer's account history, so a decision can be reviewed rather than guessed at. */
+  app.get('/api/admin/volunteers/:email/status-history', (req, res) => {
+    try {
+      const email = decodeURIComponent(req.params.email);
+      return res.json({
+        success: true,
+        history: getStatusHistory(email),
+        suspensions: countSuspensions(email),
+        appealedSinceSuspension: hasAppealedSinceSuspension(email),
+        appealWindowDays: APPEAL_WINDOW_DAYS,
+        suspensionDays: SUSPENSION_DAYS
+      });
+    } catch (error: any) {
+      console.error('Status History Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '讀取帳號歷程失敗' });
+    }
+  });
+
+  /**
    * Applies the rulebook's absence rule after a coordinator confirms a no-show.
    *
    * Automatic, unlike the absence itself. The count only moves when a person
@@ -1804,18 +1846,28 @@ ${contextText}
       email,
       'suspended',
       'system',
-      `未到場達 ${absences} 次（規章門檻 ${ABSENCE_SUSPENSION_THRESHOLD} 次）`
+      `未到場達 ${absences} 次（規章門檻 ${ABSENCE_SUSPENSION_THRESHOLD} 次），${SUSPENSION_DAYS} 天後自動恢復`
     );
     console.log(`SQLite: ${volunteer.name} 因未到場 ${absences} 次已自動停權`);
 
     // The push is the slow part and the only part allowed to fail, so it is the
     // only part that does not block the coordinator's screen. It logs its own
     // failures rather than throwing.
+    // The terms change on a repeat, so the message has to as well. Being held
+    // to a deadline nobody told you about is not a rule, it is a trap.
+    const times = countSuspensions(email);
     void notifyVolunteerDirect(
       email,
-      `【浪浪家園】${volunteer.name} 您好，系統記錄您已有 ${absences} 次未到場，` +
-      `依志工規章已暫停搶班權限。您仍可登入查看自己的服務紀錄與時數。` +
-      `若有特殊情況或已安排代班，請與社工督導聯繫恢復 🐾`
+      times >= 2
+        ? `【浪浪家園】${volunteer.name} 您好，系統記錄您已有 ${absences} 次未到場，`
+          + `這是第 ${times} 次暫停搶班權限。`
+          + `請於 ${APPEAL_WINDOW_DAYS} 天內與社工督導聯繫說明情況，`
+          + `否則帳號將轉為離退狀態（服務時數與紀錄仍會保留，之後仍可恢復）。`
+          + `聯繫過後，督導可以提早恢復，或讓停權走完 ${SUSPENSION_DAYS} 天 🐾`
+        : `【浪浪家園】${volunteer.name} 您好，系統記錄您已有 ${absences} 次未到場，`
+          + `依志工規章已暫停搶班權限 ${SUSPENSION_DAYS} 天，期滿會自動恢復，缺席次數也會重新計算。`
+          + `您仍可登入查看自己的服務紀錄與時數。若有特殊情況或已安排代班，`
+          + `與社工督導聯繫後可以提早恢復 🐾`
     );
 
     return { name: volunteer.name, absences };
@@ -4165,8 +4217,27 @@ ${contextText}
    */
   function runSuspensionSweep() {
     try {
-      for (const moved of sweepStaleSuspensions()) {
-        console.log(`SQLite: ${moved.name} 停權已 ${moved.days} 天未處理，轉為離退（可隨時恢復）`);
+      const { restored, filed } = sweepSuspensions();
+      for (const person of restored) {
+        console.log(`SQLite: ${person.name} 停權已滿 ${person.days} 天，自動恢復搶班權限`);
+        // Being let back in is not much use to somebody who does not know it
+        // happened -- they would go on believing they are still shut out.
+        void notifyVolunteerDirect(
+          person.email,
+          `【浪浪家園】${person.name} 您好，您的停權已滿 ${SUSPENSION_DAYS} 天並自動解除，`
+          + `現在可以重新報名班次了。缺席次數也已重新計算。期待再見到您 🐾`
+        );
+      }
+      for (const person of filed) {
+        console.log(`SQLite: ${person.name} 第二次停權後 ${person.days} 天未聯繫，轉為離退`);
+        // Sent because it is still not too late: nothing has been deleted and a
+        // coordinator can put them back the moment they hear from them.
+        void notifyVolunteerDirect(
+          person.email,
+          `【浪浪家園】${person.name} 您好，因第二次停權後超過 ${APPEAL_WINDOW_DAYS} 天未與社工督導聯繫，`
+          + `您的帳號已轉為離退狀態。您的服務時數與出勤紀錄都完整保留，`
+          + `隨時與督導聯繫就可以恢復，我們仍然歡迎您回來 🐾`
+        );
       }
     } catch (error: any) {
       console.error('Suspension Sweep Error:', error?.message || error);
