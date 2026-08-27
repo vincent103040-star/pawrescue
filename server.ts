@@ -6,7 +6,7 @@ import { writeFileSync, mkdirSync, createWriteStream, statSync, readFileSync, un
 import { gzipSync } from 'zlib';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
-import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, cancelShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, getRollCall, getAbsenceCounts, setVolunteerAccountStatus, sweepStaleSuspensions, ABSENCE_SUSPENSION_THRESHOLD, createSubstitutionRequest, getSubstitutionRequest, getOpenSubstitutionForSignup, getOpenSubstitutions, takeSubstitutionRequest, withdrawSubstitutionRequest, expireStaleSubstitutions, hoursUntilShift, SUBSTITUTION_NOTICE_HOURS, getReminderCandidates, markReminderSent, normalizeReminderLead } from './db';
+import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, cancelShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, getRollCall, getAbsenceCounts, setVolunteerAccountStatus, sweepStaleSuspensions, ABSENCE_SUSPENSION_THRESHOLD, createSubstitutionRequest, getSubstitutionRequest, getOpenSubstitutionForSignup, getOpenSubstitutions, takeSubstitutionRequest, withdrawSubstitutionRequest, expireStaleSubstitutions, hoursUntilShift, SUBSTITUTION_NOTICE_HOURS, getReminderCandidates, markReminderSent, normalizeReminderLead, planShiftsForRange, generateDraftShifts, publishDraftShifts, discardDraftShifts, SHIFT_MERGE_GAP_MINUTES } from './db';
 import { PDFParse } from 'pdf-parse';
 import type { SopContent, SopDocument, SopVideo } from './src/types';
 
@@ -2230,12 +2230,113 @@ ${contextText}
     }
   });
 
-  app.get('/api/shifts', (req, res) => {
+  /**
+   * Coordinators see drafts; volunteers do not.
+   *
+   * Filtered here rather than in the page, because a draft is a shift nobody
+   * has agreed to run yet -- offering it and then withdrawing it is exactly the
+   * broken promise the two-layer plan exists to avoid. Any caller that skips
+   * the page still cannot see one.
+   */
+  app.get('/api/shifts', (req: any, res) => {
     try {
-      return res.json({ success: true, shifts: getAllShifts() });
+      const all = getAllShifts();
+      const visible = isAdmin(req) ? all : all.filter(shift => shift.status !== 'draft');
+      return res.json({ success: true, shifts: visible });
     } catch (error: any) {
       console.error('Get Shifts Error:', error);
       return res.status(500).json({ success: false, error: error.message || '讀取班次失敗' });
+    }
+  });
+
+  // ==========================================================================
+  // Generating a period's roster
+  // --------------------------------------------------------------------------
+  // The plan's main source of relief: state each zone's daily care work once,
+  // and a fortnight of shifts falls out of it instead of being typed in one
+  // form at a time.
+  // ==========================================================================
+
+  /** Reads a YYYY-MM-DD, or today in the shelter's own timezone. */
+  function requestedStart(value: unknown): string {
+    const raw = String(value || '');
+    return /^\d{4}-\d{2}-\d{2}$/.test(raw)
+      ? raw
+      : new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' });
+  }
+
+  /** Days to cover. Two weeks by default, capped so one click cannot fill a year. */
+  function requestedDays(value: unknown): number {
+    const n = Math.floor(Number(value));
+    if (!Number.isFinite(n) || n < 1) return 14;
+    return Math.min(n, 60);
+  }
+
+  const rangeEnd = (start: string, days: number) =>
+    new Date(new Date(`${start}T00:00:00+08:00`).getTime() + (days - 1) * 86400000)
+      .toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' });
+
+  /** What would be produced, without writing anything. */
+  app.post('/api/admin/schedule/preview', (req, res) => {
+    try {
+      const startDate = requestedStart(req.body?.startDate);
+      const days = requestedDays(req.body?.days);
+      const planned = planShiftsForRange(startDate, days);
+      return res.json({
+        success: true, startDate, days, endDate: rangeEnd(startDate, days),
+        planned, mergeGapMinutes: SHIFT_MERGE_GAP_MINUTES
+      });
+    } catch (error: any) {
+      console.error('Schedule Preview Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '試算班表失敗' });
+    }
+  });
+
+  /** Writes the plan as drafts. Never modifies a shift that already exists. */
+  app.post('/api/admin/schedule/generate', (req, res) => {
+    try {
+      const startDate = requestedStart(req.body?.startDate);
+      const days = requestedDays(req.body?.days);
+      const { created, skipped } = generateDraftShifts(startDate, days);
+      if (created.length > 0) broadcastChange('shifts');
+      console.log(`SQLite: 自動產生 ${created.length} 個班次草稿（略過已存在 ${skipped.length} 個）`);
+      return res.json({
+        success: true, startDate, days, endDate: rangeEnd(startDate, days),
+        created, skipped
+      });
+    } catch (error: any) {
+      console.error('Schedule Generate Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '產生班表失敗' });
+    }
+  });
+
+  /** Publishes the range's drafts -- this is the moment volunteers can see them. */
+  app.post('/api/admin/schedule/publish', (req, res) => {
+    try {
+      const startDate = requestedStart(req.body?.startDate);
+      const days = requestedDays(req.body?.days);
+      const endDate = rangeEnd(startDate, days);
+      const published = publishDraftShifts(startDate, endDate);
+      if (published > 0) broadcastChange('shifts');
+      return res.json({ success: true, published, startDate, endDate });
+    } catch (error: any) {
+      console.error('Schedule Publish Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '發布班表失敗' });
+    }
+  });
+
+  /** Throws the range's unpublished drafts away, so it can be generated again. */
+  app.post('/api/admin/schedule/discard', (req, res) => {
+    try {
+      const startDate = requestedStart(req.body?.startDate);
+      const days = requestedDays(req.body?.days);
+      const endDate = rangeEnd(startDate, days);
+      const discarded = discardDraftShifts(startDate, endDate);
+      if (discarded > 0) broadcastChange('shifts');
+      return res.json({ success: true, discarded, startDate, endDate });
+    } catch (error: any) {
+      console.error('Schedule Discard Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '清除草稿失敗' });
     }
   });
 
@@ -2354,6 +2455,13 @@ ${contextText}
             ? '此志工帳號目前為停權狀態，無法報名班次。請與社工督導聯繫恢復。'
             : '此志工帳號目前為離退狀態，請與社工督導聯繫。'
         });
+      }
+
+      // A draft has not been published. Nobody should be able to reach one, but
+      // the rule belongs where it cannot be skipped rather than only in the list.
+      const target = getShift(String(owned.shiftId || ''));
+      if (target && target.status === 'draft') {
+        return res.status(409).json({ success: false, error: '這個班次尚未發布，暫時無法報名。' });
       }
 
       const saved = insertShiftSignup(owned);

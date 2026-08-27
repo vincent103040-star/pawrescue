@@ -66,7 +66,12 @@ export interface PositionShift {
   tasks: string[];
   locationDetails: string; // e.g. "A棟2樓貓捨 / B戶外草坪"
   attachmentUrl?: string; // e.g. Cloud map photo or guide PDF
-  status: 'active' | 'full' | 'cancelled';
+  /**
+   * 'draft' is a shift the generator produced that nobody has approved yet.
+   * Volunteers never see one; 'full' is derived from the headcount rather than
+   * stored. See shiftStatusFrom.
+   */
+  status: 'active' | 'full' | 'cancelled' | 'draft';
   createdAt: string;
 }
 

@@ -20,6 +20,7 @@ import { RollCallPanel } from './components/RollCallPanel';
 import { VolunteerRoster } from './components/VolunteerRoster';
 import { SubstitutionBoard, OpenSubstitution } from './components/SubstitutionBoard';
 import { SubstitutionWatchlist } from './components/SubstitutionWatchlist';
+import { PeriodRosterPanel } from './components/PeriodRosterPanel';
 import { AiPostModal } from './components/AiPostModal';
 import { VolunteerCheckInModal } from './components/VolunteerCheckInModal';
 import { VolunteerSelfCheckIn } from './components/VolunteerSelfCheckIn';
@@ -973,6 +974,14 @@ export default function App() {
             )}
 
             {adminActiveTab === 'positions' && (
+              <div className="space-y-6">
+                <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto pt-6">
+                  <PeriodRosterPanel
+                    onToast={showToast}
+                    draftCount={shifts.filter(s => s.status === 'draft').length}
+                    onChanged={() => { refreshShifts(); refreshShiftSignups(); }}
+                  />
+                </div>
               <PositionManager
                 shifts={shifts}
                 volunteers={volunteers}
@@ -985,6 +994,7 @@ export default function App() {
                 onAssignVolunteer={handleAssignVolunteerToShift}
                 onUpdateSignupStatus={handleUpdateAppStatus}
               />
+              </div>
             )}
 
             {adminActiveTab === 'signups' && (
