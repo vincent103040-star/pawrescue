@@ -1862,7 +1862,12 @@ ${contextText}
         responsibleRole: req.body.responsibleRole,
         requiredPeople: Number(req.body.requiredPeople),
         estimatedMinutes: Number(req.body.estimatedMinutes),
-        timeWindow: String(req.body.timeWindow || '').trim(),
+        startTime: String(req.body.startTime || ''),
+        endTime: String(req.body.endTime || ''),
+        weekdays: req.body.weekdays,
+        // Composed on read from startTime/endTime; passed only to satisfy the
+        // shape, never stored.
+        timeWindow: '',
         isRequired: req.body.isRequired !== false,
         sopSectionId: String(req.body.sopSectionId || ''),
         sopVideoId: String(req.body.sopVideoId || '')
@@ -1882,9 +1887,13 @@ ${contextText}
 
       const updates: any = {};
       for (const field of ['zoneId', 'title', 'description', 'category', 'triggerType',
-                           'shiftId', 'responsibleRole', 'timeWindow', 'sopSectionId', 'sopVideoId']) {
+                           'shiftId', 'responsibleRole', 'startTime', 'endTime',
+                           'sopSectionId', 'sopVideoId']) {
         if (req.body[field] !== undefined) updates[field] = String(req.body[field]).trim();
       }
+      // Sent as an array of day numbers by the form; normalised in db.ts, which
+      // is also where an all-seven selection collapses back to "every day".
+      if (req.body.weekdays !== undefined) updates.weekdays = req.body.weekdays;
       if (req.body.requiredPeople !== undefined) updates.requiredPeople = Number(req.body.requiredPeople);
       if (req.body.estimatedMinutes !== undefined) updates.estimatedMinutes = Number(req.body.estimatedMinutes);
       if (req.body.isRequired !== undefined) updates.isRequired = req.body.isRequired !== false;
@@ -2057,16 +2066,17 @@ ${contextText}
         { personSlots: 0, personHours: 0 }
       );
 
+      // The rows are already the fortnight's real totals -- getZoneWorkload
+      // walks the fourteen days and counts each duty only on the weekdays it
+      // runs. There used to be a "× 14" here instead, which is what reported a
+      // Saturday adoption event as forty hours every day of the week.
       return res.json({
         success: true,
         workload,
-        totals,
-        // Two weeks is the publishing horizon the plan assumes; showing the
-        // fortnight total is what makes this figure mean something to someone
-        // deciding how many shifts to open.
-        fortnight: {
-          personSlots: totals.personSlots * 14,
-          personHours: Math.round(totals.personHours * 14 * 10) / 10
+        fortnight: totals,
+        daily: {
+          personSlots: Math.round((totals.personSlots / 14) * 10) / 10,
+          personHours: Math.round((totals.personHours / 14) * 10) / 10
         }
       });
     } catch (error: any) {
