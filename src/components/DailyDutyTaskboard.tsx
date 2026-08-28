@@ -25,7 +25,8 @@ import {
   EyeOff,
   PlayCircle,
   BookOpen,
-  X
+  Plus,
+  Loader2
 } from 'lucide-react';
 
 interface SopItem {
@@ -88,6 +89,66 @@ export const DailyDutyTaskboard: React.FC<DailyDutyTaskboardProps> = ({
   const [busyIds, setBusyIds] = useState<string[]>([]);
 
   const [viewingMaterial, setViewingMaterial] = useState<SopItem | null>(null);
+
+  /**
+   * Adding something that came up today.
+   *
+   * A dog back from the vet needing two-hourly checks, a flooded yard, a
+   * delivery to log -- work that belongs to one shift on one day. Until now the
+   * only ways to record it were to create a permanent duty, which then appears
+   * every day until somebody remembers to disable it, or to say it out loud,
+   * which leaves no checkbox, no record of whether it was done, and nothing in
+   * the volunteer's arrival message.
+   *
+   * Bound to a single shift, so it expires by itself when that day passes.
+   */
+  const [isAddingOneOff, setIsAddingOneOff] = useState(false);
+  const [oneOff, setOneOff] = useState({ shiftId: '', title: '', requiredPeople: 1, estimatedMinutes: 30 });
+  const [isSavingOneOff, setIsSavingOneOff] = useState(false);
+
+  const todayIso = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' });
+  const todaysShifts = shifts.filter(shift => shift.date === todayIso && shift.status !== 'cancelled');
+
+  const saveOneOff = async () => {
+    if (!oneOff.shiftId || !oneOff.title.trim()) {
+      onSendLineToast('⚠️ 請選擇班次並填寫任務內容。');
+      return;
+    }
+    setIsSavingOneOff(true);
+    try {
+      const shift = todaysShifts.find(x => x.id === oneOff.shiftId);
+      const res = await authFetch('/api/admin/duty-items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          zoneId: shift?.zone || '',
+          title: oneOff.title.trim(),
+          description: '',
+          category: '臨時任務',
+          triggerType: 'specific_shift',
+          shiftId: oneOff.shiftId,
+          responsibleRole: 'volunteer',
+          requiredPeople: oneOff.requiredPeople,
+          estimatedMinutes: oneOff.estimatedMinutes,
+          startTime: '',
+          endTime: '',
+          isRequired: true,
+          sopSectionId: '',
+          sopVideoId: ''
+        })
+      });
+      const data = await res.json();
+      if (!data.success) { onSendLineToast(`⚠️ ${data.error || '新增失敗'}`); return; }
+      onSendLineToast(`✅ 已加入今天的勤務清單：${data.dutyItem.title}`);
+      setIsAddingOneOff(false);
+      setOneOff({ shiftId: '', title: '', requiredPeople: 1, estimatedMinutes: 30 });
+      await loadDuties();
+    } catch {
+      onSendLineToast('⚠️ 無法連線，這項任務尚未建立。');
+    } finally {
+      setIsSavingOneOff(false);
+    }
+  };
 
   const loadDuties = React.useCallback(() => {
     setIsLoadingDuties(true);
@@ -451,6 +512,93 @@ export const DailyDutyTaskboard: React.FC<DailyDutyTaskboardProps> = ({
           );
         })}
       </div>
+        </div>
+      )}
+
+      {!isAddingOneOff ? (
+        <button
+          type="button"
+          onClick={() => setIsAddingOneOff(true)}
+          disabled={todaysShifts.length === 0}
+          className="w-full mt-3 py-2.5 rounded-2xl border border-dashed border-[#716053] text-[#716053] text-xs font-bold hover:bg-[#FAF6EE] disabled:opacity-40 transition cursor-pointer flex items-center justify-center gap-1.5"
+        >
+          <Plus className="w-4 h-4" />
+          <span>{todaysShifts.length === 0 ? '今天沒有班次，無法新增臨時任務' : '為今天新增一項臨時任務'}</span>
+        </button>
+      ) : (
+        <div className="mt-3 p-4 rounded-2xl border border-[#716053] bg-[#FAF6EE] space-y-3">
+          <p className="text-xs font-bold text-slate-800">為今天新增一項臨時任務</p>
+
+          <select
+            value={oneOff.shiftId}
+            onChange={e => setOneOff({ ...oneOff, shiftId: e.target.value })}
+            className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white"
+          >
+            <option value="">這項任務屬於哪個班次？</option>
+            {todaysShifts.map(shift => (
+              <option key={shift.id} value={shift.id}>{shift.timeRange}・{shift.title}</option>
+            ))}
+          </select>
+
+          <input
+            value={oneOff.title}
+            onChange={e => setOneOff({ ...oneOff, title: e.target.value })}
+            maxLength={60}
+            placeholder="要做什麼？例如：小黑剛從醫院回來，每兩小時觀察一次"
+            className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"
+          />
+
+          <div className="flex items-center gap-3 flex-wrap">
+            <label className="flex items-center gap-1.5 text-xs text-slate-600">
+              <span className="font-bold">需要</span>
+              <input
+                type="number"
+                min={1}
+                max={50}
+                value={oneOff.requiredPeople}
+                onChange={e => setOneOff({ ...oneOff, requiredPeople: Number(e.target.value) })}
+                className="w-16 px-2 py-1.5 rounded-lg border border-slate-300 text-sm"
+              />
+              <span>人</span>
+            </label>
+            <label className="flex items-center gap-1.5 text-xs text-slate-600">
+              <span className="font-bold">約</span>
+              <input
+                type="number"
+                min={5}
+                max={720}
+                step={5}
+                value={oneOff.estimatedMinutes}
+                onChange={e => setOneOff({ ...oneOff, estimatedMinutes: Number(e.target.value) })}
+                className="w-20 px-2 py-1.5 rounded-lg border border-slate-300 text-sm"
+              />
+              <span>分鐘</span>
+            </label>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={saveOneOff}
+              disabled={isSavingOneOff}
+              className="px-4 py-2 rounded-xl bg-[#716053] hover:bg-[#5A4A3F] disabled:opacity-50 text-white text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
+            >
+              {isSavingOneOff && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <span>加入今天的清單</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsAddingOneOff(false)}
+              className="px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-600 text-xs font-bold hover:bg-slate-50 transition cursor-pointer"
+            >
+              取消
+            </button>
+          </div>
+
+          <p className="text-[11px] text-slate-500">
+            只會在這個班次出現這一次，<strong>當天過了就不再出現</strong>——不需要記得回來停用它。
+            值班志工的清單上會馬上看到，簽到後的 LINE 訊息也會帶到。
+          </p>
         </div>
       )}
 

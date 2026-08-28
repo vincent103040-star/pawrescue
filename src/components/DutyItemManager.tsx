@@ -28,6 +28,7 @@ interface DutyItem {
   description: string;
   category: string;
   triggerType: 'daily' | 'zone_shift' | 'specific_shift';
+  /** Which shift a one-off duty belongs to. Empty for recurring ones. */
   shiftId: string;
   responsibleRole: 'staff' | 'volunteer';
   requiredPeople: number;
@@ -75,6 +76,7 @@ const EMPTY_DRAFT = {
   timeWindow: '',
   sopSectionId: '',
   sopVideoId: '',
+  shiftId: '',
   isRequired: true
 };
 
@@ -102,6 +104,7 @@ export const DutyItemManager: React.FC<DutyItemManagerProps> = ({ zones, onToast
   const [isAdding, setIsAdding] = useState(false);
   const [draft, setDraft] = useState(EMPTY_DRAFT);
   const [confirmDisable, setConfirmDisable] = useState<DutyItem | null>(null);
+  const [showFinishedOneOffs, setShowFinishedOneOffs] = useState(false);
 
   /**
    * The material a duty can point at.
@@ -115,6 +118,19 @@ export const DutyItemManager: React.FC<DutyItemManagerProps> = ({ zones, onToast
     sections: Array<{ id: string; title: string }>;
     videos: Array<{ id: string; title: string }>;
   }>({ sections: [], videos: [] });
+
+  /**
+   * Shifts, so a one-off duty can name the one it belongs to and the list can
+   * tell a task that is still coming from one whose day has passed.
+   */
+  const [shifts, setShifts] = useState<Array<{ id: string; title: string; date: string; timeRange: string; zone: string }>>([]);
+
+  useEffect(() => {
+    authFetch('/api/shifts')
+      .then(res => res.json())
+      .then(data => { if (data.success) setShifts(data.shifts); })
+      .catch(() => { /* the picker just stays empty */ });
+  }, []);
 
   useEffect(() => {
     authFetch('/api/sop-content')
@@ -161,6 +177,7 @@ export const DutyItemManager: React.FC<DutyItemManagerProps> = ({ zones, onToast
       startTime: item.startTime || '', endTime: item.endTime || '',
       weekdays: item.weekdays || '', timeWindow: item.timeWindow,
       sopSectionId: item.sopSectionId || '', sopVideoId: item.sopVideoId || '',
+      shiftId: item.shiftId || '',
       isRequired: item.isRequired
     });
     setEditingId(item.id);
@@ -344,6 +361,30 @@ export const DutyItemManager: React.FC<DutyItemManagerProps> = ({ zones, onToast
               />
             </label>
 
+            {draft.triggerType === 'specific_shift' && (
+              <label className="block sm:col-span-2">
+                <span className="text-xs font-bold text-slate-600">屬於哪一個班次</span>
+                <select
+                  value={draft.shiftId}
+                  onChange={e => setDraft({ ...draft, shiftId: e.target.value })}
+                  className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white"
+                >
+                  <option value="">請選擇班次</option>
+                  {[...shifts]
+                    .filter(shift => shift.date >= new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' }))
+                    .sort((a, b) => (a.date + a.timeRange).localeCompare(b.date + b.timeRange))
+                    .map(shift => (
+                      <option key={shift.id} value={shift.id}>
+                        {shift.date} {shift.timeRange}・{shift.title}
+                      </option>
+                    ))}
+                </select>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  只會在這一個班次出現一次，班次過了就不再出現——<strong>不需要記得回來停用它</strong>。
+                </p>
+              </label>
+            )}
+
             <div className="block sm:col-span-2 space-y-1">
               <span className="text-xs font-bold text-slate-600">
                 出勤前要看的教材 <span className="font-normal text-slate-400">（選填）</span>
@@ -386,6 +427,7 @@ export const DutyItemManager: React.FC<DutyItemManagerProps> = ({ zones, onToast
               >
                 <option value="daily">每天固定（不論有無班次）</option>
                 <option value="zone_shift">該場域有班次時才出現</option>
+                <option value="specific_shift">只有這一次（指定班次）</option>
               </select>
             </label>
 
@@ -447,7 +489,9 @@ export const DutyItemManager: React.FC<DutyItemManagerProps> = ({ zones, onToast
               </div>
             </div>
 
-            <div className="block sm:col-span-2 space-y-1">
+            <div className={`block sm:col-span-2 space-y-1 ${
+              draft.triggerType === 'specific_shift' ? 'hidden' : ''
+            }`}>
               <span className="text-xs font-bold text-slate-600">
                 星期幾要做 <span className="font-normal text-slate-400">（不選＝每天）</span>
               </span>
@@ -525,8 +569,41 @@ export const DutyItemManager: React.FC<DutyItemManagerProps> = ({ zones, onToast
       )}
 
       {/* ---------- list ---------- */}
+      {(() => {
+        // One-off tasks pile up: every "today the yard flooded" ever recorded
+        // would sit in this list forever, burying the standing duties that
+        // actually describe how the shelter runs. They are kept -- the record
+        // of what was asked and whether it was done still matters -- just
+        // folded away once their day has passed.
+        const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' });
+        const shiftDate = (id: string) => shifts.find(x => x.id === id)?.date || '';
+        const isFinishedOneOff = (item: DutyItem) =>
+          item.triggerType === 'specific_shift' &&
+          !!item.shiftId &&
+          !!shiftDate(item.shiftId) &&
+          shiftDate(item.shiftId) < today;
+        const finished = items.filter(isFinishedOneOff);
+        if (finished.length > 0 && !showFinishedOneOffs) {
+          return (
+            <button
+              type="button"
+              onClick={() => setShowFinishedOneOffs(true)}
+              className="w-full text-left text-[11px] text-slate-500 hover:text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 cursor-pointer transition"
+            >
+              已結束的一次性任務（{finished.length}）——點此展開
+            </button>
+          );
+        }
+        return null;
+      })()}
+
       <div className="space-y-2">
-        {items.map(item => {
+        {items.filter(item => {
+          if (showFinishedOneOffs) return true;
+          if (item.triggerType !== 'specific_shift' || !item.shiftId) return true;
+          const date = shifts.find(x => x.id === item.shiftId)?.date || '';
+          return !date || date >= new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' });
+        }).map(item => {
           const zone = resolveZone(item.zoneId);
           const isDisabled = item.status === 'disabled';
           return (
@@ -557,6 +634,11 @@ export const DutyItemManager: React.FC<DutyItemManagerProps> = ({ zones, onToast
                   <span className={parseWeekdays(item.weekdays).length ? 'font-bold text-[#716053]' : ''}>
                     {describeWeekdays(item.weekdays)}
                   </span>
+                  {item.triggerType === 'specific_shift' && item.shiftId && (
+                    <span className="font-bold text-amber-800">
+                      一次性・{shifts.find(x => x.id === item.shiftId)?.date || '班次已刪除'}
+                    </span>
+                  )}
                   {(item.sopSectionId || item.sopVideoId) && (
                     <span className="text-indigo-700 font-bold">
                       {item.sopSectionId && '📖'}{item.sopVideoId && '🎬'} 附教材
