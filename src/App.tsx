@@ -40,7 +40,7 @@ import {
   SignupStatus,
   AttendanceRecord
 } from './types';
-import { INITIAL_SHIFTS, INITIAL_SHIFT_SIGNUPS, VOLUNTEER_PROFILES, INITIAL_ATTENDANCE_RECORDS, ZONE_CONFIGS, DEFAULT_SHELTER_LOCATION } from './data/mockData';
+import { INITIAL_SHIFTS, VOLUNTEER_PROFILES, ZONE_CONFIGS, DEFAULT_SHELTER_LOCATION } from './data/mockData';
 import { applyZones, type ZoneRecord } from './data/zones';
 import { MessageSquare, X, Bell, Clock, MapPin, QrCode, ArrowUpRight } from 'lucide-react';
 import { sendLinePush } from './utils/linePush';
@@ -69,20 +69,22 @@ export default function App() {
     };
   });
 
+  /**
+   * Null until somebody actually signs in.
+   *
+   * This used to fall back to a made-up volunteer -- 林小明, phone
+   * 0912-345-678 -- and that phone number is also carried by two of the sample
+   * bookings and one of the sample attendance rows the app ships with. So any
+   * screen that asked "which of these are mine?" by phone was handed a
+   * stranger's shifts. An absent session now matches nothing, which is the
+   * truthful answer.
+   */
   const [volunteerSession, setVolunteerSession] = useState<VolunteerUserSession | null>(() => {
     const saved = localStorage.getItem('paw_volunteer_session');
     if (saved) {
       try { return JSON.parse(saved); } catch (e) { /* ignore */ }
     }
-    return {
-      id: 'vol-01',
-      name: localStorage.getItem('volunteer_profile_name') || '林小明',
-      email: localStorage.getItem('volunteer_profile_email') || 'xiaoming@gmail.com',
-      phone: localStorage.getItem('volunteer_profile_phone') || '0912-345-678',
-      lineId: localStorage.getItem('volunteer_profile_lineid') || 'xiaoming_line',
-      tier: '資深志工',
-      totalHours: 24
-    };
+    return null;
   });
 
   // Tab states for separate roles
@@ -107,9 +109,13 @@ export default function App() {
   // Seeded from the mock data purely so the first paint isn't empty; the effects
   // below immediately replace all four with the server's copy.
   const [shifts, setShifts] = useState<PositionShift[]>(INITIAL_SHIFTS);
-  const [shiftSignups, setShiftSignups] = useState<ShiftSignup[]>(INITIAL_SHIFT_SIGNUPS);
+  // Personal lists start empty rather than pre-filled with the sample rows.
+  // Every loader below keeps what is on screen when a fetch fails, which is
+  // right for a dropped connection and wrong at first paint: it left demo
+  // bookings sitting on the page looking exactly like real ones.
+  const [shiftSignups, setShiftSignups] = useState<ShiftSignup[]>([]);
   const [volunteers, setVolunteers] = useState<VolunteerProfile[]>(VOLUNTEER_PROFILES);
-  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(INITIAL_ATTENDANCE_RECORDS);
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
 
   // The live-updates subscription below is created once and therefore closes
   // over the first render's values; this ref is how it can still see the
@@ -421,20 +427,16 @@ export default function App() {
   const upcomingApprovedShiftReminder = useMemo(() => {
     if (userRole !== 'volunteer' || !volunteerSession) return null;
 
-    const vName = volunteerSession.name || localStorage.getItem('volunteer_profile_name') || '林小明';
-    const vEmail = volunteerSession.email || localStorage.getItem('volunteer_profile_email') || 'xiaoming@gmail.com';
-    const vPhone = volunteerSession.phone || localStorage.getItem('volunteer_profile_phone') || '0912-345-678';
-    const vLineId = volunteerSession.lineId || localStorage.getItem('volunteer_profile_lineid') || 'xiaoming_line';
+    // Email only: it is what the server issues the session against and what it
+    // scopes this list by. Matching on a phone number as well is how somebody
+    // else's shift ended up in here.
+    const vEmail = (volunteerSession.email || '').trim().toLowerCase();
+    if (!vEmail) return null;
 
-    // Find approved signups for this volunteer
     const myApprovedAppShiftIds = shiftSignups
       .filter(a =>
-        a.status === 'approved' && (
-          (a.volunteerName && a.volunteerName.trim().toLowerCase() === vName.trim().toLowerCase()) ||
-          (a.volunteerEmail && a.volunteerEmail.trim().toLowerCase() === vEmail.trim().toLowerCase()) ||
-          (a.volunteerPhone && a.volunteerPhone.trim() === vPhone.trim()) ||
-          (a.lineId && a.lineId.trim() === vLineId.trim())
-        )
+        a.status === 'approved' &&
+        (a.volunteerEmail || '').trim().toLowerCase() === vEmail
       )
       .map(a => a.shiftId);
 
@@ -899,10 +901,10 @@ export default function App() {
   };
 
   const pendingCount = shiftSignups.filter(a => a.status === 'pending').length;
-  const mySignupsCount = shiftSignups.filter(a => 
-    a.volunteerName === (volunteerSession?.name || '林小明') ||
-    (volunteerSession?.phone && a.volunteerPhone === volunteerSession.phone)
-  ).length;
+  const myEmailLower = (volunteerSession?.email || '').trim().toLowerCase();
+  const mySignupsCount = myEmailLower
+    ? shiftSignups.filter(a => (a.volunteerEmail || '').trim().toLowerCase() === myEmailLower).length
+    : 0;
 
   // 1. IF NOT LOGGED IN -> RENDER LOGIN PORTAL
   if (!userRole) {

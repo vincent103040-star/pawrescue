@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { VolunteerUserSession } from '../types';
+import { setToken } from '../utils/session';
 import {
   ShieldCheck,
   CheckCircle2,
@@ -153,6 +154,15 @@ export const GooglePhoneAuthModal: React.FC<GooglePhoneAuthModalProps> = ({
 
       const data = await res.json();
       if (data.success && data.user) {
+        // The server issues a real volunteer session here. It used to be
+        // dropped on the floor: the browser kept the profile and threw away the
+        // token, so every request the volunteer portal made afterwards was
+        // unauthenticated. Behind the default-deny middleware that meant a 401
+        // for the shift list, the attendance record and the duty board alike --
+        // and because those loaders keep whatever is on screen when a fetch
+        // fails, the volunteer was left looking at the demo rows the app ships
+        // with, believing they were their own.
+        if (data.token) setToken(data.token);
         setVerifiedUserData(data.user);
         setBackendSyncLog(prev => [
           ...prev,

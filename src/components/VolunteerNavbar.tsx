@@ -42,7 +42,7 @@ export const VolunteerNavbar: React.FC<VolunteerNavbarProps> = ({
           <div className="hidden sm:flex items-center gap-2 bg-black/20 px-2.5 py-0.5 rounded-full">
             <User className="w-3.5 h-3.5 text-amber-200" />
             <span>
-              志工：<strong>{currentUser?.name || '林小明'}</strong>
+              志工：<strong>{currentUser?.name || '志工夥伴'}</strong>
               <span className="ml-1 px-1.5 py-0.2 bg-amber-500/40 text-amber-100 rounded-md text-[10px]">
                 {currentUser?.tier || '資深志工'}
               </span>
