@@ -1425,6 +1425,7 @@ ${contextText}
           shiftChanges: !!linePreferences.shiftChanges,
           urgentRecruitment: !!linePreferences.urgentRecruitment,
           checkInReminder: !!linePreferences.checkInReminder,
+          sopReminder: linePreferences.sopReminder !== false,
           // Stored rather than dropped: the sweep reads this to decide when to
           // send, and it used to live only in the volunteer's browser.
           reminderTimingHours: normalizeReminderLead(linePreferences.reminderTimingHours)
@@ -2098,7 +2099,23 @@ ${contextText}
       const completionKey = (itemId: string, sid: string) => `${itemId}::${sid}`;
       const byKey = new Map(completions.map(c => [completionKey(c.dutyItemId, c.shiftId), c]));
 
+      // A coordinator is running the whole site, so they see the whole list. A
+      // volunteer is here for their own shift: showing them every zone's
+      // checklist would bury the three things that are actually theirs, and
+      // invite them to tick off work in a zone they never entered.
+      const myZones = isAdmin(req)
+        ? null
+        : new Set(
+            getAllShiftSignups()
+              .filter(signup =>
+                sameEmail(signup.volunteerEmail, sessionEmail(req)) &&
+                ['approved', 'attended'].includes(signup.status))
+              .map(signup => shiftsToday.find(shift => shift.id === signup.shiftId)?.zone)
+              .filter(Boolean) as string[]
+          );
+
       const items = getActiveDutyItems().filter(item => {
+        if (myZones && !myZones.has(item.zoneId)) return false;
         if (item.triggerType === 'daily') return true;
         if (item.triggerType === 'zone_shift') return zonesWithShifts.has(item.zoneId);
         return shiftId ? item.shiftId === shiftId : shiftsToday.some(s => s.id === item.shiftId);
@@ -3231,6 +3248,54 @@ ${contextText}
     });
   });
 
+  /**
+   * Tells a volunteer what today holds, at the moment they arrive.
+   *
+   * Before this, checking in confirmed a time and nothing else: the duty list
+   * lived on a screen only coordinators could reach, so a volunteer on site had
+   * no way to find out what the shelter needed from them beyond asking.
+   */
+  async function sendArrivalBriefing(shift: any, volunteerName: string): Promise<void> {
+    try {
+      const email = String(
+        getAllVolunteers().find(v => v.name === volunteerName)?.email || ''
+      ).trim();
+      if (!email) return;
+
+      const prefs = getLinePreferences(email);
+      const duties = getActiveDutyItems().filter(
+        item => item.zoneId === shift.zone && item.triggerType !== 'specific_shift'
+      );
+      const zoneName = getZone(shift.zone)?.name || shift.zone;
+
+      const lines = [
+        `【浪浪家園】${volunteerName} 您好，簽到成功，感謝您今天來 🐾`,
+        `班次：${shift.title}（${shift.date} ${shift.timeRange}・${zoneName}）`,
+        ''
+      ];
+
+      if (duties.length === 0) {
+        lines.push('今天這個場域沒有登記固定勤務，請依現場社工督導的安排進行。');
+      } else {
+        lines.push(`今日 ${zoneName} 的工作（共 ${duties.length} 項）：`);
+        for (const duty of duties) {
+          const when = duty.timeWindow ? `${duty.timeWindow} ` : '';
+          lines.push(`・${when}${duty.title}${duty.isRequired ? '（必做）' : ''}`);
+          // Only the duties that actually have material, and only if they want it.
+          if (prefs.sopReminder && (duty.sopSectionId || duty.sopVideoId)) {
+            lines.push('　↳ 這項有出勤前教材，請在系統的「今日勤務」點開「先看規範」');
+          }
+        }
+        lines.push('');
+        lines.push('完成後請到系統的「今日勤務」勾選核銷。現場如有臨時任務，以督導的安排為準。');
+      }
+
+      await notifyVolunteerDirect(email, lines.join('\n'));
+    } catch (error: any) {
+      console.warn('Arrival briefing failed:', error?.message || error);
+    }
+  }
+
   app.post('/api/attendance/check-in', requireAuth, (req: any, res) => {
     try {
       const { shiftId, siteCode, posterCode, lat, lng, onBehalfOfName } = req.body || {};
@@ -3344,6 +3409,14 @@ ${contextText}
         qrCodeToken: '',
         checkInMethod: isAdmin ? 'staff' : 'self'
       } as any);
+
+      // What they came to do, sent the moment they arrive.
+      //
+      // Fire and forget: a volunteer standing at the gate must not wait on a
+      // LINE round trip to be told their check-in worked. The work itself is
+      // always included -- it is the reason they are here -- while the material
+      // links are the part a preference can decline.
+      void sendArrivalBriefing(shift, volunteerName);
 
       broadcastChange('attendance');
       return res.json({
