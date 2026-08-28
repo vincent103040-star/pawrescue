@@ -379,10 +379,10 @@ export const RulebookManualModal: React.FC<RulebookManualModalProps> = ({
                   <div className="bg-[#FFFDF7] p-4 rounded-2xl border border-slate-200 space-y-1.5">
                     <div className="flex items-center gap-2 font-bold text-slate-900">
                       <CheckCircle2 className="w-4 h-4 text-indigo-600" />
-                      <span>6. 每日勤務看板打勾</span>
+                      <span>6. 今日勤務打勾</span>
                     </div>
                     <p className="text-slate-600 leading-relaxed">
-                      在首頁看到當日值班要做的勤務項目（給水、出犬檢查、貓房消毒…），每完成一項點選核銷，系統同步紀錄是誰、什麼時候完成的。
+                      在「我的排班與出勤紀錄」上方看到<strong>您今天班次場域</strong>要做的勤務項目（給水、出犬檢查、貓房消毒…），每完成一項點選核銷，系統同步紀錄是誰、什麼時候完成的。有附教材的項目會有「先看規範」可以點開。
                     </p>
                   </div>
 

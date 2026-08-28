@@ -704,6 +704,14 @@ export interface StoredLinePreferences {
   urgentRecruitment: boolean;
   checkInReminder: boolean;
   /**
+   * Whether the post-check-in message includes the SOP material links.
+   *
+   * The work itself is always listed -- that is what the volunteer turned up to
+   * do, and it is not promotional. The teaching material beside it is the part
+   * somebody who has done the job fifty times can reasonably decline.
+   */
+  sopReminder: boolean;
+  /**
    * How many hours before a shift the reminder goes out.
    *
    * The settings panel has offered this choice since before there was anything
@@ -721,6 +729,7 @@ const DEFAULT_LINE_PREFERENCES: StoredLinePreferences = {
   shiftChanges: true,
   urgentRecruitment: true,
   checkInReminder: true,
+  sopReminder: true,
   reminderTimingHours: 1
 };
 

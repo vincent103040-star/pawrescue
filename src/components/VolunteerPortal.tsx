@@ -162,6 +162,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
       shiftChanges: true,      // 班次異動
       urgentRecruitment: true, // 緊急招募
       checkInReminder: true,   // 簽到提醒
+      sopReminder: true,       // 簽到後的工作清單要不要附教材提醒
       reminderTimingHours: 1
     };
   });
@@ -533,6 +534,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
             shiftChanges: linePreferences.shiftChanges,
             urgentRecruitment: linePreferences.urgentRecruitment,
             checkInReminder: linePreferences.checkInReminder,
+            sopReminder: linePreferences.sopReminder !== false,
             // Sent now. This choice used to stay in localStorage, so it was lost
             // on a new device -- and nothing on the server read it anyway.
             reminderTimingHours: linePreferences.reminderTimingHours || 1
@@ -1503,6 +1505,42 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                     >
                       <div className={`w-5 h-5 rounded-full bg-white shadow-xs absolute top-0.5 transition-transform ${
                         linePreferences.checkInReminder ? 'right-0.5' : 'left-0.5'
+                      }`} />
+                    </button>
+                  </div>
+
+                  {/* Toggle 4: 簽到後的教材提醒 */}
+                  <div className="bg-[#FAF6EE]/80 hover:bg-[#FAF6EE] p-4 rounded-2xl border border-[#716053] flex items-start justify-between gap-4 transition">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">📖</span>
+                        <span className="font-bold text-slate-900 text-sm">簽到後附上教材提醒</span>
+                        {linePreferences.sopReminder !== false ? (
+                          <span className="bg-emerald-100 text-emerald-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full">
+                            已開啟 (ON)
+                          </span>
+                        ) : (
+                          <span className="bg-slate-200 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                            已停用 (OFF)
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-600 leading-relaxed">
+                        簽到成功後，LINE 會列出您今天班次場域的工作內容。
+                        這個開關控制的是<strong>要不要一併提醒哪幾項有出勤前教材</strong>——
+                        <strong className="text-slate-800">工作內容本身一定會列出</strong>，那是您今天來做的事。
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleTogglePreference('sopReminder')}
+                      className={`w-12 h-6 rounded-full transition-colors relative cursor-pointer shrink-0 mt-1 ${
+                        linePreferences.sopReminder !== false ? 'bg-emerald-500' : 'bg-slate-300'
+                      }`}
+                    >
+                      <div className={`w-5 h-5 rounded-full bg-white shadow-xs absolute top-0.5 transition-transform ${
+                        linePreferences.sopReminder !== false ? 'right-0.5' : 'left-0.5'
                       }`} />
                     </button>
                   </div>

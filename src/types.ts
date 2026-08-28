@@ -151,6 +151,7 @@ export interface LineNotificationPreferences {
   shiftChanges: boolean;      // 班次異動推播
   urgentRecruitment: boolean; // 緊急招募推播
   checkInReminder: boolean;   // 簽到提醒推播
+  sopReminder?: boolean;      // 簽到後的訊息要不要附上教材提醒
   reminderTimingHours?: number; // 出班前提醒時數 (預設 1 小時)
 }
 
