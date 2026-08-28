@@ -70,7 +70,14 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
   );
 
   const completedAttendance = myAttendance.filter(r => r.status === 'completed');
-  const totalCompletedHours = completedAttendance.reduce((acc, r) => acc + (r.hoursLogged || 3), 0) + (currentUser?.totalHours || 0);
+
+  // The record on file is the total. The server credits a volunteer's hours
+  // when their check-out is confirmed, so every completed shift below is
+  // already inside this figure -- summing them again on top counted each shift
+  // twice, both here and on the printed service certificate. The stored number
+  // is also the only one that includes hours a coordinator logged by hand for
+  // work done on paper.
+  const totalCompletedHours = currentUser?.totalHours || 0;
 
   const approvedApps = mySignups.filter(a => a.status === 'approved');
   const pendingApps = mySignups.filter(a => a.status === 'pending');
@@ -511,20 +518,29 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
       {/* Certificate Modal */}
       {showCertificateModal && (
         <CertificateModal
+          /* Everything on this document comes from the volunteer's own record.
+             It used to be filled in with invented values -- three hard-coded
+             skills, a joining date of 2025-06-15, an emergency contact called
+             林媽媽, and a completed-shift count with eight added to it. This is
+             a document a volunteer can export as proof of service, so a number
+             on it that nobody can trace is worse than no number at all. */
           volunteer={{
-            id: 'vol-my',
+            id: currentUser?.id || '',
             name: volunteerName,
             email: currentUser?.email || '',
             phone: currentUser?.phone || '',
             lineId: currentUser?.lineId || '',
             avatar: '',
-            skills: ['大型犬牽引放風', '貓房清消', '傷病貓照護'],
-            preferredZones: ['dog', 'cat'],
+            skills: currentUser?.skills || [],
+            preferredZones: [],
             totalHours: totalCompletedHours,
-            completedShiftsCount: Math.max(1, completedAttendance.length + 8),
-            tier: currentUser?.tier || '資深志工',
-            joinedDate: '2025-06-15',
-            emergencyContact: '林媽媽 (0988-111-222)'
+            // The server keeps this count, incrementing it as each check-out is
+            // confirmed. Falling back to the attendance rows covers a session
+            // stored before the field was carried through.
+            completedShiftsCount: currentUser?.completedShiftsCount ?? completedAttendance.length,
+            tier: currentUser?.tier || '新進志工',
+            joinedDate: currentUser?.joinedDate || '',
+            emergencyContact: ''
           }}
           onClose={() => setShowCertificateModal(false)}
         />
