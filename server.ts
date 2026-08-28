@@ -1974,6 +1974,14 @@ ${contextText}
     if (has('zoneId') && String(body.zoneId || '')) {
       if (!getZone(String(body.zoneId))) return '找不到這個場域，請重新選擇';
     }
+    // A one-off duty is found by its shift and nothing else, so one without a
+    // real shift is invisible everywhere -- created, stored, and never shown to
+    // anybody. Refused here rather than filed away silently.
+    if (String(body?.triggerType) === 'specific_shift') {
+      const shiftId = String(body?.shiftId || '');
+      if (!shiftId) return '一次性任務請選擇它屬於哪一個班次';
+      if (!getAllShifts().some(shift => shift.id === shiftId)) return '找不到這個班次，請重新選擇';
+    }
     return null;
   }
 
