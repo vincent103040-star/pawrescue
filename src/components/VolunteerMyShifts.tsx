@@ -40,25 +40,33 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
   const [activeSubTab, setActiveSubTab] = useState<'all' | 'upcoming' | 'completed' | 'pending'>('all');
   const [showCertificateModal, setShowCertificateModal] = useState(false);
 
-  const vName = currentUser?.name || localStorage.getItem('volunteer_profile_name') || '林小明';
+  // Who this page belongs to comes from the signed-in session and nowhere
+  // else. These four used to fall back to a demo volunteer -- 林小明,
+  // xiaoming@gmail.com, 0912-345-678 -- and that phone number is shared by two
+  // of the sample bookings and one of the sample attendance rows, so a
+  // volunteer whose session was missing a field was shown another person's
+  // pending shifts under their own name.
+  const vName = (currentUser?.name || '').trim();
   const volunteerName = vName;
-  const vEmail = currentUser?.email || localStorage.getItem('volunteer_profile_email') || 'xiaoming@gmail.com';
-  const vPhone = currentUser?.phone || localStorage.getItem('volunteer_profile_phone') || '0912-345-678';
-  const vLineId = currentUser?.lineId || localStorage.getItem('volunteer_profile_lineid') || 'xiaoming_line';
+  const vEmail = (currentUser?.email || '').trim().toLowerCase();
+  const vPhone = (currentUser?.phone || '').trim();
+  const vLineId = (currentUser?.lineId || '').trim();
 
-  // Filter signups belonging to this volunteer
-  const mySignups = shiftSignups.filter(a => 
-    (a.volunteerName && a.volunteerName.trim().toLowerCase() === vName.trim().toLowerCase()) ||
-    (a.volunteerEmail && a.volunteerEmail.trim().toLowerCase() === vEmail.trim().toLowerCase()) ||
-    (a.volunteerPhone && a.volunteerPhone.trim() === vPhone.trim()) ||
-    (a.lineId && a.lineId.trim() === vLineId.trim())
-  );
+  // Email is the identity the server issues the session against and scopes
+  // /api/shift-signups by, so it is the only thing matched here. A phone
+  // number is reformatted on its way through the login (+886912345678 comes
+  // back as 0912-345-678) and a name is not unique, so neither can say whose
+  // booking this is.
+  const mySignups = vEmail
+    ? shiftSignups.filter(a => (a.volunteerEmail || '').trim().toLowerCase() === vEmail)
+    : [];
 
-  // Filter attendance records belonging to this volunteer
+  // Attendance rows carry no email, so these still match on the other three --
+  // but only against values that came from the session, never invented ones.
   const myAttendance = attendanceRecords.filter(r =>
-    (r.volunteerName && r.volunteerName.trim().toLowerCase() === vName.trim().toLowerCase()) ||
-    (vPhone && r.volunteerPhone && r.volunteerPhone.trim() === vPhone.trim()) ||
-    (vLineId && r.lineId && r.lineId.trim() === vLineId.trim())
+    (!!vName && (r.volunteerName || '').trim().toLowerCase() === vName.toLowerCase()) ||
+    (!!vPhone && (r.volunteerPhone || '').trim() === vPhone) ||
+    (!!vLineId && (r.lineId || '').trim() === vLineId)
   );
 
   const completedAttendance = myAttendance.filter(r => r.status === 'completed');
@@ -506,9 +514,9 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
           volunteer={{
             id: 'vol-my',
             name: volunteerName,
-            email: currentUser?.email || 'xiaoming@gmail.com',
-            phone: currentUser?.phone || '0912-345-678',
-            lineId: currentUser?.lineId || 'xiaoming_line',
+            email: currentUser?.email || '',
+            phone: currentUser?.phone || '',
+            lineId: currentUser?.lineId || '',
             avatar: '',
             skills: ['大型犬牽引放風', '貓房清消', '傷病貓照護'],
             preferredZones: ['dog', 'cat'],

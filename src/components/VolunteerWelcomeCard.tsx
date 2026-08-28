@@ -73,7 +73,7 @@ export const VolunteerWelcomeCard: React.FC<VolunteerWelcomeCardProps> = ({
   onOpenCheckInModal,
   onNavigateTab
 }) => {
-  const volunteerName = currentUser?.name || localStorage.getItem('volunteer_profile_name') || '林小明';
+  const volunteerName = currentUser?.name || localStorage.getItem('volunteer_profile_name') || '志工夥伴';
   
   // Calculate completed attendance hours
   const myCompletedAttendance = attendanceRecords.filter(r => 

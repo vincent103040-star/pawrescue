@@ -130,19 +130,18 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
 
   // Compute shift IDs that current volunteer has applied for
   const myAppliedShiftIds = useMemo(() => {
-    const vName = currentUser?.name || localStorage.getItem('volunteer_profile_name') || '林小明';
-    const vEmail = currentUser?.email || localStorage.getItem('volunteer_profile_email') || 'xiaoming@gmail.com';
-    const vPhone = currentUser?.phone || localStorage.getItem('volunteer_profile_phone') || '0912-345-678';
-    const vLineId = currentUser?.lineId || localStorage.getItem('volunteer_profile_lineid') || 'xiaoming_line';
+    // Which shifts already have my name on them -- used to grey out the
+    // sign-up button. Matched by email alone, from the session and nowhere
+    // else: the old version fell back to a demo identity whose phone number
+    // the sample bookings share, so a shift somebody else had taken showed up
+    // as already booked by me.
+    const vEmail = (currentUser?.email || '').trim().toLowerCase();
+    if (!vEmail) return [];
 
     return shiftSignups
-      .filter(a => 
-        a.status !== 'rejected' && (
-          (a.volunteerName && a.volunteerName.trim() === vName.trim()) ||
-          (a.volunteerEmail && a.volunteerEmail.toLowerCase() === vEmail.toLowerCase()) ||
-          (a.volunteerPhone && a.volunteerPhone === vPhone) ||
-          (a.lineId && a.lineId === vLineId)
-        )
+      .filter(a =>
+        a.status !== 'rejected' &&
+        (a.volunteerEmail || '').trim().toLowerCase() === vEmail
       )
       .map(a => a.shiftId);
   }, [shiftSignups, currentUser]);
