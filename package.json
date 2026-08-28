@@ -9,7 +9,8 @@
     "start": "node --use-system-ca dist/server.cjs",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "check:security": "node --import tsx scripts/security-smoke.ts"
+    "check:security": "node --import tsx scripts/security-smoke.ts",
+    "ocr:pdfs": "node --import tsx scripts/ocr-import.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
