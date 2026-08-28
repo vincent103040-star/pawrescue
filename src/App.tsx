@@ -197,6 +197,19 @@ export default function App() {
     refreshAttendance();
     refreshVolunteers();
     refreshSubstitutions();
+
+    // A sign-in builds the session out of what the login screen knows, which is
+    // the profile and nothing else. The record on file carries more -- the
+    // credited hours, the completed shift count, the skills -- and the service
+    // certificate prints those, so fetch them rather than leaving the document
+    // to guess.
+    if (userRole === 'volunteer') {
+      fetchCurrentSession().then(session => {
+        if (session?.role === 'volunteer' && session.volunteer) {
+          setVolunteerSession(prev => ({ ...(prev as any), ...session.volunteer }));
+        }
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userRole]);
 
@@ -249,7 +262,10 @@ export default function App() {
           phone: session.volunteer.phone,
           lineId: session.volunteer.lineId,
           tier: session.volunteer.tier,
-          totalHours: session.volunteer.totalHours
+          totalHours: session.volunteer.totalHours,
+          completedShiftsCount: session.volunteer.completedShiftsCount,
+          skills: session.volunteer.skills,
+          joinedDate: session.volunteer.joinedDate
         }));
       }
     });
@@ -691,33 +707,39 @@ export default function App() {
       aiReadinessAssessment: situational?.assessment
     };
 
-    setShiftSignups(prev => [newApp, ...prev]);
-
-    // Update recruitment count on the shift immediately
-    setShifts(sPrev => sPrev.map(s => {
-      if (s.id === shiftId) {
-        const newCount = Math.min(s.requiredCount, s.currentCount + 1);
-        return {
-          ...s,
-          currentCount: newCount,
-          status: newCount >= s.requiredCount ? 'full' : s.status
-        };
-      }
-      return s;
-    }));
-
-    const updatedCount = Math.min(shift.requiredCount, shift.currentCount + 1);
-    showToast(`🎉【${name}】報名【${shift.title}】成功！招募名額已更新（已報名 ${updatedCount}/${shift.requiredCount} 人），並自動同步至 Google 日曆與出勤清單。`);
-
-    // The server owns the headcount, so it recomputes it and we take its answer
-    // -- two volunteers applying from different devices can't overwrite it.
+    // Nothing is claimed until the server has stored it.
+    //
+    // This used to add the booking locally and announce 報名成功 before the
+    // request had even been sent. An HTTP error does not reject a fetch, so a
+    // refusal -- the shift filled up, the volunteer is suspended, the shift is
+    // still a draft -- arrived as a 4xx that nothing looked at, leaving the
+    // volunteer reading a success message about a booking that did not exist.
+    // Same reasoning as the cancel path below, which was fixed earlier.
     authFetch('/api/shift-signups', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newApp)
     })
-      .then(() => { refreshShiftSignups(); refreshShifts(); })
-      .catch(() => showToast('⚠️ 報名未能存到伺服器，請重新整理確認。'));
+      .then(async res => {
+        const data = await res.json().catch(() => ({} as any));
+        if (!res.ok || !data.success) {
+          showToast(`⚠️ ${data.error || '報名沒有完成，請重新整理後再試一次。'}`);
+          // Re-read either way: the refusal may be because somebody else took
+          // the last place, and the board should show that.
+          refreshShiftSignups();
+          refreshShifts();
+          return;
+        }
+
+        // The server owns the headcount -- it recomputes it from the signups
+        // and hands back the shift, so two volunteers applying from different
+        // devices can't overwrite each other's count.
+        const saved = data.shift || shift;
+        showToast(`🎉【${name}】報名【${shift.title}】成功！招募名額已更新（已報名 ${saved.currentCount}/${saved.requiredCount} 人），並自動同步至 Google 日曆與出勤清單。`);
+        refreshShiftSignups();
+        refreshShifts();
+      })
+      .catch(() => showToast('⚠️ 無法連線到伺服器，這次報名沒有送出。'));
   };
 
   // Waits for the server before claiming anything. The previous version removed

@@ -21,7 +21,15 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({ volunteer, o
   const dateStr = String(today.getDate()).padStart(2, '0');
   const formattedDate = `${yearStr} 年 ${monthStr} 月 ${dateStr} 日`;
 
-  const certNumber = `PAW-CERT-2026-${volunteer.id.replace(/[^0-9]/g, '') || '888'}`;
+  // One number per volunteer, and the year this was issued.
+  //
+  // Both halves used to be fixed: the year was written into the string, and the
+  // id arrived as the literal 'vol-my', whose digits strip to nothing -- so
+  // every volunteer's certificate carried PAW-CERT-2026-888. A serial number
+  // that is the same on everybody's document is worse than none, because it
+  // reads as though it identifies the holder.
+  const serial = volunteer.id.replace(/[^0-9a-z]/gi, '').slice(0, 8).toUpperCase();
+  const certNumber = serial ? `PAW-CERT-${yearStr}-${serial}` : '';
 
   const handleDownloadPdf = async () => {
     if (!certificateRef.current) return;
@@ -122,7 +130,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({ volunteer, o
                   浪浪家園 志工服務榮譽證明書
                 </h1>
                 <p className="text-[11px] text-slate-500 font-mono tracking-widest">
-                  證書編號：{certNumber}
+                  {certNumber ? `證書編號：${certNumber}` : '　'}
                 </p>
               </div>
 
@@ -156,9 +164,11 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({ volunteer, o
                   </div>
                 </div>
 
-                <div className="text-xs text-slate-500">
-                  專長服務項目：{volunteer.skills.join('、')}
-                </div>
+                {volunteer.skills.length > 0 && (
+                  <div className="text-xs text-slate-500">
+                    專長服務項目：{volunteer.skills.join('、')}
+                  </div>
+                )}
               </div>
 
               {/* Certificate Footer with Stamp / Signature */}

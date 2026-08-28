@@ -292,6 +292,21 @@ export interface VolunteerUserSession {
   lineId: string;
   tier: '新進志工' | '正式志工' | '資深志工' | '志工隊長';
   totalHours: number;
+  /**
+   * Carried through from the volunteer's own record so the service certificate
+   * prints what is actually on file. It used to fill these in with invented
+   * values -- a fixed joining date, a fixed emergency contact, three hard-coded
+   * skills and a shift count with eight added to it -- on a document a
+   * volunteer can export as proof of service.
+   *
+   * Optional because a session restored from a browser that predates them, or
+   * built by a login screen, will not have them until /api/auth/me answers.
+   */
+  completedShiftsCount?: number;
+  skills?: string[];
+  joinedDate?: string;
+  /** The volunteer's own record id, which the certificate number is built from. */
+  id?: string;
 }
 
 // Volunteer rulebook / SOP content -- admin-editable, and the single source of
