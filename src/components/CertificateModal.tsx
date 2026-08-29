@@ -1,7 +1,5 @@
 import React, { useRef, useState } from 'react';
 import { VolunteerProfile } from '../types';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import { Download, X, Award, ShieldCheck, Sparkles, CheckCircle2, FileText, Loader2 } from 'lucide-react';
 
 interface CertificateModalProps {
@@ -37,7 +35,19 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({ volunteer, o
     setDownloadSuccess(false);
 
     try {
-      // Use html2canvas to convert DOM to canvas with high resolution
+      // Fetched here rather than at the top of the file: together these are a
+      // third of what the browser used to download before showing anything,
+      // and neither is needed until this button is pressed.
+      //
+      // html2canvas-pro rather than html2canvas: the original was last released
+      // in 2022 and throws on the oklab() colours Tailwind v4 emits, so this
+      // export failed for everyone with "unsupported color function". The fork
+      // is API-compatible and understands them.
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas-pro'),
+        import('jspdf')
+      ]);
+
       const canvas = await html2canvas(certificateRef.current, {
         scale: 2,
         useCORS: true,
