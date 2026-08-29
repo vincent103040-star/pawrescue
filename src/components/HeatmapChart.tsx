@@ -1,5 +1,8 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
-import * as d3 from 'd3';
+// Named imports, not the whole namespace: this chart uses five functions, and
+// `import * as d3` pulls in the geographic projections, force simulation and
+// hierarchy layouts alongside them.
+import { select, scaleBand, scaleLinear, axisBottom, axisLeft } from 'd3';
 import { PositionShift } from '../types';
 import { ZONE_CONFIGS } from '../data/mockData';
 import { Sparkles, AlertTriangle, TrendingUp, Calendar, Clock, MapPin, Zap, Info, ShieldAlert, CheckCircle2, ChevronRight, BarChart2, ChevronDown, ChevronUp, EyeOff } from 'lucide-react';
@@ -122,7 +125,7 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
 
     const displayData = heatmapData;
 
-    const svg = d3.select(svgRef.current);
+    const svg = select(svgRef.current);
     svg.selectAll('*').remove(); // Clear previous render
 
     const margin = { top: 40, right: 30, bottom: 50, left: 110 };
@@ -139,31 +142,31 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
     const yDomain = DAYS_OF_WEEK.map(d => d.label.split(' ')[0]); // "週一", "週二", etc.
 
     // Scales
-    const xScale = d3.scaleBand()
+    const xScale = scaleBand()
       .range([0, width])
       .domain(xDomain)
       .padding(0.08);
 
-    const yScale = d3.scaleBand()
+    const yScale = scaleBand()
       .range([0, height])
       .domain(yDomain)
       .padding(0.08);
 
     // Color Scales
     // Shortage mode: Light Rose -> Bright Red -> Dark Crimson
-    const shortageColorScale = d3.scaleLinear<string>()
+    const shortageColorScale = scaleLinear<string>()
       .domain([0, 30, 60, 100])
       .range(['#fef2f2', '#fca5a5', '#e11d48', '#881337']);
 
     // Density mode: Light Beige -> Sage Green -> Deep Forest
-    const densityColorScale = d3.scaleLinear<string>()
+    const densityColorScale = scaleLinear<string>()
       .domain([0, 40, 75, 100])
       .range(['#FAF6EE', '#a7f3d0', '#10b981', '#064e3b']);
 
     // X Axis
     chartGroup.append('g')
       .attr('transform', `translate(0, ${height})`)
-      .call(d3.axisBottom(xScale).tickSize(0))
+      .call(axisBottom(xScale).tickSize(0))
       .select('.domain').remove();
 
     chartGroup.selectAll('.tick text')
@@ -174,7 +177,7 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
 
     // Y Axis
     chartGroup.append('g')
-      .call(d3.axisLeft(yScale).tickSize(0))
+      .call(axisLeft(yScale).tickSize(0))
       .select('.domain').remove();
 
     chartGroup.selectAll('.tick text')
@@ -271,7 +274,7 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
 
     // Hover interactions & Tooltip
     cells.on('mouseover', (event, d) => {
-      d3.select(event.currentTarget).select('rect')
+      select(event.currentTarget).select('rect')
         .attr('stroke', '#0f172a')
         .attr('stroke-width', 2.5);
 
@@ -280,7 +283,7 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
       }
     })
     .on('mouseout', (event, d) => {
-      d3.select(event.currentTarget).select('rect')
+      select(event.currentTarget).select('rect')
         .attr('stroke', (metricMode === 'shortage' && d.val >= 50) ? '#be123c' : '#ffffff')
         .attr('stroke-width', (metricMode === 'shortage' && d.val >= 50) ? 2 : 1);
 

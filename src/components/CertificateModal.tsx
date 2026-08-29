@@ -1,7 +1,5 @@
 import React, { useRef, useState } from 'react';
 import { VolunteerProfile } from '../types';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import { Download, X, Award, ShieldCheck, Sparkles, CheckCircle2, FileText, Loader2 } from 'lucide-react';
 
 interface CertificateModalProps {
@@ -37,7 +35,19 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({ volunteer, o
     setDownloadSuccess(false);
 
     try {
-      // Use html2canvas to convert DOM to canvas with high resolution
+      // Fetched here rather than at the top of the file: together these are a
+      // third of what the browser used to download before showing anything,
+      // and neither is needed until this button is pressed.
+      //
+      // html2canvas-pro rather than html2canvas: the original was last released
+      // in 2022 and throws on the oklab() colours Tailwind v4 emits, so this
+      // export failed for everyone with "unsupported color function". The fork
+      // is API-compatible and understands them.
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas-pro'),
+        import('jspdf')
+      ]);
+
       const canvas = await html2canvas(certificateRef.current, {
         scale: 2,
         useCORS: true,
@@ -137,7 +147,13 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({ volunteer, o
               {/* Main Body Statement */}
               <div className="space-y-6 my-auto text-center px-8 relative z-10">
                 <p className="text-base text-slate-700 leading-relaxed font-serif">
-                  茲證明志工 <strong className="text-2xl text-[#716053] underline decoration-[#716053]/30 underline-offset-8 px-2">{volunteer.name}</strong> 君（LINE 帳號：@{volunteer.lineId}），
+                  {/* Name only. The LINE handle used to be printed beside it,
+                      but nothing ever asks the volunteer for one -- the login
+                      manufactures it from the email address as
+                      `${local-part}_line`, so it identified nobody and was one
+                      more invented field on a document people submit as proof
+                      of service. */}
+                  茲證明志工 <strong className="text-2xl text-[#716053] underline decoration-[#716053]/30 underline-offset-8 px-2">{volunteer.name}</strong> 君，
                   熱心投入浪浪家園園區保護流浪動物、洗澡放風、貓舍照護與園區運作之志工服務。
                   服務期間盡心盡力，特頒此證以資感謝與鼓勵！
                 </p>
