@@ -878,6 +878,65 @@ ${contextText}
     }
   }
 
+
+  /**
+   * A voice message, turned into the question it was.
+   *
+   * A volunteer with both hands on a dog cannot type. LINE's microphone button
+   * is the closest thing to hands-free that works without writing a native app,
+   * and the answer path behind it is the one that already exists -- this only
+   * has to produce the words.
+   *
+   * Gemini transcribes it rather than a dedicated speech service, deliberately:
+   * the key is already here, and the shelter's assistant should not gain a
+   * runtime dependency on a subscription that can lapse.
+   *
+   * Returns null when the audio could not be fetched or the model could not be
+   * reached; an empty `text` when it was heard but nothing intelligible came
+   * back. The caller says something different for each, because "I could not
+   * reach the service" and "I could not make out what you said" ask the
+   * volunteer to do different things.
+   */
+  async function transcribeLineAudio(messageId: string, channelToken: string): Promise<{ text: string } | null> {
+    try {
+      const audioRes = await fetch(
+        `https://api-data.line.me/v2/bot/message/${encodeURIComponent(messageId)}/content`,
+        { headers: { Authorization: `Bearer ${channelToken}` } }
+      );
+      if (!audioRes.ok) {
+        console.warn(`LINE Webhook: audio download failed (HTTP ${audioRes.status})`);
+        return null;
+      }
+
+      // LINE documents m4a today. Logging what actually arrives means the first
+      // real voice message tells us the format instead of us inferring it, and
+      // the type is passed straight through rather than hard-coded.
+      const mimeType = (audioRes.headers.get('content-type') || 'audio/mp4').split(';')[0].trim();
+      const bytes = Buffer.from(await audioRes.arrayBuffer());
+      console.log(`LINE Webhook: audio ${mimeType}, ${(bytes.length / 1024).toFixed(0)} kB`);
+
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        console.warn('LINE Webhook: GEMINI_API_KEY not set, cannot transcribe');
+        return null;
+      }
+
+      const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { 'User-Agent': 'aistudio-build' } } });
+      const response = await ai.models.generateContent({
+        model: AI_TEXT_MODEL,
+        contents: [
+          { text: '把這段錄音逐字轉成繁體中文。只輸出聽到的那句話本身，不要加任何說明、標題或引號。如果聽不出內容就回傳空字串。' },
+          { inlineData: { mimeType, data: bytes.toString('base64') } }
+        ]
+      });
+
+      return { text: stripMarkdown(response.text || '').trim() };
+    } catch (error: any) {
+      console.warn('LINE Webhook: transcription failed:', error?.message || error);
+      return null;
+    }
+  }
+
   /**
    * The same answer, with the excerpts it came from written underneath.
    *
@@ -3906,6 +3965,29 @@ ${contextText}
         if (event.type === 'message' && event.message?.type === 'text') {
           const result = await answerRulebookQuestion(event.message.text);
           await replyToLine(event.replyToken, withSources(result));
+          continue;
+        }
+        if (event.type === 'message' && event.message?.type === 'audio') {
+          if (!token) {
+            console.warn('LINE Webhook: no channel access token, cannot fetch audio');
+            continue;
+          }
+          const heard = await transcribeLineAudio(event.message.id, token);
+          if (!heard) {
+            await replyToLine(event.replyToken, '語音我收到了，但這邊沒能把它轉成文字 🐾 可以改用打字問我嗎？');
+            continue;
+          }
+          if (!heard.text) {
+            await replyToLine(event.replyToken, '這段錄音我聽不太清楚 🐾 現場比較吵的話，可以靠近一點再說一次，或改用打字。');
+            continue;
+          }
+          // Echoing what was heard before answering it: when the transcription
+          // is wrong -- and in a kennel it sometimes will be -- the volunteer
+          // can see that is why the answer looks unrelated, instead of
+          // concluding the manual is wrong.
+          const result = await answerRulebookQuestion(heard.text);
+          await replyToLine(event.replyToken, `🎤 我聽到的是：「${heard.text}」\n\n${withSources(result)}`);
+          continue;
         }
       } catch (error: any) {
         console.error('LINE Webhook Event Error:', error?.message || error);
