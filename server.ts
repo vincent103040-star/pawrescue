@@ -878,6 +878,27 @@ ${contextText}
     }
   }
 
+  /**
+   * The same answer, with the excerpts it came from written underneath.
+   *
+   * The web page shows an answer's sources beside it; the LINE reply used to
+   * drop them and send the prose alone. That was backwards -- the volunteer
+   * asking from inside a kennel is the one most likely to want to turn to the
+   * page and check, and since the PDF chunks started carrying page numbers
+   * there is finally a page to turn to.
+   *
+   * A fallback answer is left alone: it already quotes its source inline, and
+   * repeating it underneath reads like two different citations.
+   */
+  function withSources(result: { answer: string; isFallback: boolean; sources: string[] }): string {
+    if (result.isFallback) return result.answer;
+    const cited = Array.from(new Set(
+      result.sources.map(source => String(source || '').trim()).filter(Boolean)
+    ));
+    if (cited.length === 0) return result.answer;
+    return `${result.answer}\n\n📖 出處\n${cited.map(source => `・${source}`).join('\n')}`;
+  }
+
   app.post('/api/ai/rag-ask', async (req, res) => {
     const { question } = req.body;
     if (!question || !String(question).trim()) {
@@ -3884,7 +3905,7 @@ ${contextText}
         }
         if (event.type === 'message' && event.message?.type === 'text') {
           const result = await answerRulebookQuestion(event.message.text);
-          await replyToLine(event.replyToken, result.answer);
+          await replyToLine(event.replyToken, withSources(result));
         }
       } catch (error: any) {
         console.error('LINE Webhook Event Error:', error?.message || error);
