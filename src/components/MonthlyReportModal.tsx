@@ -3,6 +3,7 @@ import { ShelterLocation, PositionShift, ShiftSignup } from '../types';
 import { Download, X, FileSpreadsheet, FileText, Printer, CheckCircle2, ShieldCheck, Sparkles, Building2, Users, Clock, AlertTriangle, Loader2 } from 'lucide-react';
 
 import { authFetch } from '../utils/session';
+import { captureElement } from '../utils/domToCanvas';
 interface MonthlyReportModalProps {
   month: string; // e.g., '2026-08'
   shelterLocation: ShelterLocation;
@@ -171,25 +172,13 @@ export const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({
     setDownloadSuccess(null);
 
     try {
-      // Fetched here rather than at the top of the file: together these are a
+      // Fetched on the click, not at the top of the file: together these are a
       // third of what the browser used to download before showing anything,
       // and neither is needed until this button is pressed.
-      //
-      // html2canvas-pro rather than html2canvas: the original was last released
-      // in 2022 and throws on the oklab() colours Tailwind v4 emits, so this
-      // export failed for everyone with "unsupported color function". The fork
-      // is API-compatible and understands them.
-      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
-        import('html2canvas-pro'),
+      const [canvas, { default: jsPDF }] = await Promise.all([
+        captureElement(reportRef.current),
         import('jspdf')
       ]);
-
-      const canvas = await html2canvas(reportRef.current, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#FAF6EE',
-        logging: false
-      });
 
       const imgData = canvas.toDataURL('image/jpeg', 0.98);
       const pdf = new jsPDF({

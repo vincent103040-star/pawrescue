@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { VolunteerProfile } from '../types';
-import { Download, X, Award, ShieldCheck, Sparkles, CheckCircle2, FileText, Loader2 } from 'lucide-react';
+import { Download, X, Award, ShieldCheck, Sparkles, CheckCircle2, FileText, Loader2, AlertTriangle } from 'lucide-react';
+import { captureElement } from '../utils/domToCanvas';
 
 interface CertificateModalProps {
   volunteer: VolunteerProfile;
@@ -11,6 +12,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({ volunteer, o
   const certificateRef = useRef<HTMLDivElement>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   // Generate today's date string in Traditional Chinese format
   const today = new Date();
@@ -33,27 +35,16 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({ volunteer, o
     if (!certificateRef.current) return;
     setIsGenerating(true);
     setDownloadSuccess(false);
+    setDownloadError(null);
 
     try {
-      // Fetched here rather than at the top of the file: together these are a
+      // Fetched on the click, not at the top of the file: together these are a
       // third of what the browser used to download before showing anything,
       // and neither is needed until this button is pressed.
-      //
-      // html2canvas-pro rather than html2canvas: the original was last released
-      // in 2022 and throws on the oklab() colours Tailwind v4 emits, so this
-      // export failed for everyone with "unsupported color function". The fork
-      // is API-compatible and understands them.
-      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
-        import('html2canvas-pro'),
+      const [canvas, { default: jsPDF }] = await Promise.all([
+        captureElement(certificateRef.current),
         import('jspdf')
       ]);
-
-      const canvas = await html2canvas(certificateRef.current, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#FAF6EE',
-        logging: false
-      });
 
       const imgData = canvas.toDataURL('image/jpeg', 0.98);
 
@@ -73,7 +64,11 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({ volunteer, o
       setDownloadSuccess(true);
       setTimeout(() => setDownloadSuccess(false), 4000);
     } catch (err) {
+      // Saying nothing here is what made this look like a dead button: the
+      // export had been failing for everyone, and the only trace was a line in
+      // a console nobody opens.
       console.error('PDF generation error:', err);
+      setDownloadError(String((err as any)?.message || err).slice(0, 120));
     } finally {
       setIsGenerating(false);
     }
@@ -221,6 +216,13 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({ volunteer, o
               <span className="text-xs text-emerald-700 font-bold flex items-center gap-1 animate-in fade-in">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                 <span>PDF 下載成功！</span>
+              </span>
+            )}
+
+            {downloadError && (
+              <span className="text-xs text-rose-700 font-bold flex items-center gap-1 animate-in fade-in max-w-[22rem]">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>證書產生失敗：{downloadError}</span>
               </span>
             )}
 
