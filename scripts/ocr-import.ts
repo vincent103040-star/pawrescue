@@ -2,19 +2,25 @@
 //
 //   npm run ocr:pdfs -- --dry-run        # analyse and report, write nothing
 //   npm run ocr:pdfs                     # analyse and replace the chunks
+//   npm run ocr:pdfs -- --relabel        # ...even if the text came back ~equal
 //   npm run ocr:pdfs -- --only=doc-1787414465485
 //
-// Why this exists: the three manuals a coordinator uploaded are scanned slide
-// decks. A PDF like that carries a text layer only on the pages that happened
-// to keep one, so the upload path -- which reads the embedded text and nothing
-// else -- indexed 16, 11 and 6 chunks out of decks of 67, 42 and (roughly) 40
-// pages. The rest of the content is pixels. It is on screen for a volunteer
-// reading the file, and invisible to the assistant answering questions about
-// it.
+// This was written to fix a problem that turned out not to exist, and the
+// finding is worth keeping.
 //
-// OCR reads the pixels. The chunks it produces go into the same table, with the
-// same embedding model, as the ones the upload path makes, so the retrieval
-// side needs no changes to use them.
+// The three manuals are 50-88MB and were assumed to be scans whose text layer
+// covered only some pages -- 67, 42 and 21 pages had produced just 16, 11 and 6
+// chunks, which looked like most of the content was pixels. Running OCR settled
+// it: all three came back at ~290 characters per page, within 4% of what the
+// upload path had already extracted. They are PowerPoint exports, large because
+// of embedded photographs, and their text layer was complete all along. The
+// original figure was an assumption dressed up as evidence; dividing by the
+// page count would have shown it.
+//
+// What remains is worth having anyway: chunks re-indexed from here are cited by
+// page. Everything else is deliberately identical to the upload path -- same
+// table, same chunk size, same embedding model -- so the retrieval side needs
+// no changes to use them.
 //
 // One thing does change, and for the better: these chunks are cited by page.
 // "東森寵物假日送養志工 工作內容（第 24-25 頁）" can be checked by opening the
@@ -51,6 +57,24 @@ const CHUNK_SIZE = 1200;
 
 const DRY_RUN = process.argv.includes('--dry-run');
 const ONLY = (process.argv.find(a => a.startsWith('--only=')) || '').split('=')[1] || '';
+
+/**
+ * Re-index a document whose OCR text is merely *comparable* to what is already
+ * there, rather than longer.
+ *
+ * The default refuses to shrink an index, because a partial read or the wrong
+ * file is the likely reason a result comes back smaller. That guard did its job
+ * on the shelter's three manuals -- they turned out to be PowerPoint exports
+ * with a complete text layer, not scans, so OCR found the same text and in two
+ * cases a few percent less of it.
+ *
+ * But there is still a reason to re-index them: the chunks would then be cited
+ * by page. So this flag lowers the bar from "longer" to "within 10%", which
+ * still catches a read that failed halfway while allowing one that merely
+ * tokenised the whitespace differently.
+ */
+const RELABEL = process.argv.includes('--relabel');
+const SHRINK_TOLERANCE = RELABEL ? 0.9 : 1.0;
 
 const sopDocsDir = path.join(process.cwd(), 'data', 'sop-docs');
 
@@ -205,14 +229,22 @@ async function main() {
     const gain = beforeChars > 0 ? `${(cleaned.length / beforeChars).toFixed(1)} 倍` : '（原本沒有索引）';
     console.log(`   辨識結果：${cleaned.length.toLocaleString()} 字 —— ${gain}`);
 
-    // OCR reads everything the embedded text layer had and more, so a result
-    // that is shorter means something went wrong -- a partial read, the wrong
-    // file. Keeping what is already indexed is the safer answer than replacing
-    // good chunks with worse ones.
-    if (cleaned.length < beforeChars) {
-      console.log(`   ✗ 辨識結果比現有索引還短，不覆蓋（保留原本的 ${before.length} 段）`);
+    // A shorter result usually means something went wrong -- a partial read,
+    // the wrong file -- so keeping what is already indexed is safer than
+    // replacing good chunks with worse ones. --relabel lowers the bar to
+    // "within 10%" for the case where the point is the page numbers, not the
+    // text.
+    if (cleaned.length < beforeChars * SHRINK_TOLERANCE) {
+      const shortfall = beforeChars > 0 ? Math.round((1 - cleaned.length / beforeChars) * 100) : 0;
+      console.log(`   ✗ 辨識結果比現有索引少 ${shortfall}%，不覆蓋（保留原本的 ${before.length} 段）`);
+      if (!RELABEL && shortfall <= 10) {
+        console.log(`      字數相當，若只是想換成頁碼引用，可加上 --relabel`);
+      }
       skipped++;
       continue;
+    }
+    if (cleaned.length < beforeChars) {
+      console.log(`   （字數少 ${Math.round((1 - cleaned.length / beforeChars) * 100)}%，在 --relabel 容許範圍內，改用頁碼重建索引）`);
     }
 
     if (DRY_RUN) {
