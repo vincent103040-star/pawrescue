@@ -147,7 +147,13 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({ volunteer, o
               {/* Main Body Statement */}
               <div className="space-y-6 my-auto text-center px-8 relative z-10">
                 <p className="text-base text-slate-700 leading-relaxed font-serif">
-                  茲證明志工 <strong className="text-2xl text-[#716053] underline decoration-[#716053]/30 underline-offset-8 px-2">{volunteer.name}</strong> 君（LINE 帳號：@{volunteer.lineId}），
+                  {/* Name only. The LINE handle used to be printed beside it,
+                      but nothing ever asks the volunteer for one -- the login
+                      manufactures it from the email address as
+                      `${local-part}_line`, so it identified nobody and was one
+                      more invented field on a document people submit as proof
+                      of service. */}
+                  茲證明志工 <strong className="text-2xl text-[#716053] underline decoration-[#716053]/30 underline-offset-8 px-2">{volunteer.name}</strong> 君，
                   熱心投入浪浪家園園區保護流浪動物、洗澡放風、貓舍照護與園區運作之志工服務。
                   服務期間盡心盡力，特頒此證以資感謝與鼓勵！
                 </p>
