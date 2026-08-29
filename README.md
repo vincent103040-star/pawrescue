@@ -1,20 +1,160 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# 浪浪家園 PawRescue
 
-# Run and deploy your AI Studio app
+流浪動物收容所的志工招募與排班管理系統。
 
-This contains everything you need to run your app locally.
+社工要掌握全局 —— 今天誰有班、誰沒到、哪個場域缺人、時數怎麼認證。志工只想知道跟自己有關的事 —— 我什麼時候有班、今天要做什麼、這項工作的規範在哪。這套系統讓兩邊看同一份資料，但各自只看到該看的部分。
 
-View your app in AI Studio: https://ai.studio/apps/7aedf23e-6e0d-4b01-895c-b87486f70b60
+實際部署在 GCP 的 e2-micro（1 GB 記憶體）上，整個系統就一台機器、一個 Node 行程、一個檔案型資料庫。
 
-## Run Locally
+---
 
-**Prerequisites:**  Node.js
+## 功能
 
+**志工端**
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+- 班次月曆與卡片清單，線上報名搶班
+- 我的排班與出勤紀錄，可匯出服務證明 PDF
+- 現場簽到：GPS 定位 + 櫃台輪動碼，或掃描列印的簽到海報
+- 今日勤務清單，完成一項勾一項，社工端同步看到
+- 代班請求：臨時無法出席時公開釋出，其他志工接手即錄取
+- 規章與 SOP 問答，AI 只根據手冊內容回答並附上出處頁碼
+- LINE 通知：出勤提醒、簽到後推送當天工作內容
+
+**管理端**
+
+- 報名審核、志工名冊、人才庫
+- 每日勤務看板，含當天才發生的臨時任務
+- 整期自動產生班表：照護量 × 班次範本，先產草稿、確認後才發布
+- 缺工統計、出勤點名、服務回饋彙整
+- 規章與 SOP 內容管理，儲存後自動重建問答索引
+- 停權制度：缺席累計自動停權、30 天後恢復、二次停權有 14 天申訴期
+- LINE 官方帳號廣播
+
+---
+
+## 技術架構
+
+| 層 | 用什麼 | 為什麼 |
+|---|---|---|
+| 前端 | React 19 + Vite 6 + Tailwind 4 | — |
+| 後端 | Express（TypeScript，用 esbuild 打包成單一 `dist/server.cjs`） | — |
+| 資料庫 | Node 內建的 `node:sqlite`，WAL 模式 | 不需要額外行程或連線池；1 GB 的機器上省下的記憶體直接給網站服務 |
+| 即時更新 | Server-Sent Events | 資料一變動就推給前端，不用輪詢 |
+| AI 問答 | Google Gemini（向量 + 生成） | 同一組金鑰就能做兩件事 |
+| 文件辨識 | Azure Document Intelligence | **只在手動執行匯入腳本時**用到，不在請求路徑上 |
+
+1 GB 的記憶體限制形塑了不少決定：PDF 文字擷取設了大小上限（V8 的記憶體不足是攔不住的，會把整個伺服器帶走）、OCR 做成獨立腳本而不是 API 端點、向量比對在記憶體裡做而不裝向量資料庫。
+
+### 幾條反覆出現的設計原則
+
+- **衍生，而不是儲存** —— 能算出來的就不要存。班次已報名人數、是否額滿、缺席次數、停權次數都是從紀錄現算的。
+- **停用，而不是刪除** —— 場域、勤務項目、志工帳號、取消的報名都只標記狀態，歷史紀錄才不會變成謊言。
+- **回報，而不是推論** —— 點名表顯示「這些人沒有簽到紀錄」，而不是「這些人缺席」。判斷留給社工。
+- **預設拒絕** —— `/api` 底下的每個端點都需要憑證，除非列在 `server.ts` 的 `PUBLIC_ENDPOINTS` 白名單。忘記保護新端點的後果是鎖住，不是敞開。
+- **不編造數字** —— 沒有的資料就留白。服務證明書上曾經有「實際班次數 + 8」和所有人共用的證書編號。
+
+---
+
+## 執行
+
+需要 Node.js 22 以上（`node:sqlite` 是內建模組）。
+
+```bash
+npm install
+cp .env.example .env.local     # 再把金鑰填進去
+npm run dev                    # http://localhost:3000
+```
+
+第一次啟動時，如果沒有設定 `ADMIN_PASSWORD`，伺服器會產生一組隨機管理員密碼印在主控台。
+
+### 環境變數
+
+都放在 `.env.local`（不會進 git）。`.env.example` 裡有每個變數的申請說明。
+
+| 變數 | 用途 | 沒有會怎樣 |
+|---|---|---|
+| `ADMIN_PASSWORD` | 管理員登入密碼 | 每次啟動產生隨機密碼 |
+| `GEMINI_API_KEY` | AI 問答的向量與生成 | 問答退回關鍵字搜尋 |
+| `VITE_GOOGLE_CLIENT_ID` | 志工用 Google 登入 | 無法用 Google 登入 |
+| `LINE_CHANNEL_ACCESS_TOKEN`<br>`LINE_CHANNEL_SECRET` | LINE 推播與 webhook | LINE 通知靜默略過 |
+| `LINE_LOGIN_CHANNEL_ID`<br>`LINE_LOGIN_CHANNEL_SECRET`<br>`VITE_LINE_LOGIN_CHANNEL_ID` | LINE 登入與帳號綁定 | 無法用 LINE 登入 |
+| `VITE_LIFF_ID` | 在 LINE 內開啟時的整合 | 一般瀏覽器行為 |
+| `APP_URL` | 產生對外連結（簽到海報等）用 | 由請求推斷 |
+| `AZURE_DOC_ENDPOINT`<br>`AZURE_DOC_KEY` | OCR 匯入腳本 | 只影響 `npm run ocr:pdfs` |
+
+LINE Login 頻道要跟 Messaging API 頻道在**同一個 Provider** 底下，`userId` 才會一致。
+
+---
+
+## 部署
+
+在機器上跑一次即可，之後每次更新重複後三步：
+
+```bash
+git pull
+npm install          # 只有依賴變更時才需要
+npm run build
+sudo systemctl restart pawrescue
+```
+
+`npm run build` 會做兩件事：Vite 打包前端到 `dist/assets/`，esbuild 把後端打包成 `dist/server.cjs`。生產模式下 Express 直接服務 `dist/`。
+
+資料庫每次啟動都會自動備份到 `data/backups/`（用 `VACUUM INTO`，服務執行中取快照是安全的），保留最近 14 份。
+
+---
+
+## 檢查
+
+```bash
+npm run lint                # TypeScript 型別檢查
+npm run check:security      # 89 項授權檢查，需要伺服器在跑
+npm run check:ocr-chunking  # 13 項 OCR 頁碼對照檢查
+```
+
+`check:security` 只發出唯讀、或本來就該被拒絕的請求，所以通過時不會改變任何資料，失敗時揭露一個漏洞而不是製造一個。每次部署前跑。
+
+### OCR 匯入（選用）
+
+掃描型 PDF 的文字擷取。Azure 只在這裡用到一次，跑完就結束 —— 網站與問答完全不依賴它。
+
+```bash
+npm run ocr:pdfs -- --dry-run   # 只辨識和報告，不寫入
+npm run ocr:pdfs                # 正式匯入
+```
+
+匯入後要重啟服務，因為向量是開機時讀進記憶體的。
+
+---
+
+## 資料與隱私
+
+`data/volunteers.db` 裡有志工的姓名、電話、電子郵件與緊急聯絡人。這個檔案、它的 WAL sidecar、以及 `data/backups/` 都在 `.gitignore` 裡。
+
+匯出給外部系統的統計資料只給數字，不給名冊。
+
+---
+
+## 已知限制
+
+- **備份與資料庫在同一顆磁碟。**機器毀損的話兩者一起消失，還沒有異地副本。
+- **單機部署，沒有備援。**更新時服務會中斷約一秒；機器本身故障就是全停。
+- **GPS 可以被偽造。**有螢幕的據點靠每 60 秒輪動的簽到碼補強，沒有螢幕的據點只能靠定位，這一塊較弱。
+- **教學影片的內容沒有進問答索引**，只有標題和說明。
+- **「每月取消三次」的規則還沒實作。**取消已改成軟性標記所以算得出來，但還沒有人去算它。
+
+---
+
+## 專案結構
+
+```
+server.ts                 Express API、排程、AI、LINE webhook（約 4,400 行）
+db.ts                     SQLite 結構、遷移、查詢（約 3,500 行）
+src/App.tsx               前端路由與資料載入
+src/components/           39 個元件
+src/utils/                session、時間、weekday 等共用邏輯
+scripts/security-smoke.ts 授權檢查
+scripts/ocr-import.ts     OCR 匯入
+data/                     資料庫、上傳檔案、備份（不進 git）
+```
+
+開發歷程與每個決定的理由記在 commit 訊息裡（`git log`），接手開發前可以先看 [HANDOFF.md](HANDOFF.md)。
