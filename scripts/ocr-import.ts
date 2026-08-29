@@ -12,10 +12,22 @@
 // reading the file, and invisible to the assistant answering questions about
 // it.
 //
-// OCR reads the pixels. Everything else here is deliberately the same as the
-// upload path -- same chunk size, same embedding model, same table -- so the
-// chunks this produces are indistinguishable from the ones already there, and
-// the assistant needs no changes to use them.
+// OCR reads the pixels. The chunks it produces go into the same table, with the
+// same embedding model, as the ones the upload path makes, so the retrieval
+// side needs no changes to use them.
+//
+// One thing does change, and for the better: these chunks are cited by page.
+// "東森寵物假日送養志工 工作內容（第 24-25 頁）" can be checked by opening the
+// PDF at that page; "（第 7 段）" cannot be checked at all. Azure reports which
+// span of the extracted text belongs to which page, so the page a chunk came
+// from is known rather than guessed -- and when it is not reported, the label
+// falls back to the old ordinal rather than inventing a number.
+//
+// Azure is used once, here. Nothing at request time touches it: a volunteer's
+// question is embedded and answered by the same Google models as before,
+// against text that now lives in the shelter's own database. If the Azure
+// subscription lapses, the assistant is unaffected -- only OCR of a *new*
+// upload would be.
 //
 // It runs as a script rather than inside the server because analysing a 67-page
 // scan takes minutes, and the deploy VM has 1GB of memory to spend on serving
@@ -26,14 +38,15 @@ import { readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { GoogleGenAI } from '@google/genai';
 import { getAllSopDocuments, getAllRagChunks, replaceRagChunks } from '../db';
+import { PageSpan, cleanWithOffsets, pageSpansFrom, planChunks } from './ocr-chunking';
 
 const ENDPOINT = (process.env.AZURE_DOC_ENDPOINT || '').replace(/\/+$/, '');
 const KEY = process.env.AZURE_DOC_KEY || '';
 const API_VERSION = process.env.AZURE_DOC_API_VERSION || '2024-11-30';
 const EMBED_MODEL = process.env.GEMINI_EMBED_MODEL || 'gemini-embedding-001';
 
-// Both must match the upload path in server.ts, or the same document would be
-// chunked one way today and another way tomorrow.
+// Matches the upload path in server.ts, so the same document is not chunked one
+// way today and another way tomorrow.
 const CHUNK_SIZE = 1200;
 
 const DRY_RUN = process.argv.includes('--dry-run');
@@ -59,7 +72,7 @@ function describe(error: any): string {
 
 // ---------------------------------------------------------------- Azure OCR
 
-async function analyze(filePath: string, label: string): Promise<string> {
+async function analyze(filePath: string, label: string): Promise<{ content: string; pages: PageSpan[] }> {
   const url = `${ENDPOINT}/documentintelligence/documentModels/prebuilt-read:analyze?api-version=${API_VERSION}`;
   const bytes = readFileSync(filePath);
 
@@ -99,9 +112,10 @@ async function analyze(filePath: string, label: string): Promise<string> {
 
     if (data.status === 'succeeded') {
       const content = String(data.analyzeResult?.content || '');
-      const pages = data.analyzeResult?.pages?.length ?? '?';
-      console.log(`      辨識完成：${pages} 頁、${content.length.toLocaleString()} 字（耗時 ${waited} 秒）`);
-      return content;
+      const pages = pageSpansFrom(data.analyzeResult?.pages);
+      console.log(`      辨識完成：${data.analyzeResult?.pages?.length ?? '?'} 頁、${content.length.toLocaleString()} 字（耗時 ${waited} 秒）`);
+      if (pages.length === 0) console.log(`      （沒有頁碼資訊，引用會退回「第 N 段」）`);
+      return { content, pages };
     }
     if (data.status === 'failed') {
       throw new Error(`${label}：辨識失敗 ${JSON.stringify(data.error || {}).slice(0, 300)}`);
@@ -177,16 +191,17 @@ async function main() {
     }
 
     let content: string;
+    let pages: PageSpan[];
     try {
       console.log(`   送出辨識…（${(doc.fileSize / 1048576).toFixed(1)} MB）`);
-      content = await analyze(filePath, doc.title);
+      ({ content, pages } = await analyze(filePath, doc.title));
     } catch (error: any) {
       console.log(`   ✗ ${describe(error)}`);
       skipped++;
       continue;
     }
 
-    const cleaned = content.replace(/\s+/g, ' ').trim();
+    const { text: cleaned, offsets } = cleanWithOffsets(content);
     const gain = beforeChars > 0 ? `${(cleaned.length / beforeChars).toFixed(1)} 倍` : '（原本沒有索引）';
     console.log(`   辨識結果：${cleaned.length.toLocaleString()} 字 —— ${gain}`);
 
@@ -201,22 +216,18 @@ async function main() {
     }
 
     if (DRY_RUN) {
-      const wouldBe = Math.ceil(cleaned.length / CHUNK_SIZE);
-      console.log(`   → 正式執行會產生約 ${wouldBe} 段（目前 ${before.length} 段）`);
+      const planned = planChunks(cleaned, offsets, pages, CHUNK_SIZE);
+      console.log(`   → 正式執行會產生 ${planned.length} 段（目前 ${before.length} 段）`);
+      console.log(`   → 引用會長這樣：${doc.title}（${planned[0]?.label ?? '第 1 段'}）、${doc.title}（${planned[planned.length - 1]?.label ?? '第 1 段'}）`);
       continue;
     }
 
+    const planned = planChunks(cleaned, offsets, pages, CHUNK_SIZE);
     const chunks: { title: string; text: string; embedding: number[] }[] = [];
-    for (let i = 0; i < cleaned.length; i += CHUNK_SIZE) {
-      const slice = cleaned.slice(i, i + CHUNK_SIZE);
-      if (!slice.trim()) continue;
-      const embedding = await embed(slice);
-      if (embedding) {
-        chunks.push({ title: `${doc.title}（第 ${chunks.length + 1} 段）`, text: slice, embedding });
-      }
-      if (chunks.length % 10 === 0 && chunks.length > 0) {
-        console.log(`      已產生 ${chunks.length} 段向量…`);
-      }
+    for (const [index, piece] of planned.entries()) {
+      const embedding = await embed(piece.text);
+      if (embedding) chunks.push({ title: `${doc.title}（${piece.label}）`, text: piece.text, embedding });
+      if ((index + 1) % 10 === 0) console.log(`      已處理 ${index + 1} / ${planned.length} 段…`);
     }
 
     if (chunks.length === 0) {
@@ -227,6 +238,7 @@ async function main() {
 
     replaceRagChunks('pdf', doc.id, chunks);
     console.log(`   ✓ 已寫入 ${chunks.length} 段（原本 ${before.length} 段）`);
+    console.log(`      例：${chunks[0].title}`);
     written++;
   }
 
