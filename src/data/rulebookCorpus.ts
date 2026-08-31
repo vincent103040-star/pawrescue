@@ -24,10 +24,21 @@ export const RULEBOOK_CORPUS: RulebookChunk[] = [
     title: '請假、代班與誠信管理規範',
     text: '若因故無法出席已報名之班次，請務必於班次開始 24 小時前於系統或 LINE 志工大群組發起「代班請求」。無故缺席（曠工）達 2 次者，系統將暫停該帳號未來 30 天之搶班權限，以保障浪浪照顧不中斷。'
   },
+  // The entry that used to sit here described clicking「AI 一鍵補班」to have
+  // Gemini "自動分析志工技能並直錄最佳人選". No button of that name exists, and
+  // nothing fills a shift by itself. It also named three sites (新店總部、
+  // 草山狗園、淡水貓島館) that are not this shelter's zones.
+  //
+  // A stale sentence in a manual is a stale sentence. The same sentence here is
+  // the AI answering "how do I fill a shift?" with an invented button and a
+  // citation for it, so it was worth getting exactly right rather than roughly
+  // right: the recommendation and the direct enrolment are both real, and both
+  // are one volunteer at a time, chosen by a person. Only the automation was
+  // invented.
   {
     id: 'admin-shortage-dashboard',
-    title: '（管理端）缺工看板與 AI 智慧一鍵排班',
-    text: '進入「缺工統計看板」，查看大台北 3 大據點（新店總部、陽明山草山狗園、淡水貓島館）缺工狀況。點擊「AI 一鍵補班」，Gemini 會自動分析志工技能並直錄最佳人選。'
+    title: '（管理端）缺工統計看板與補人力的方式',
+    text: '「缺工統計看板」顯示招募與排班指標、志工參與熱力圖、資源需求預警、每日勤務執行追蹤、月度報表匯出、志工回饋彙整與各場域即時排班卡片。班次缺人時，可在「職位與班次發布」對某一個班次開啟 AI 排班建議，系統會依技能、等級與服務時數排出推薦名單；管理者再逐一決定要發送 LINE 邀約，或直接錄取該名志工。沒有任何按鈕會自動把整個班次或整期班表補滿 —— 推薦是系統做的，決定是人做的，每一位都要管理者按一次。'
   },
   {
     id: 'admin-shift-publish',

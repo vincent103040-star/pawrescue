@@ -160,8 +160,12 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
             }}
             className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs px-5 py-3 rounded-full shadow-xs transition flex items-center gap-2 cursor-pointer"
           >
+            {/* Named for what it does. It was 「AI 全局自動排班建議」, and both
+                halves were wrong: it opens one shift, not the whole roster, and
+                it recommends rather than schedules -- every invite and every
+                enrolment is a separate click by a person. */}
             <Bot className="w-4 h-4 text-slate-950" />
-            <span>🤖 AI 全局自動排班建議</span>
+            <span>🤖 AI 推薦人選與邀約</span>
           </button>
 
           <button
@@ -372,7 +376,7 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
                     className="flex-1 bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs py-2.5 px-3 rounded-full shadow-2xs transition flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <Bot className="w-4 h-4 text-slate-950" />
-                    <span>AI 自動排班建議</span>
+                    <span>AI 推薦人選</span>
                   </button>
 
                   {/* AI Recruitment Post Button */}

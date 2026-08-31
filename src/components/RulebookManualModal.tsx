@@ -9,7 +9,6 @@ import {
   AlertTriangle, 
   Users, 
   Award, 
-  Sparkles, 
   Calendar, 
   Building2, 
   QrCode, 
@@ -230,57 +229,189 @@ export const RulebookManualModal: React.FC<RulebookManualModalProps> = ({
                 <span className="text-xs font-mono text-slate-400">Section 2</span>
               </div>
 
-              {/* 2.1 管理者社工功能 -- 僅管理端 */}
+              {/* 2.1 管理者社工功能 -- 僅管理端
+                  Rewritten from the four feature cards that used to sit here.
+                  Two things were wrong with those: one described an
+                  「AI 一鍵補班」button that has never existed, and all four were
+                  organised by feature rather than by when a coordinator has to
+                  do the thing. What a manual has to answer first is "what do I
+                  do today", so that is the order now: every fortnight, every
+                  day, when something goes wrong, never (the system does it),
+                  and once at setup. */}
               {showAdminGuide && (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
                   <span className="px-2.5 py-0.5 rounded-lg bg-slate-800 text-white font-mono text-xs">A</span>
                   <span>管理者 / 社工人員 (Manager / Admin Guide)</span>
                 </h4>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                  <div className="bg-[#FFFDF7] p-4 rounded-2xl border border-slate-200 space-y-1.5">
-                    <div className="flex items-center gap-2 font-bold text-slate-900">
-                      <ShieldCheck className="w-4 h-4 text-amber-600" />
-                      <span>1. 缺工看板與 AI 智慧一鍵排班</span>
-                    </div>
-                    <p className="text-slate-600 leading-relaxed">
-                      進入「1. 缺工統計看板」，查看大台北 3 大據點（新店總部、陽明山草山狗園、淡水貓島館）缺工狀況。點擊「AI 一鍵補班」，Gemini 3.6 Flash 會自動分析志工技能並直錄最佳人選。
-                    </p>
-                  </div>
+                <div className="bg-[#F5E6D0]/50 border-l-4 border-[#716053] px-4 py-3 rounded-r-xl text-xs leading-relaxed text-slate-700">
+                  <strong className="text-slate-900">整個系統做的是一件事：</strong>
+                  把「要做的工作」描述清楚，系統算出「需要多少人」，
+                  然後負責把人找來、提醒他、記錄他做了什麼。
+                </div>
 
-                  <div className="bg-[#FFFDF7] p-4 rounded-2xl border border-slate-200 space-y-1.5">
-                    <div className="flex items-center gap-2 font-bold text-slate-900">
-                      <Calendar className="w-4 h-4 text-emerald-600" />
-                      <span>2. 班次發布與 Google 地圖日曆同步</span>
-                    </div>
-                    <p className="text-slate-600 leading-relaxed">
-                      在「2. 職位與班次發布」建立新班次，系統會自動生成 Google Maps GPS 導航定位，並產出可一鍵加入 Google Calendar 的預約時間檔與 LINE 群組宣傳文案。
-                    </p>
+                {/* ---------- 每兩週 ---------- */}
+                <div className="space-y-2">
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <span className="text-xs font-extrabold text-slate-900">每兩週一次：產生下一期班表</span>
+                    <span className="text-[10px] font-mono text-[#716053]">2. 職位與班次發布 → 整期自動產生班表</span>
                   </div>
-
-                  <div className="bg-[#FFFDF7] p-4 rounded-2xl border border-slate-200 space-y-1.5">
-                    <div className="flex items-center gap-2 font-bold text-slate-900">
-                      <Users className="w-4 h-4 text-purple-600" />
-                      <span>3. 志工人才庫與自動升級通知</span>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                    <div className="bg-[#FFFDF7] p-3.5 rounded-2xl border border-slate-200 space-y-1">
+                      <div className="font-bold text-slate-900">1. 試算</div>
+                      <p className="text-slate-600 leading-relaxed">
+                        先看算出來的人力需求，<strong>不寫入任何東西</strong>。數字來自「勤務項目」清單：
+                        把所有勤務時間攤開，用同時段最高需求算每個班要幾人。
+                      </p>
                     </div>
-                    <p className="text-slate-600 leading-relaxed">
-                      於「志工人才庫名冊」掌握全隊志工時數。當志工完成『志工成長軌跡』考核項目並達成門檻，系統將發送卡片通知管理員進行資深級別審核與證書頒發。
-                    </p>
+                    <div className="bg-[#FFFDF7] p-3.5 rounded-2xl border border-slate-200 space-y-1">
+                      <div className="font-bold text-slate-900">2. 產生草稿</div>
+                      <p className="text-slate-600 leading-relaxed">
+                        建立班次，但<strong>志工還看不到</strong>，可以逐一調整。
+                        已存在的班次會被略過，不會重複建立。
+                      </p>
+                    </div>
+                    <div className="bg-[#FFFDF7] p-3.5 rounded-2xl border border-slate-200 space-y-1">
+                      <div className="font-bold text-slate-900">3. 發布</div>
+                      <p className="text-slate-600 leading-relaxed">
+                        志工這時才看得到並可以報名。「捨棄草稿」只會清掉<strong>未發布</strong>的部分，
+                        已發布的不受影響。
+                      </p>
+                    </div>
                   </div>
+                </div>
 
-                  <div className="bg-[#FFFDF7] p-4 rounded-2xl border border-slate-200 space-y-1.5">
-                    <div className="flex items-center gap-2 font-bold text-slate-900">
-                      <Sparkles className="w-4 h-4 text-sky-600" />
-                      <span>4. 雙週物資人力 AI 預警地圖 &amp; SOP 追蹤</span>
+                {/* ---------- 每天 ---------- */}
+                <div className="space-y-2">
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <span className="text-xs font-extrabold text-slate-900">每天：審核報名</span>
+                    <span className="text-[10px] font-mono text-[#716053]">3. 報名與審核流程（分頁上有紅點數字）</span>
+                  </div>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    核准或婉拒，志工端即時更新並收到 LINE 通知。
+                    同一時段重複報名的申請，可以在「衝突檢查」裡一次批次退回。
+                  </p>
+                </div>
+
+                {/* ---------- 臨時狀況 ---------- */}
+                <div className="space-y-2">
+                  <span className="text-xs font-extrabold text-slate-900">臨時狀況怎麼處理</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                    <div className="bg-[#FFFDF7] p-3.5 rounded-2xl border border-slate-200 space-y-1">
+                      <div className="font-bold text-slate-900">班次快開始了還缺人</div>
+                      <p className="text-slate-600 leading-relaxed">
+                        到「1. 缺工統計看板」看哪些班還缺。可以用<strong>緊急招募推播</strong>產生文案發 LINE，
+                        或對單一班次開啟 <strong>AI 推薦人選</strong>，依技能、等級與服務時數排出名單，
+                        再逐一發邀約或直接錄取。
+                      </p>
+                      <p className="text-slate-500 leading-relaxed">
+                        沒有任何按鈕會自動把班次補滿 ——
+                        <strong className="text-slate-700">推薦是系統做的，決定是人做的。</strong>
+                      </p>
                     </div>
-                    <p className="text-slate-600 leading-relaxed">
-                      透過「資源需求預警地圖」預測下一週飼料與醫療器材缺口；使用「每日志工勤務看板」讓值班志工勾選完成 SOP，確保浪浪照顧品質。
+                    <div className="bg-[#FFFDF7] p-3.5 rounded-2xl border border-slate-200 space-y-1">
+                      <div className="font-bold text-slate-900">志工臨時來不了</div>
+                      <p className="text-slate-600 leading-relaxed">
+                        超過 24 小時：志工可自行取消，名額自動釋出。
+                        不到 24 小時：志工改按「找人代班」，其他人接手即錄取，
+                        <strong>不列入未到紀錄</strong>。這兩種情況你都不需要介入。
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ---------- 自動 ---------- */}
+                <div className="space-y-2">
+                  <span className="text-xs font-extrabold text-slate-900">這些不用管，系統會自己做</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                    <div className="bg-emerald-50/70 p-3.5 rounded-2xl border border-emerald-200 space-y-1">
+                      <div className="font-bold text-emerald-900">每天／每次自動執行</div>
+                      <ul className="text-slate-600 leading-relaxed list-disc pl-4 space-y-0.5">
+                        <li><strong>出勤前提醒</strong>：依志工各自設定的提前時數發 LINE</li>
+                        <li><strong>時數計算</strong>：簽退時由伺服器結算，不用人工登打</li>
+                        <li><strong>缺席停權掃描</strong>：達門檻自動停權，志工可申訴</li>
+                      </ul>
+                    </div>
+                    <div className="bg-emerald-50/70 p-3.5 rounded-2xl border border-emerald-200 space-y-1">
+                      <div className="font-bold text-emerald-900">每 6 小時自動執行</div>
+                      <ul className="text-slate-600 leading-relaxed list-disc pl-4 space-y-0.5">
+                        <li><strong>收動物狀態</strong>：從母系統收信、解析、寫入資料庫</li>
+                        <li>時間：台灣時間 00:15 / 06:15 / 12:15 / 18:15</li>
+                        <li>結果在「6. 勤務項目&amp;智慧開缺」的收信紀錄</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ---------- 設定一次 ---------- */}
+                <div className="space-y-2">
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <span className="text-xs font-extrabold text-slate-900">設定一次就好的五件事</span>
+                    <span className="text-[10px] text-slate-500">收容所條件變了才回來改</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs min-w-[30rem]">
+                      <thead>
+                        <tr className="text-slate-500 border-b border-slate-300">
+                          <th className="text-left py-1.5 font-bold">設定什麼</th>
+                          <th className="text-left py-1.5 font-bold px-2">在哪裡</th>
+                          <th className="text-left py-1.5 font-bold">為什麼重要</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-slate-600">
+                        <tr className="border-b border-slate-100">
+                          <td className="py-1.5 font-bold text-slate-800 whitespace-nowrap">場域有哪幾區</td>
+                          <td className="py-1.5 px-2 whitespace-nowrap">5. 手冊與 SOP</td>
+                          <td className="py-1.5">所有勤務與班次都掛在場域下。停用而非刪除，歷史才查得到。</td>
+                        </tr>
+                        <tr className="border-b border-slate-100">
+                          <td className="py-1.5 font-bold text-slate-800 whitespace-nowrap">每區的勤務項目</td>
+                          <td className="py-1.5 px-2 whitespace-nowrap">6. 勤務項目&amp;智慧開缺</td>
+                          <td className="py-1.5"><strong>最重要的一項。</strong>它同時是志工的今日勤務清單，也是算人力的來源 —— 描述一次就好。</td>
+                        </tr>
+                        <tr className="border-b border-slate-100">
+                          <td className="py-1.5 font-bold text-slate-800 whitespace-nowrap">一人一班可做幾分鐘</td>
+                          <td className="py-1.5 px-2 whitespace-nowrap">6. 勤務項目&amp;智慧開缺</td>
+                          <td className="py-1.5">合計工時除以它就是建議人力。三小時的班扣掉交接、移動、休息不等於三小時。</td>
+                        </tr>
+                        <tr className="border-b border-slate-100">
+                          <td className="py-1.5 font-bold text-slate-800 whitespace-nowrap">動物狀態 → 勤務對照</td>
+                          <td className="py-1.5 px-2 whitespace-nowrap">6. 勤務項目&amp;智慧開缺</td>
+                          <td className="py-1.5">「這個狀態＝哪項勤務＝一隻幾分鐘」。<strong>沒設規則的狀態算 0 分鐘</strong>，畫面會一直列出來提醒。</td>
+                        </tr>
+                        <tr>
+                          <td className="py-1.5 font-bold text-slate-800 whitespace-nowrap">手冊、SOP 與影片</td>
+                          <td className="py-1.5 px-2 whitespace-nowrap">5. 手冊與 SOP</td>
+                          <td className="py-1.5">可指定給某項勤務，志工打勾前會看到「先看示範」。也是 AI 問答唯一的資料來源。</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* ---------- AI 的範圍 ---------- */}
+                <div className="space-y-2">
+                  <span className="text-xs font-extrabold text-slate-900">AI 實際會做的事，只有這 6 項</span>
+                  <div className="bg-[#FFFDF7] p-3.5 rounded-2xl border border-slate-200 text-xs">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1 text-slate-600">
+                      <span>· <strong className="text-slate-800">招募文案生成</strong>：給 LINE／FB 用</span>
+                      <span>· <strong className="text-slate-800">衝突申請批次退回</strong>：同時段重複報名</span>
+                      <span>· <strong className="text-slate-800">緊急招募推播</strong>：缺工時的催班文案</span>
+                      <span>· <strong className="text-slate-800">資源缺口預測</strong>：飼料與醫療器材</span>
+                      <span>· <strong className="text-slate-800">推薦人選與邀約</strong>：針對單一班次</span>
+                      <span>· <strong className="text-slate-800">手冊問答</strong>：只依手冊內容答，附頁碼</span>
+                    </div>
+                    <p className="text-slate-600 leading-relaxed mt-2.5 pt-2.5 border-t border-slate-200">
+                      <strong className="text-slate-900">排班人力的計算不是 AI。</strong>
+                      那是把勤務時間攤開的算術，所以每一個數字都追得到來源 ——
+                      被問「為什麼這個班要 4 個人」時答得出來。
                     </p>
                   </div>
                 </div>
               </div>
               )}
+
 
               {/* 2.2 志工夥伴功能 -- 依志工端五個分頁排序 */}
               <div className="space-y-3">

@@ -1269,6 +1269,32 @@ if (ragChunksSeedCount.c === 0) {
   }
 }
 
+// Migration: drop a chunk describing a feature that never existed.
+//
+// The seed carried an entry about clicking「AI 一鍵補班」to have Gemini enrol
+// the best volunteers automatically. There is no such button anywhere in this
+// system, and nothing here enrols anybody -- a volunteer joins a shift by
+// applying, or by taking over a substitution request. The entry also named
+// three sites that are not this shelter's zones.
+//
+// A wrong sentence in a manual is a wrong sentence. The same sentence in the
+// RAG corpus is the AI answering "how do I fill a shift?" with an invented
+// button and a citation for it, which is worse than not answering. Databases
+// seeded before this was noticed still hold it, so it is removed here rather
+// than only at the source.
+//
+// Deleted rather than rewritten: the stored embedding was computed from the
+// false text, so replacing the words would leave a vector that still matches
+// questions about the button and then answers them with something else.
+// Matching on the text keeps this from touching a correctly seeded row.
+const staleChunk = db.prepare(`
+  DELETE FROM rag_chunks
+  WHERE source = 'static' AND sourceId = 'admin-shortage-dashboard' AND text LIKE '%一鍵補班%'
+`).run();
+if (Number(staleChunk.changes) > 0) {
+  console.log('SQLite: 已移除 AI 知識庫裡描述不存在功能的段落（AI 一鍵補班）');
+}
+
 export function getSopContent(): SopContent {
   const row = db.prepare('SELECT contentJson FROM sop_content WHERE id = ?').get('default') as { contentJson: string } | undefined;
   return row ? JSON.parse(row.contentJson) : DEFAULT_SOP_CONTENT;
