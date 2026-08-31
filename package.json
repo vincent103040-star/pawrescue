@@ -12,7 +12,9 @@
     "check:security": "node --import tsx scripts/security-smoke.ts",
     "ocr:pdfs": "node --import tsx scripts/ocr-import.ts",
     "check:ocr-chunking": "node --import tsx scripts/ocr-chunking.test.ts",
-    "check:status-csv": "node --import tsx scripts/status-csv.test.ts"
+    "check:status-csv": "node --import tsx scripts/status-csv.test.ts",
+    "check:status-mail": "node --import tsx scripts/status-mail.test.ts",
+    "mail:check": "node --import tsx scripts/status-mail-check.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -23,8 +25,10 @@
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "html2canvas-pro": "^2.4.0",
+    "imapflow": "^1.7.6",
     "jspdf": "^4.2.1",
     "lucide-react": "^0.546.0",
+    "mailparser": "^3.9.18",
     "pdf-parse": "^2.4.5",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
