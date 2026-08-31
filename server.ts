@@ -8,6 +8,7 @@ import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, cancelShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, getRollCall, getAbsenceCounts, setVolunteerAccountStatus, sweepSuspensions, countSuspensions, recordAppeal, getStatusHistory, hasAppealedSinceSuspension, ABSENCE_SUSPENSION_THRESHOLD, SUSPENSION_DAYS, APPEAL_WINDOW_DAYS, createSubstitutionRequest, getSubstitutionRequest, getOpenSubstitutionForSignup, getOpenSubstitutions, takeSubstitutionRequest, withdrawSubstitutionRequest, expireStaleSubstitutions, hoursUntilShift, SUBSTITUTION_NOTICE_HOURS, getReminderCandidates, markReminderSent, normalizeReminderLead, planShiftsForRange, generateDraftShifts, publishDraftShifts, discardDraftShifts, SHIFT_MERGE_GAP_MINUTES, getAllStatusDutyMappings, getUnmappedStatuses, upsertStatusDutyMapping, setStatusDutyMappingStatus, getShiftCapacityMinutes, setShiftCapacityMinutes, getRecentStatusBatches, getImportedBatchSequences, getStatusRecordsForBatch, getStatusWorkload, getAnimalConcerns } from './db';
 import { findMissingSequences } from './scripts/status-csv';
+import { isDutyOnTodaysList } from './src/utils/dutyVisibility';
  import { PDFParse } from 'pdf-parse';
 import type { SopContent, SopDocument, SopVideo } from './src/types';
 
@@ -2372,7 +2373,6 @@ ${contextText}
       const shiftId = String(req.query.shiftId || '');
 
       const shiftsToday = getAllShifts().filter(shift => shift.date === date);
-      const zonesWithShifts = new Set(shiftsToday.map(shift => shift.zone));
       const completions = getDutyCompletionsForDate(date);
       const completionKey = (itemId: string, sid: string) => `${itemId}::${sid}`;
       const byKey = new Map(completions.map(c => [completionKey(c.dutyItemId, c.shiftId), c]));
@@ -2381,23 +2381,28 @@ ${contextText}
       // volunteer is here for their own shift: showing them every zone's
       // checklist would bury the three things that are actually theirs, and
       // invite them to tick off work in a zone they never entered.
-      const myZones = isAdmin(req)
+      const mySignups = isAdmin(req)
         ? null
-        : new Set(
-            getAllShiftSignups()
-              .filter(signup =>
-                sameEmail(signup.volunteerEmail, sessionEmail(req)) &&
-                ['approved', 'attended'].includes(signup.status))
-              .map(signup => shiftsToday.find(shift => shift.id === signup.shiftId)?.zone)
-              .filter(Boolean) as string[]
-          );
+        : getAllShiftSignups().filter(signup =>
+            sameEmail(signup.volunteerEmail, sessionEmail(req)) &&
+            ['approved', 'attended'].includes(signup.status));
 
-      const items = getActiveDutyItems().filter(item => {
-        if (myZones && !myZones.has(item.zoneId)) return false;
-        if (item.triggerType === 'daily') return true;
-        if (item.triggerType === 'zone_shift') return zonesWithShifts.has(item.zoneId);
-        return shiftId ? item.shiftId === shiftId : shiftsToday.some(s => s.id === item.shiftId);
-      });
+      const myZones = mySignups && new Set(
+        mySignups
+          .map(signup => shiftsToday.find(shift => shift.id === signup.shiftId)?.zone)
+          .filter(Boolean) as string[]
+      );
+      const myShiftIds = mySignups && new Set(mySignups.map(signup => signup.shiftId));
+
+      // Shared with the test rather than written twice -- see the module for
+      // what the zone gate used to do to one-off duties.
+      const items = getActiveDutyItems().filter(item =>
+        isDutyOnTodaysList(item, {
+          shiftsToday,
+          requestedShiftId: shiftId,
+          myZones,
+          myShiftIds
+        }));
 
       // The teaching material a duty points at, resolved here rather than left
       // as two ids for the page to look up. It is the one place that knows
