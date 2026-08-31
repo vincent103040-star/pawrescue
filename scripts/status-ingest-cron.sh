@@ -58,7 +58,13 @@ fi
 
 run() {
   echo ""
-  echo "===== $(date '+%Y-%m-%d %H:%M:%S %Z') ====="
+  # TZ on the date call only, not exported. CRON_TZ decides when cron fires; it
+  # does not change the machine's clock, which on this VM is UTC -- so a job set
+  # for 00:15 Taipei logs itself at 16:15 and reads like it ran at the wrong
+  # time. Scoping it here keeps the log in the timezone the schedule was written
+  # in, while node still runs in UTC like the server process it shares a
+  # database with.
+  echo "===== $(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M:%S %Z') ====="
   # set +e around the call, and the status captured on its own line. Written as
   # `if ! node ...; then echo $?` the reported code is the negation's, which is
   # always 0 -- a failure log that says the run succeeded.
@@ -78,7 +84,7 @@ run() {
 if command -v flock >/dev/null 2>&1; then
   exec 9>"$LOG_DIR/status-ingest.lock"
   if ! flock -n 9; then
-    echo "$(date '+%Y-%m-%d %H:%M:%S %Z') 上一次還在執行，這次跳過" >> "$LOG_FILE"
+    echo "$(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M:%S %Z') 上一次還在執行，這次跳過" >> "$LOG_FILE"
     exit 0
   fi
 fi
