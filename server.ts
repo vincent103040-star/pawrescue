@@ -6,8 +6,9 @@ import { writeFileSync, mkdirSync, createWriteStream, statSync, readFileSync, un
 import { gzipSync } from 'zlib';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
-import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, cancelShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, getRollCall, getAbsenceCounts, setVolunteerAccountStatus, sweepSuspensions, countSuspensions, recordAppeal, getStatusHistory, hasAppealedSinceSuspension, ABSENCE_SUSPENSION_THRESHOLD, SUSPENSION_DAYS, APPEAL_WINDOW_DAYS, createSubstitutionRequest, getSubstitutionRequest, getOpenSubstitutionForSignup, getOpenSubstitutions, takeSubstitutionRequest, withdrawSubstitutionRequest, expireStaleSubstitutions, hoursUntilShift, SUBSTITUTION_NOTICE_HOURS, getReminderCandidates, markReminderSent, normalizeReminderLead, planShiftsForRange, generateDraftShifts, publishDraftShifts, discardDraftShifts, SHIFT_MERGE_GAP_MINUTES } from './db';
-import { PDFParse } from 'pdf-parse';
+import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, cancelShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, getRollCall, getAbsenceCounts, setVolunteerAccountStatus, sweepSuspensions, countSuspensions, recordAppeal, getStatusHistory, hasAppealedSinceSuspension, ABSENCE_SUSPENSION_THRESHOLD, SUSPENSION_DAYS, APPEAL_WINDOW_DAYS, createSubstitutionRequest, getSubstitutionRequest, getOpenSubstitutionForSignup, getOpenSubstitutions, takeSubstitutionRequest, withdrawSubstitutionRequest, expireStaleSubstitutions, hoursUntilShift, SUBSTITUTION_NOTICE_HOURS, getReminderCandidates, markReminderSent, normalizeReminderLead, planShiftsForRange, generateDraftShifts, publishDraftShifts, discardDraftShifts, SHIFT_MERGE_GAP_MINUTES, getAllStatusDutyMappings, getUnmappedStatuses, upsertStatusDutyMapping, setStatusDutyMappingStatus, getShiftCapacityMinutes, setShiftCapacityMinutes, getRecentStatusBatches, getImportedBatchSequences, getStatusRecordsForBatch, getStatusWorkload, getAnimalConcerns } from './db';
+import { findMissingSequences } from './scripts/status-csv';
+ import { PDFParse } from 'pdf-parse';
 import type { SopContent, SopDocument, SopVideo } from './src/types';
 
 // Environment loading lives in ./env, which ./db imports before it does
@@ -1506,6 +1507,10 @@ ${contextText}
           urgentRecruitment: !!linePreferences.urgentRecruitment,
           checkInReminder: !!linePreferences.checkInReminder,
           sopReminder: linePreferences.sopReminder !== false,
+          // Opt-in, so an absent field means off. The other switches read
+          // `!== false` because their default is on; this one must not be
+          // turned on by a client that simply did not mention it.
+          animalStatusAlerts: linePreferences.animalStatusAlerts === true,
           // Stored rather than dropped: the sweep reads this to decide when to
           // send, and it used to live only in the volunteer's browser.
           reminderTimingHours: normalizeReminderLead(linePreferences.reminderTimingHours)
@@ -2162,6 +2167,191 @@ ${contextText}
     } catch (error: any) {
       console.error('Restore Duty Item Error:', error);
       return res.status(500).json({ success: false, error: error.message || '恢復勤務項目失敗' });
+    }
+  });
+
+// ==========================================================================
+  // 動物狀態：收到什麼、怎麼換算成人力
+  // --------------------------------------------------------------------------
+  // Everything under /api/admin here is already admin-only by the middleware
+  // above. The one volunteer-facing route is /api/animal-concerns, and it is
+  // deliberately narrower than the admin view -- see its own note.
+  // ==========================================================================
+
+  app.get('/api/admin/status-mappings', (req, res) => {
+    try {
+      return res.json({
+        success: true,
+        mappings: getAllStatusDutyMappings(),
+        // Sent together because they are read together: the screen's whole job
+        // is turning the second list into the first.
+        unmapped: getUnmappedStatuses(),
+        dutyItems: getActiveDutyItems().map(d => ({ id: d.id, title: d.title, zoneId: d.zoneId })),
+        shiftCapacityMinutes: getShiftCapacityMinutes()
+      });
+    } catch (error: any) {
+      console.error('Get Status Mappings Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '讀取對照表失敗' });
+    }
+  });
+
+  app.post('/api/admin/status-mappings', (req, res) => {
+    try {
+      const optionCode = String(req.body.optionCode || '').trim();
+      const dutyItemId = String(req.body.dutyItemId || '').trim();
+      if (!optionCode) return res.status(400).json({ success: false, error: '請選擇狀態' });
+      if (!dutyItemId) return res.status(400).json({ success: false, error: '請選擇對應的勤務' });
+
+      const minutes = Number(req.body.minutesPerAnimal);
+      if (!Number.isFinite(minutes) || minutes < 0 || minutes > 1440) {
+        return res.status(400).json({ success: false, error: '每隻分鐘數請填 0 到 1440 之間' });
+      }
+
+      const mapping = upsertStatusDutyMapping({
+        categoryCode: String(req.body.categoryCode || '').trim(),
+        optionCode,
+        optionLabel: String(req.body.optionLabel || '').trim(),
+        dutyItemId,
+        minutesPerAnimal: Math.round(minutes),
+        requiredTier: String(req.body.requiredTier || '').trim(),
+        note: String(req.body.note || '').trim()
+      });
+      broadcastChange('duties');
+      return res.json({ success: true, mapping });
+    } catch (error: any) {
+      console.error('Upsert Status Mapping Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '儲存對照規則失敗' });
+    }
+  });
+
+  // Disabled, never deleted: a rule that produced a past roster has to stay
+  // readable, or "why were three people called in that Tuesday" loses its
+  // answer.
+  app.post('/api/admin/status-mappings/:id/disable', (req, res) => {
+    try {
+      if (!setStatusDutyMappingStatus(req.params.id, 'disabled')) {
+        return res.status(404).json({ success: false, error: '找不到該對照規則' });
+      }
+      broadcastChange('duties');
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error('Disable Status Mapping Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '停用失敗' });
+    }
+  });
+
+  app.post('/api/admin/status-mappings/:id/restore', (req, res) => {
+    try {
+      if (!setStatusDutyMappingStatus(req.params.id, 'active')) {
+        return res.status(404).json({ success: false, error: '找不到該對照規則' });
+      }
+      broadcastChange('duties');
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error('Restore Status Mapping Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '恢復失敗' });
+    }
+  });
+
+  /**
+   * How many minutes one volunteer covers in one shift.
+   *
+   * The divisor that turns minutes of care into a headcount, so it decides the
+   * answer. It is a judgement about how this shelter runs, not a fact, and it
+   * belongs to whoever runs it rather than to a constant in the source.
+   */
+  app.put('/api/admin/shift-capacity', (req, res) => {
+    try {
+      const saved = setShiftCapacityMinutes(Number(req.body.minutes));
+      if (saved !== Math.round(Number(req.body.minutes))) {
+        return res.status(400).json({
+          success: false,
+          error: '請填 15 到 1440 分鐘之間',
+          shiftCapacityMinutes: saved
+        });
+      }
+      broadcastChange('duties');
+      return res.json({ success: true, shiftCapacityMinutes: saved });
+    } catch (error: any) {
+      console.error('Set Shift Capacity Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '儲存失敗' });
+    }
+  });
+
+  /** The received batches, so "did anything arrive?" is answerable on screen. */
+  app.get('/api/admin/status-batches', (req, res) => {
+    try {
+      const batches = getRecentStatusBatches(30);
+      const sequences = getImportedBatchSequences();
+      // Gaps are computed here rather than stored, from the sequence numbers
+      // themselves. A batch that never arrived leaves no row to look at, so the
+      // absence has to be derived from what is present.
+      const highest = sequences.length > 0 ? sequences[sequences.length - 1] : 0;
+      const missing = sequences.length > 1
+        ? findMissingSequences(sequences.slice(0, -1), highest)
+        : [];
+      return res.json({ success: true, batches, missing });
+    } catch (error: any) {
+      console.error('Get Status Batches Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '讀取批次失敗' });
+    }
+  });
+
+  app.get('/api/admin/status-batches/:id/records', (req, res) => {
+    try {
+      return res.json({ success: true, records: getStatusRecordsForBatch(req.params.id) });
+    } catch (error: any) {
+      console.error('Get Status Records Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '讀取狀態明細失敗' });
+    }
+  });
+
+  /** Minutes, people, and the working behind both. Derived on every read. */
+  app.get('/api/admin/status-workload', (req, res) => {
+    try {
+      const days = Number(req.query.days);
+      const sinceDays = Number.isFinite(days) && days > 0 && days <= 90 ? Math.round(days) : 7;
+      return res.json({
+        success: true,
+        workload: getStatusWorkload(sinceDays),
+        concerns: getAnimalConcerns(sinceDays)
+      });
+    } catch (error: any) {
+      console.error('Get Status Workload Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '推算人力失敗' });
+    }
+  });
+
+  /**
+   * This week's animals needing attention, for a signed-in volunteer.
+   *
+   * Narrower than the admin view on purpose: which animal needs what is useful
+   * to somebody who will be in the run tomorrow, but the staffing arithmetic
+   * behind it is a management question and showing it invites a volunteer to
+   * conclude the shelter is short-handed from a number they cannot check.
+   *
+   * `enabled` reflects that volunteer's own switch, which is off until they
+   * turn it on. The server sends it rather than letting the client decide, so
+   * one place governs both the screen and the LINE message.
+   */
+  app.get('/api/animal-concerns', (req: any, res) => {
+    try {
+      const email = String(req.session?.identity || '');
+      const enabled = isAdmin(req) ? true : getLinePreferences(email).animalStatusAlerts;
+      if (!enabled) return res.json({ success: true, enabled: false, concerns: [] });
+
+      const concerns = getAnimalConcerns(7).map(c => ({
+        animalName: c.animalName,
+        shelterNumber: c.shelterNumber,
+        optionLabel: c.optionLabel || c.optionCode,
+        dutyTitle: c.dutyTitle,
+        observedAt: c.observedAt,
+        requiredTier: c.requiredTier
+      }));
+      return res.json({ success: true, enabled: true, concerns });
+    } catch (error: any) {
+      console.error('Get Animal Concerns Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '讀取動物狀態失敗' });
     }
   });
 
