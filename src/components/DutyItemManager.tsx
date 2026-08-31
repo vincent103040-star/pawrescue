@@ -402,7 +402,19 @@ export const DutyItemManager: React.FC<DutyItemManagerProps> = ({ zones, onToast
                 ) : (
                   <select
                     value={draft.shiftId}
-                    onChange={e => setDraft({ ...draft, shiftId: e.target.value })}
+                    onChange={e => {
+                      // The zone follows the shift. They were picked separately,
+                      // and a one-off duty labelled 大狗運動場 while bound to a
+                      // 醫療區 shift then showed up on the wrong people's lists.
+                      // Taking the zone from the shift removes the mismatch
+                      // rather than leaving it to be caught later.
+                      const chosen = selectableShifts.find(s => s.id === e.target.value);
+                      setDraft({
+                        ...draft,
+                        shiftId: e.target.value,
+                        zoneId: chosen ? chosen.zone : draft.zoneId
+                      });
+                    }}
                     className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white"
                   >
                     <option value="">請選擇班次</option>
