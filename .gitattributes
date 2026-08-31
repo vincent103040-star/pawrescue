@@ -1,0 +1,6 @@
+# Shell scripts must keep LF endings even when checked out on Windows.
+#
+# This repository is edited on Windows and runs on Linux. A .sh file that
+# arrives with CRLF fails on the VM with "\r: command not found" -- pointing at
+# a line that looks perfectly fine, because the carriage return is invisible.
+*.sh text eol=lf

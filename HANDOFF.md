@@ -169,3 +169,69 @@ sudo systemctl restart pawrescue
 
 **切過分支之後記得切回 main。**曾經因為停在一個已經被刪掉的遠端分支上,
 `git pull` 只 fetch 不 merge,整次部署跑的還是舊程式碼 —— 建置輸出的檔案大小是最快的判斷依據。
+
+## 動物狀態自動匯入(2026-08-31)
+
+母系統 StrayHub 目前不開對外 API,所以動物狀態改用 email 傳送:對方每 6 小時
+寄一封帶 CSV 附件的信到專用信箱,這邊定期收信、解析、寫進資料庫。
+
+```
+scripts/status-csv.ts        解析 CSV 與信件主旨(不碰網路,可單獨測)
+scripts/status-mail.ts       IMAP 收信
+scripts/status-ingest.ts     排程執行的那一支:收信 → 存檔 → 標示已讀
+scripts/status-mail-check.ts 連線診斷,不寫入也不標示已讀,可重複跑
+scripts/status-ingest-cron.sh cron 的包裝腳本
+```
+
+```bash
+npm run check:status-csv    # 28 項
+npm run check:status-mail   # 20 項
+npm run check:status-db     # 20 項,每次建一個全新資料庫
+npm run mail:check          # 連得上嗎?對方寄的格式對嗎?
+npm run status:ingest -- --dry-run
+```
+
+`.env.local` 需要 `STATUS_MAIL_USER` 與 `STATUS_MAIL_APP_PASSWORD`
+(Google 應用程式密碼,不是帳號密碼)。**`STATUS_MAIL_ALLOWED_SENDER` 應該要設**,
+設了之後其他地址寄來的信不會被讀取內容;留空則任何人寄的 CSV 都會進來。
+
+### 三個不能動的順序
+
+- **先存檔,才標示已讀。**反過來的話,中間當掉就永遠失去那一批,而且失去得無聲無息
+  —— 序號沒被記下來,連「掉了一批」都偵測不到。
+- **永遠不刪信。**那封信是「對方到底寄了什麼」的唯一證據。
+- **整批寫入或整批不寫。**批次那一列就是「#142 已經收到」的紀錄,只寫它而沒寫觀察
+  資料,比整封信掉了更糟。
+
+### 對照表是表,不是 AI
+
+`status_duty_mappings` 存的是「這個狀態 = 這個勤務 = 幾分鐘」。**故意不用 AI 算。**
+社工被告知星期二要多排四個人,有權問為什麼;來自表格的數字答得出來(哪個狀態、
+哪個勤務、誰設定的),來自模型的數字答不出來,也改不了 —— 沒有東西可以編輯。
+
+**這張表出廠是空的。**對方那 21 個觀察狀態目前只有「狗狗便便」是真的,其餘是佔位資料,
+現在填分鐘數等於把猜測包裝成設定。`getUnmappedStatuses()` 會列出「真的被觀察到、
+但還沒設規則」的狀態,由收容所自己填。**沒設規則的狀態算 0 分鐘工時** —— 這是對
+「還沒有人回答的問題」的正確處理,但前提是那個問題持續被看見,所以每次執行都會列出來。
+
+### 排程
+
+VM 上 `crontab -e`,加這兩行(第一行不是註解,是必要的):
+
+```
+CRON_TZ=Asia/Taipei
+15 0,6,12,18 * * * /home/使用者名稱/pawrescue/scripts/status-ingest-cron.sh
+```
+
+**`CRON_TZ` 不能省。**GCP VM 的時區是 UTC,少了它 `15 0` 會跑在台灣時間早上 8 點 15 分。
+
+紀錄在 `data/logs/status-ingest.log`(超過 1 MB 會砍掉舊的一半)。這個目錄有進
+`.gitignore` —— 裡面有寄件地址和動物資料。
+
+### 還沒做
+
+- **對照表沒有管理介面。**資料表和讀寫函式都有了,社工還不能自己編輯。
+- **還沒接上排班產生器。**狀態存進來了,但還沒換算成人力缺口。
+- **`STATUS_MAIL_ALLOWED_SENDER` 還沒設**,因為對方的寄件地址還沒確定。
+- **對方的觀察狀態還沒真的產生。**所以這條管線的「語意層」兩邊都還沒辦法驗證 ——
+  傳輸是通的,傳的內容還是假的。

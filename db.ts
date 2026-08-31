@@ -13,7 +13,13 @@ import { parseWeekdays, serializeWeekdays } from './src/utils/weekdays';
 export { parseWeekdays, serializeWeekdays } from './src/utils/weekdays';
 import type { VolunteerProfile, AttendanceRecord, PositionShift, ShiftSignup, SubstitutionRequest, SopContent, SopSection, SopDocument, SopVideo, PromotionRequest, ShiftTemplate, ShelterLocation, LineOfficialAccount } from './src/types';
 
-const dataDir = path.join(process.cwd(), 'data');
+// DATA_DIR exists so tests can run against a database of their own. Unset --
+// which is every real deployment -- it behaves exactly as before. It is opt-in
+// on purpose: a mistyped path here would start the server on an empty database
+// that looks perfectly healthy, so nothing should be able to set it by accident.
+const dataDir = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR)
+  : path.join(process.cwd(), 'data');
 fs.mkdirSync(dataDir, { recursive: true });
 
 const dbPath = path.join(dataDir, 'volunteers.db');
@@ -157,13 +163,27 @@ try {
   // column already exists
 }
 
-// Seed with the original mock roster on first run only
+// Seed with the original mock roster on first run only.
+//
+// This used to list a `status` column and pass 1 for it. There has never been a
+// such a column on volunteers -- account state lives in `accountStatus`, added
+// by the migration further down -- so preparing this statement threw, and db.ts
+// throws while loading, and the server cannot start.
+//
+// It stayed hidden because the block runs only when the table is empty. Every
+// database that already had volunteers in it skipped the whole thing, which is
+// every database anyone had run. Only a first run on a new machine hit it: a
+// fresh clone could not start, and the error named a column nobody would find
+// by searching, because it does not exist anywhere.
+//
+// Nothing needs to replace it. accountStatus is added below with DEFAULT
+// 'active', so seeded volunteers get the right state when that migration runs.
 const seedCount = db.prepare('SELECT COUNT(*) AS c FROM volunteers').get() as { c: number };
 if (seedCount.c === 0) {
   const insertSeed = db.prepare(`
     INSERT INTO volunteers
-      (email, id, name, phone, lineId, avatar, skills, preferredZones, totalHours, completedShiftsCount, tier, joinedDate, emergencyContact, providers, status, lastLoginAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (email, id, name, phone, lineId, avatar, skills, preferredZones, totalHours, completedShiftsCount, tier, joinedDate, emergencyContact, providers, lastLoginAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const nowIso = new Date().toISOString();
   for (const v of VOLUNTEER_PROFILES) {
@@ -182,7 +202,6 @@ if (seedCount.c === 0) {
       v.joinedDate,
       v.emergencyContact,
       JSON.stringify(['seed']),
-      1,
       nowIso
     );
   }
@@ -3478,4 +3497,446 @@ export function destroySession(token: string): void {
 /** Drops every session belonging to a volunteer -- used when they're deleted. */
 export function destroySessionsForIdentity(identity: string): void {
   db.prepare('DELETE FROM sessions WHERE identity = ?').run(identity.toLowerCase().trim());
+}
+
+// ============================================================================
+// 動物狀態 —— what the main system observed, and what that means for staffing
+// ============================================================================
+//
+// Three tables for three different kinds of fact, which is the whole point of
+// keeping them apart:
+//
+//   status_batches         what arrived, and when -- one row per email
+//   animal_status_records  what it said -- one row per observation
+//   status_duty_mappings   what we decided that means -- one row per rule
+//
+// The last one is a table and not a call to the AI. Asking a model "how many
+// volunteer-minutes does 便便較軟 cost?" would produce a number, and a shelter
+// asked to staff four extra people on a Tuesday is entitled to ask why. A
+// number that came out of a table can be answered: this status, this duty, this
+// many minutes, and here is who set it. A number that came out of a prompt
+// cannot be answered at all, and cannot be corrected either -- there is nothing
+// to edit. The mapping is the shelter's policy, so the shelter owns it.
+//
+// The mapping ships EMPTY. The observation vocabulary on the far side is still
+// placeholder data -- of the 21 states currently defined, only 狗狗便便 is real
+// -- so any minutes seeded here would be invention presented as configuration.
+// getUnmappedStatuses() exists to make the emptiness visible and fillable:
+// it reports which statuses have actually been observed and have no rule yet,
+// so the shelter fills in the ones that turn out to matter rather than being
+// handed 21 guesses to audit.
+// ============================================================================
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS status_batches (
+    id TEXT PRIMARY KEY,
+    sequence INTEGER NOT NULL,
+    periodStart TEXT NOT NULL DEFAULT '',
+    periodEnd TEXT NOT NULL DEFAULT '',
+    mailUid INTEGER NOT NULL DEFAULT 0,
+    subject TEXT NOT NULL DEFAULT '',
+    sender TEXT NOT NULL DEFAULT '',
+    sentAt TEXT NOT NULL DEFAULT '',
+    recordCount INTEGER NOT NULL DEFAULT 0,
+    skippedCount INTEGER NOT NULL DEFAULT 0,
+    notes TEXT NOT NULL DEFAULT '',
+    organizationId TEXT NOT NULL DEFAULT '',
+    importedAt TEXT NOT NULL
+  )
+`);
+
+// Email delivers the same message twice more often than it loses one, and a
+// re-delivered batch imported again would double every animal's workload for
+// that period. The sequence number is the sender's own count, so it is what
+// identifies a batch -- not the mail UID, which changes if the message is moved.
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_status_batch_sequence
+  ON status_batches (organizationId, sequence)
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS animal_status_records (
+    id TEXT PRIMARY KEY,
+    batchId TEXT NOT NULL,
+    shelterCode TEXT NOT NULL,
+    animalId TEXT NOT NULL,
+    shelterNumber TEXT NOT NULL DEFAULT '',
+    animalName TEXT NOT NULL DEFAULT '',
+    observedAt TEXT NOT NULL,
+    observedAtUtc TEXT NOT NULL DEFAULT '',
+    categoryCode TEXT NOT NULL DEFAULT '',
+    optionCode TEXT NOT NULL,
+    optionLabel TEXT NOT NULL DEFAULT '',
+    organizationId TEXT NOT NULL DEFAULT ''
+  )
+`);
+
+// No uniqueness constraint on the records themselves, deliberately. The obvious
+// one -- one observation per animal per category per instant -- assumes things
+// about their data model that have not been confirmed, and a wrong constraint
+// here would silently drop real observations. The batch-level guard above
+// already prevents the failure that actually happens (a redelivered email), and
+// that one is understood.
+db.exec(`CREATE INDEX IF NOT EXISTS idx_status_record_batch ON animal_status_records (batchId)`);
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_status_record_animal
+  ON animal_status_records (animalId, categoryCode, observedAtUtc)
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS status_duty_mappings (
+    id TEXT PRIMARY KEY,
+    categoryCode TEXT NOT NULL DEFAULT '',
+    optionCode TEXT NOT NULL,
+    optionLabel TEXT NOT NULL DEFAULT '',
+    dutyItemId TEXT NOT NULL,
+    minutesPerAnimal INTEGER NOT NULL DEFAULT 0,
+    requiredTier TEXT NOT NULL DEFAULT '',
+    note TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'active',
+    sortOrder INTEGER NOT NULL DEFAULT 0,
+    organizationId TEXT NOT NULL DEFAULT '',
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL
+  )
+`);
+
+// One status may well require two duties -- 食慾不佳 could mean both a feeding
+// check and a record in the log -- so the rule is unique per duty, not per
+// status. What it forbids is the same status pointing at the same duty twice,
+// which would double that duty's minutes with nothing on screen to show why.
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_status_mapping_once
+  ON status_duty_mappings (organizationId, categoryCode, optionCode, dutyItemId)
+`);
+
+export interface StatusBatch {
+  id: string;
+  sequence: number;
+  periodStart: string;
+  periodEnd: string;
+  mailUid: number;
+  subject: string;
+  sender: string;
+  sentAt: string;
+  recordCount: number;
+  skippedCount: number;
+  notes: string;
+  importedAt: string;
+}
+
+export interface AnimalStatusRecord {
+  id: string;
+  batchId: string;
+  shelterCode: string;
+  animalId: string;
+  shelterNumber: string;
+  animalName: string;
+  /** Exactly as the CSV wrote it. */
+  observedAt: string;
+  /** The same instant in UTC, for comparing. Empty if it would not parse. */
+  observedAtUtc: string;
+  categoryCode: string;
+  optionCode: string;
+  optionLabel: string;
+}
+
+/** One shelter's rule: this observation costs this much of this duty. */
+export interface StatusDutyMapping {
+  id: string;
+  categoryCode: string;
+  optionCode: string;
+  /** Kept alongside the code so the admin screen reads in Chinese. */
+  optionLabel: string;
+  dutyItemId: string;
+  minutesPerAnimal: number;
+  /** '' means any volunteer; otherwise a tier from VolunteerProfile. */
+  requiredTier: string;
+  note: string;
+  status: 'active' | 'disabled';
+  sortOrder: number;
+}
+
+/**
+ * The same instant, normalised, so two timestamps can be compared.
+ *
+ * Observations arrive as ISO strings that may carry any offset. Comparing those
+ * as text -- which is what MAX() does -- ranks "+08:00" against "Z" by their
+ * punctuation, so an evening reading from one source can lose to a morning one
+ * from another and "the animal's latest status" quietly becomes the wrong row.
+ * The original text is kept as well; this is only ever for ordering.
+ */
+function toComparableInstant(value: string): string {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString();
+}
+
+function rowToStatusBatch(row: any): StatusBatch {
+  return {
+    id: row.id,
+    sequence: row.sequence,
+    periodStart: row.periodStart,
+    periodEnd: row.periodEnd,
+    mailUid: row.mailUid,
+    subject: row.subject,
+    sender: row.sender,
+    sentAt: row.sentAt,
+    recordCount: row.recordCount,
+    skippedCount: row.skippedCount,
+    notes: row.notes,
+    importedAt: row.importedAt
+  };
+}
+
+/** Which batch numbers are already in. Feeds the missing-batch check. */
+export function getImportedBatchSequences(): number[] {
+  return (db.prepare(
+    'SELECT sequence FROM status_batches WHERE organizationId = ? ORDER BY sequence'
+  ).all(currentOrganizationId()) as any[]).map(r => r.sequence as number);
+}
+
+export function getStatusBatchBySequence(sequence: number): StatusBatch | null {
+  const row = db.prepare(
+    'SELECT * FROM status_batches WHERE organizationId = ? AND sequence = ?'
+  ).get(currentOrganizationId(), sequence) as any;
+  return row ? rowToStatusBatch(row) : null;
+}
+
+export function getRecentStatusBatches(limit = 20): StatusBatch[] {
+  return (db.prepare(
+    'SELECT * FROM status_batches WHERE organizationId = ? ORDER BY sequence DESC LIMIT ?'
+  ).all(currentOrganizationId(), limit) as any[]).map(rowToStatusBatch);
+}
+
+/**
+ * Stores one batch and its observations, together or not at all.
+ *
+ * The transaction is not a nicety. The batch row is the record that says "#142
+ * is in" -- write it without the observations and #142 is permanently missing
+ * while the gap check reports everything present, which is worse than losing
+ * the email outright, because losing the email is at least visible.
+ *
+ * A sequence that is already stored returns an error rather than throwing or
+ * overwriting: a redelivered email is a normal event, not a fault, and the
+ * caller should say so and move on.
+ */
+export function recordStatusBatch(input: {
+  sequence: number;
+  periodStart: string;
+  periodEnd: string;
+  mailUid: number;
+  subject: string;
+  sender: string;
+  sentAt: string;
+  skippedCount: number;
+  notes?: string;
+  rows: Array<{
+    shelterCode: string;
+    animalId: string;
+    shelterNumber: string;
+    animalName: string;
+    observedAt: string;
+    categoryCode: string;
+    optionCode: string;
+    optionLabel: string;
+  }>;
+}): { batchId: string; recorded: number } | { error: string } {
+  const organizationId = currentOrganizationId();
+
+  const existing = getStatusBatchBySequence(input.sequence);
+  if (existing) {
+    return { error: `批次 #${input.sequence} 已經在 ${existing.importedAt} 匯入過了` };
+  }
+
+  const batchId = `batch-${randomUUID().slice(0, 8)}`;
+  const now = new Date().toISOString();
+
+  db.exec('BEGIN');
+  try {
+    db.prepare(`
+      INSERT INTO status_batches
+        (id, sequence, periodStart, periodEnd, mailUid, subject, sender, sentAt,
+         recordCount, skippedCount, notes, organizationId, importedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      batchId, input.sequence, input.periodStart, input.periodEnd, input.mailUid,
+      input.subject, input.sender, input.sentAt,
+      input.rows.length, input.skippedCount, input.notes || '', organizationId, now
+    );
+
+    const insertRow = db.prepare(`
+      INSERT INTO animal_status_records
+        (id, batchId, shelterCode, animalId, shelterNumber, animalName,
+         observedAt, observedAtUtc, categoryCode, optionCode, optionLabel, organizationId)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const row of input.rows) {
+      insertRow.run(
+        `status-${randomUUID().slice(0, 8)}`, batchId,
+        row.shelterCode, row.animalId, row.shelterNumber, row.animalName,
+        row.observedAt, toComparableInstant(row.observedAt),
+        row.categoryCode, row.optionCode, row.optionLabel, organizationId
+      );
+    }
+
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+
+  return { batchId, recorded: input.rows.length };
+}
+
+export function getStatusRecordsForBatch(batchId: string): AnimalStatusRecord[] {
+  return db.prepare(
+    'SELECT * FROM animal_status_records WHERE batchId = ? ORDER BY animalName, categoryCode'
+  ).all(batchId) as any[];
+}
+
+/**
+ * Each animal's most recent reading in each category -- the current picture.
+ *
+ * Ordering is on observedAtUtc, not observedAt: see toComparableInstant. Rows
+ * whose timestamp would not parse have an empty observedAtUtc and so sort last,
+ * which is the safe direction -- an unreadable timestamp should never be able
+ * to present itself as the newest thing known about an animal.
+ */
+export function getLatestAnimalStatuses(): AnimalStatusRecord[] {
+  return db.prepare(`
+    SELECT r.* FROM animal_status_records r
+    JOIN (
+      SELECT animalId, categoryCode, MAX(observedAtUtc) AS newest
+      FROM animal_status_records
+      WHERE organizationId = ?
+      GROUP BY animalId, categoryCode
+    ) latest
+      ON r.animalId = latest.animalId
+     AND r.categoryCode = latest.categoryCode
+     AND r.observedAtUtc = latest.newest
+    WHERE r.organizationId = ?
+    ORDER BY r.animalName, r.categoryCode
+  `).all(currentOrganizationId(), currentOrganizationId()) as any[];
+}
+
+function rowToStatusDutyMapping(row: any): StatusDutyMapping {
+  return {
+    id: row.id,
+    categoryCode: row.categoryCode,
+    optionCode: row.optionCode,
+    optionLabel: row.optionLabel,
+    dutyItemId: row.dutyItemId,
+    minutesPerAnimal: row.minutesPerAnimal,
+    requiredTier: row.requiredTier,
+    note: row.note,
+    status: row.status,
+    sortOrder: row.sortOrder
+  };
+}
+
+export function getAllStatusDutyMappings(): StatusDutyMapping[] {
+  return (db.prepare(`
+    SELECT * FROM status_duty_mappings WHERE organizationId = ?
+    ORDER BY sortOrder, categoryCode, optionCode
+  `).all(currentOrganizationId()) as any[]).map(rowToStatusDutyMapping);
+}
+
+export function getActiveStatusDutyMappings(): StatusDutyMapping[] {
+  return getAllStatusDutyMappings().filter(m => m.status === 'active');
+}
+
+/** Adds a rule, or edits the one already covering this status and duty. */
+export function upsertStatusDutyMapping(input: {
+  categoryCode: string;
+  optionCode: string;
+  optionLabel: string;
+  dutyItemId: string;
+  minutesPerAnimal: number;
+  requiredTier?: string;
+  note?: string;
+}): StatusDutyMapping {
+  const organizationId = currentOrganizationId();
+  const now = new Date().toISOString();
+
+  const existing = db.prepare(`
+    SELECT id FROM status_duty_mappings
+    WHERE organizationId = ? AND categoryCode = ? AND optionCode = ? AND dutyItemId = ?
+  `).get(organizationId, input.categoryCode, input.optionCode, input.dutyItemId) as any;
+
+  if (existing) {
+    db.prepare(`
+      UPDATE status_duty_mappings
+      SET optionLabel = ?, minutesPerAnimal = ?, requiredTier = ?, note = ?, updatedAt = ?
+      WHERE id = ?
+    `).run(
+      input.optionLabel, input.minutesPerAnimal,
+      input.requiredTier || '', input.note || '', now, existing.id
+    );
+    return getAllStatusDutyMappings().find(m => m.id === existing.id)!;
+  }
+
+  const id = `map-${randomUUID().slice(0, 8)}`;
+  const next = db.prepare(
+    'SELECT COALESCE(MAX(sortOrder), -1) + 1 AS n FROM status_duty_mappings WHERE organizationId = ?'
+  ).get(organizationId) as { n: number };
+
+  db.prepare(`
+    INSERT INTO status_duty_mappings
+      (id, categoryCode, optionCode, optionLabel, dutyItemId, minutesPerAnimal,
+       requiredTier, note, status, sortOrder, organizationId, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
+  `).run(
+    id, input.categoryCode, input.optionCode, input.optionLabel, input.dutyItemId,
+    input.minutesPerAnimal, input.requiredTier || '', input.note || '',
+    next.n, organizationId, now, now
+  );
+
+  return getAllStatusDutyMappings().find(m => m.id === id)!;
+}
+
+/** Disabled, never deleted -- a rule that produced past rosters has to stay readable. */
+export function setStatusDutyMappingStatus(id: string, status: 'active' | 'disabled'): boolean {
+  const result = db.prepare(
+    'UPDATE status_duty_mappings SET status = ?, updatedAt = ? WHERE id = ? AND organizationId = ?'
+  ).run(status, new Date().toISOString(), id, currentOrganizationId());
+  return Number(result.changes) > 0;
+}
+
+/**
+ * Statuses that have actually been observed and have no rule yet.
+ *
+ * This is the screen that gets the mapping table filled in. The alternative --
+ * seeding a rule for all 21 defined statuses -- would mean inventing minutes
+ * for observations that may never occur, and presenting the invention as
+ * configuration. This asks the shelter about the ones its animals really have,
+ * with a count so the frequent ones come first.
+ *
+ * A status observed and unmapped contributes nothing to the workload. That is
+ * the correct behaviour -- it is an unanswered question, not a zero -- but it
+ * is only correct while the question is visible, which is what this is for.
+ */
+export function getUnmappedStatuses(): Array<{
+  categoryCode: string;
+  optionCode: string;
+  optionLabel: string;
+  animalCount: number;
+  lastObservedAt: string;
+}> {
+  return db.prepare(`
+    SELECT r.categoryCode, r.optionCode,
+           MAX(r.optionLabel) AS optionLabel,
+           COUNT(DISTINCT r.animalId) AS animalCount,
+           MAX(r.observedAtUtc) AS lastObservedAt
+    FROM animal_status_records r
+    WHERE r.organizationId = ?
+      AND NOT EXISTS (
+        SELECT 1 FROM status_duty_mappings m
+        WHERE m.organizationId = r.organizationId
+          AND m.categoryCode = r.categoryCode
+          AND m.optionCode = r.optionCode
+          AND m.status = 'active'
+      )
+    GROUP BY r.categoryCode, r.optionCode
+    ORDER BY animalCount DESC, r.categoryCode, r.optionCode
+  `).all(currentOrganizationId()) as any[];
 }
