@@ -11,7 +11,8 @@
     "lint": "tsc --noEmit",
     "check:security": "node --import tsx scripts/security-smoke.ts",
     "ocr:pdfs": "node --import tsx scripts/ocr-import.ts",
-    "check:ocr-chunking": "node --import tsx scripts/ocr-chunking.test.ts"
+    "check:ocr-chunking": "node --import tsx scripts/ocr-chunking.test.ts",
+    "check:status-csv": "node --import tsx scripts/status-csv.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
