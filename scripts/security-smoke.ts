@@ -122,7 +122,19 @@ const PROTECTED: Array<[string, string]> = [
   ['DELETE', '/api/admin/volunteers/nobody@example.com'],
   ['POST', '/api/admin/change-password'],
   ['PUT', '/api/admin/line-official-account'],
-  ['PUT', '/api/admin/shelter-location']
+  ['PUT', '/api/admin/shelter-location'],
+  ['GET', '/api/admin/status-mappings'],
+  ['POST', '/api/admin/status-mappings'],
+  ['POST', '/api/admin/status-mappings/does-not-exist/disable'],
+  ['POST', '/api/admin/status-mappings/does-not-exist/restore'],
+  ['PUT', '/api/admin/shift-capacity'],
+  ['GET', '/api/admin/status-batches'],
+  ['GET', '/api/admin/status-batches/does-not-exist/records'],
+  ['GET', '/api/admin/status-workload'],
+  // Not under /api/admin, so it is not covered by the requireAdmin mount and
+  // relies on the default-deny middleware alone. Which is exactly the kind of
+  // route this list exists for.
+  ['GET', '/api/animal-concerns']
 ];
 
 /**

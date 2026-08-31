@@ -132,6 +132,20 @@ export const DutyItemManager: React.FC<DutyItemManagerProps> = ({ zones, onToast
       .catch(() => { /* the picker just stays empty */ });
   }, []);
 
+  /**
+   * Shifts a one-off duty can still be attached to.
+   *
+   * Past shifts are excluded because a task pinned to one that already happened
+   * can never be shown to anybody. That part was right; what was missing is
+   * what happens when the filter leaves nothing. An empty dropdown looks
+   * exactly like a broken one, and the server's answer on save -- "please pick
+   * which shift" -- reads as a taunt when there is nothing there to pick. So
+   * the emptiness is now stated, along with where to go and fix it.
+   */
+  const selectableShifts = [...shifts]
+    .filter(shift => shift.date >= new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' }))
+    .sort((a, b) => (a.date + a.timeRange).localeCompare(b.date + b.timeRange));
+
   useEffect(() => {
     authFetch('/api/sop-content')
       .then(res => res.json())
@@ -186,6 +200,16 @@ export const DutyItemManager: React.FC<DutyItemManagerProps> = ({ zones, onToast
   const cancel = () => { setIsAdding(false); setEditingId(null); setDraft(EMPTY_DRAFT); };
 
   const save = async () => {
+    // The server refuses this too, and must. But its message -- "please pick
+    // which shift" -- is unhelpful when the reason there is no shiftId is that
+    // there was nothing to pick. Say which of the two situations this is.
+    if (draft.triggerType === 'specific_shift' && !draft.shiftId) {
+      onToast(selectableShifts.length === 0
+        ? '⚠️ 目前沒有可以指定的班次。請先到「2. 職位與班次發布」開班次，或把「什麼時候要做」改成每天／每次進場。'
+        : '⚠️ 請選擇這項勤務屬於哪一個班次。');
+      return;
+    }
+
     setIsSaving(true);
     try {
       const url = isAdding ? '/api/admin/duty-items' : `/api/admin/duty-items/${encodeURIComponent(editingId!)}`;
@@ -364,21 +388,43 @@ export const DutyItemManager: React.FC<DutyItemManagerProps> = ({ zones, onToast
             {draft.triggerType === 'specific_shift' && (
               <label className="block sm:col-span-2">
                 <span className="text-xs font-bold text-slate-600">屬於哪一個班次</span>
-                <select
-                  value={draft.shiftId}
-                  onChange={e => setDraft({ ...draft, shiftId: e.target.value })}
-                  className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white"
-                >
-                  <option value="">請選擇班次</option>
-                  {[...shifts]
-                    .filter(shift => shift.date >= new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' }))
-                    .sort((a, b) => (a.date + a.timeRange).localeCompare(b.date + b.timeRange))
-                    .map(shift => (
+                {selectableShifts.length === 0 ? (
+                  <div className="mt-1 rounded-xl border-2 border-amber-300 bg-amber-50 px-3 py-2.5">
+                    <p className="text-xs font-bold text-amber-900">
+                      <AlertTriangle className="w-3.5 h-3.5 inline -mt-0.5" /> 目前沒有可以指定的班次
+                    </p>
+                    <p className="text-[11px] text-amber-800 mt-1 leading-relaxed">
+                      一次性勤務只能掛在<strong>還沒開始</strong>的班次上——掛在已經結束的班次上，
+                      沒有人會看到它。請先到「2. 職位與班次發布」開出班次，再回來新增這項勤務；
+                      或是把上面的「什麼時候要做」改成每天或每次進場。
+                    </p>
+                  </div>
+                ) : (
+                  <select
+                    value={draft.shiftId}
+                    onChange={e => {
+                      // The zone follows the shift. They were picked separately,
+                      // and a one-off duty labelled 大狗運動場 while bound to a
+                      // 醫療區 shift then showed up on the wrong people's lists.
+                      // Taking the zone from the shift removes the mismatch
+                      // rather than leaving it to be caught later.
+                      const chosen = selectableShifts.find(s => s.id === e.target.value);
+                      setDraft({
+                        ...draft,
+                        shiftId: e.target.value,
+                        zoneId: chosen ? chosen.zone : draft.zoneId
+                      });
+                    }}
+                    className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white"
+                  >
+                    <option value="">請選擇班次</option>
+                    {selectableShifts.map(shift => (
                       <option key={shift.id} value={shift.id}>
                         {shift.date} {shift.timeRange}・{shift.title}
                       </option>
                     ))}
-                </select>
+                  </select>
+                )}
                 <p className="text-[11px] text-slate-400 mt-1">
                   只會在這一個班次出現一次，班次過了就不再出現——<strong>不需要記得回來停用它</strong>。
                 </p>

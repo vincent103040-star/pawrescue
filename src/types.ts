@@ -153,6 +153,14 @@ export interface LineNotificationPreferences {
   checkInReminder: boolean;   // 簽到提醒推播
   sopReminder?: boolean;      // 簽到後的訊息要不要附上教材提醒
   reminderTimingHours?: number; // 出班前提醒時數 (預設 1 小時)
+  /**
+   * 本週需要留意的動物狀態。**預設關閉**，與上面幾項相反。
+   *
+   * 其他開關通知的是志工自己的事 —— 自己報的班、自己該簽的到。這一項是關於
+   * 動物的，是一種可以想要、也可以不想要的訊息流，替所有人預設開啟等於替他們
+   * 決定。而且沒有異常時完全不發 —— 每週固定出現的通知會停止被閱讀。
+   */
+  animalStatusAlerts?: boolean;
 }
 
 export interface VolunteerProfile {

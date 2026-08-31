@@ -739,6 +739,17 @@ export interface StoredLinePreferences {
    * it. Now it is stored beside the switch it belongs to.
    */
   reminderTimingHours: number;
+  /**
+   * Whether to hear about animals whose status needs attention this week.
+   *
+   * Off by default, unlike every other switch here. The others notify a
+   * volunteer about their own commitments -- a shift they booked, a check-in
+   * they owe. This one is about the animals, which is a stream a volunteer can
+   * want and can equally not want, and turning it on for everybody would be
+   * deciding that for them. It also stays quiet when nothing is wrong: a
+   * notification that arrives every week regardless stops being read.
+   */
+  animalStatusAlerts: boolean;
 }
 
 /** What the dropdown offers. Anything else is clamped to the nearest of these. */
@@ -749,7 +760,8 @@ const DEFAULT_LINE_PREFERENCES: StoredLinePreferences = {
   urgentRecruitment: true,
   checkInReminder: true,
   sopReminder: true,
-  reminderTimingHours: 1
+  reminderTimingHours: 1,
+  animalStatusAlerts: false
 };
 
 /** Keeps a stored or submitted lead time to something the scheduler can honour. */
@@ -1255,6 +1267,32 @@ if (ragChunksSeedCount.c === 0) {
     // never run) -- RAG just starts empty and falls back to the keyword matcher
     // in server.ts until an admin saves SOP content or uploads a PDF.
   }
+}
+
+// Migration: drop a chunk describing a feature that never existed.
+//
+// The seed carried an entry about clicking「AI 一鍵補班」to have Gemini enrol
+// the best volunteers automatically. There is no such button anywhere in this
+// system, and nothing here enrols anybody -- a volunteer joins a shift by
+// applying, or by taking over a substitution request. The entry also named
+// three sites that are not this shelter's zones.
+//
+// A wrong sentence in a manual is a wrong sentence. The same sentence in the
+// RAG corpus is the AI answering "how do I fill a shift?" with an invented
+// button and a citation for it, which is worse than not answering. Databases
+// seeded before this was noticed still hold it, so it is removed here rather
+// than only at the source.
+//
+// Deleted rather than rewritten: the stored embedding was computed from the
+// false text, so replacing the words would leave a vector that still matches
+// questions about the button and then answers them with something else.
+// Matching on the text keeps this from touching a correctly seeded row.
+const staleChunk = db.prepare(`
+  DELETE FROM rag_chunks
+  WHERE source = 'static' AND sourceId = 'admin-shortage-dashboard' AND text LIKE '%一鍵補班%'
+`).run();
+if (Number(staleChunk.changes) > 0) {
+  console.log('SQLite: 已移除 AI 知識庫裡描述不存在功能的段落（AI 一鍵補班）');
 }
 
 export function getSopContent(): SopContent {
@@ -3939,4 +3977,184 @@ export function getUnmappedStatuses(): Array<{
     GROUP BY r.categoryCode, r.optionCode
     ORDER BY animalCount DESC, r.categoryCode, r.optionCode
   `).all(currentOrganizationId()) as any[];
+}
+
+// ============================================================================
+// 由動物狀態推算人力 —— 每一個數字都要答得出「為什麼」
+// ============================================================================
+//
+// Nothing here is stored. Headcount is derived on read from three things a
+// person can point at: the observations that arrived, the shelter's own
+// mapping, and the shift length below. Storing a computed figure would let it
+// drift out of step with the rules it came from, and then "why two people?"
+// would have no answer at all.
+
+/**
+ * How many minutes of work one volunteer covers in one shift.
+ *
+ * This was a 180 written into an explanation. It is the divisor that turns
+ * minutes into people, so it decides the answer -- and it is a judgement about
+ * how this shelter works, not a fact: a three-hour shift is not three hours of
+ * hands on animals once briefing, handover and travel between areas are
+ * counted. It belongs to whoever runs the place.
+ */
+const SHIFT_CAPACITY_KEY = 'shiftCapacityMinutes';
+const DEFAULT_SHIFT_CAPACITY = 180;
+
+export function getShiftCapacityMinutes(): number {
+  const row = db.prepare('SELECT value FROM app_settings WHERE key = ?')
+    .get(SHIFT_CAPACITY_KEY) as { value: string } | undefined;
+  const stored = Number(row?.value);
+  return Number.isFinite(stored) && stored > 0 ? Math.round(stored) : DEFAULT_SHIFT_CAPACITY;
+}
+
+/** Returns what was actually saved, so a rejected value never looks accepted. */
+export function setShiftCapacityMinutes(minutes: number): number {
+  // A zero here would divide the whole roster by zero, and a day is 1440
+  // minutes -- anything past that is a typo, not a policy.
+  const clean = Math.round(Number(minutes));
+  if (!Number.isFinite(clean) || clean < 15 || clean > 1440) return getShiftCapacityMinutes();
+
+  db.prepare(`
+    INSERT INTO app_settings (key, value) VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `).run(SHIFT_CAPACITY_KEY, String(clean));
+  return clean;
+}
+
+/** One animal that needs something doing, and what the rule says it needs. */
+export interface AnimalConcern {
+  animalId: string;
+  animalName: string;
+  shelterNumber: string;
+  shelterCode: string;
+  categoryCode: string;
+  optionCode: string;
+  optionLabel: string;
+  observedAt: string;
+  observedAtUtc: string;
+  dutyItemId: string;
+  dutyTitle: string;
+  minutesPerAnimal: number;
+  requiredTier: string;
+}
+
+/**
+ * Animals whose latest reading maps to work worth doing.
+ *
+ * "Abnormal" is not a judgement this code makes. It means: the shelter wrote a
+ * rule for this status, that rule is active, and it costs more than zero
+ * minutes. So 情緒穩定 priced at 0 stays out, and anything nobody has priced
+ * stays out too -- an unanswered question must not quietly become an alert.
+ * Everything shown here is traceable to a row the shelter can edit.
+ *
+ * `sinceDays` bounds it to recent readings; an observation from March is not
+ * this week's problem.
+ */
+export function getAnimalConcerns(sinceDays = 7): AnimalConcern[] {
+  const cutoff = new Date(Date.now() - sinceDays * 86400000).toISOString();
+
+  return db.prepare(`
+    SELECT
+      r.animalId, r.animalName, r.shelterNumber, r.shelterCode,
+      r.categoryCode, r.optionCode, r.optionLabel, r.observedAt, r.observedAtUtc,
+      m.dutyItemId, m.minutesPerAnimal, m.requiredTier,
+      COALESCE(d.title, '（勤務已刪除）') AS dutyTitle
+    FROM animal_status_records r
+    JOIN (
+      SELECT animalId, categoryCode, MAX(observedAtUtc) AS newest
+      FROM animal_status_records
+      WHERE organizationId = ?
+      GROUP BY animalId, categoryCode
+    ) latest
+      ON r.animalId = latest.animalId
+     AND r.categoryCode = latest.categoryCode
+     AND r.observedAtUtc = latest.newest
+    JOIN status_duty_mappings m
+      ON m.organizationId = r.organizationId
+     AND m.categoryCode = r.categoryCode
+     AND m.optionCode = r.optionCode
+     AND m.status = 'active'
+     AND m.minutesPerAnimal > 0
+    LEFT JOIN duty_items d ON d.id = m.dutyItemId
+    WHERE r.organizationId = ?
+      AND r.observedAtUtc >= ?
+    ORDER BY m.minutesPerAnimal DESC, r.animalName
+  `).all(currentOrganizationId(), currentOrganizationId(), cutoff) as any[];
+}
+
+export interface StatusWorkload {
+  shiftCapacityMinutes: number;
+  totalMinutes: number;
+  /** Minutes that a rule says need a particular tier. */
+  skilledMinutes: number;
+  suggestedPeople: number;
+  suggestedSkilledPeople: number;
+  animalCount: number;
+  byDuty: Array<{
+    dutyItemId: string;
+    dutyTitle: string;
+    animalCount: number;
+    minutes: number;
+    requiredTier: string;
+  }>;
+  /** Observed, but nobody has priced it -- so it counts as nothing. */
+  unmapped: Array<{ optionLabel: string; optionCode: string; animalCount: number }>;
+  sinceDays: number;
+}
+
+/**
+ * What this week's statuses add up to in people.
+ *
+ * Rounded up, because two thirds of a volunteer cannot come in. Reported
+ * alongside the minutes and the per-duty breakdown rather than on its own: the
+ * number that matters to a rota is the headcount, but the number that survives
+ * being questioned is the one with its working shown.
+ */
+export function getStatusWorkload(sinceDays = 7): StatusWorkload {
+  const concerns = getAnimalConcerns(sinceDays);
+  const shiftCapacityMinutes = getShiftCapacityMinutes();
+
+  const byDutyMap = new Map<string, {
+    dutyItemId: string; dutyTitle: string; animalCount: number; minutes: number; requiredTier: string;
+  }>();
+  let totalMinutes = 0;
+  let skilledMinutes = 0;
+  const animals = new Set<string>();
+
+  for (const concern of concerns) {
+    totalMinutes += concern.minutesPerAnimal;
+    if (concern.requiredTier) skilledMinutes += concern.minutesPerAnimal;
+    animals.add(concern.animalId);
+
+    const key = `${concern.dutyItemId}|${concern.requiredTier}`;
+    const entry = byDutyMap.get(key) || {
+      dutyItemId: concern.dutyItemId,
+      dutyTitle: concern.dutyTitle,
+      animalCount: 0,
+      minutes: 0,
+      requiredTier: concern.requiredTier
+    };
+    entry.animalCount++;
+    entry.minutes += concern.minutesPerAnimal;
+    byDutyMap.set(key, entry);
+  }
+
+  const unmapped = getUnmappedStatuses().map(s => ({
+    optionLabel: s.optionLabel || s.optionCode,
+    optionCode: s.optionCode,
+    animalCount: s.animalCount
+  }));
+
+  return {
+    shiftCapacityMinutes,
+    totalMinutes,
+    skilledMinutes,
+    suggestedPeople: Math.ceil(totalMinutes / shiftCapacityMinutes),
+    suggestedSkilledPeople: Math.ceil(skilledMinutes / shiftCapacityMinutes),
+    animalCount: animals.size,
+    byDuty: [...byDutyMap.values()].sort((a, b) => b.minutes - a.minutes),
+    unmapped,
+    sinceDays
+  };
 }

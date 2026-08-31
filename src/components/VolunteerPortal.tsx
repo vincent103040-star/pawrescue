@@ -162,9 +162,47 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
       urgentRecruitment: true, // 緊急招募
       checkInReminder: true,   // 簽到提醒
       sopReminder: true,       // 簽到後的工作清單要不要附教材提醒
+      // 唯一預設關閉的一項。這是關於動物的訊息，不是志工自己的事，
+      // 替所有人預設開啟等於替他們決定要收。
+      animalStatusAlerts: false,
       reminderTimingHours: 1
     };
   });
+
+  /**
+   * 本週需要留意的動物。
+   *
+   * 只有志工自己打開開關之後才會去要。伺服器端也會再檢查一次同一個開關 ——
+   * 這裡不去打它只是省一次沒必要的請求，真正決定給不給看的是伺服器。
+   */
+  interface AnimalConcern {
+    animalName: string;
+    shelterNumber: string;
+    optionLabel: string;
+    dutyTitle: string;
+    observedAt: string;
+    requiredTier: string;
+  }
+  const [animalConcerns, setAnimalConcerns] = useState<AnimalConcern[]>([]);
+  const [animalConcernsLoading, setAnimalConcernsLoading] = useState(false);
+
+  useEffect(() => {
+    if (linePreferences.animalStatusAlerts !== true) {
+      setAnimalConcerns([]);
+      return;
+    }
+    let cancelled = false;
+    setAnimalConcernsLoading(true);
+    authFetch('/api/animal-concerns')
+      .then(res => res.json())
+      .then(data => {
+        if (cancelled) return;
+        setAnimalConcerns(data?.success && data.enabled ? (data.concerns || []) : []);
+      })
+      .catch(() => { /* 讀不到就當作沒有，不要用錯誤訊息蓋掉整個設定頁 */ })
+      .finally(() => { if (!cancelled) setAnimalConcernsLoading(false); });
+    return () => { cancelled = true; };
+  }, [linePreferences.animalStatusAlerts]);
 
   // Profile Form states
   const [profileName, setProfileName] = useState(() => localStorage.getItem('volunteer_profile_name') || '林小明');
@@ -534,6 +572,10 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
             urgentRecruitment: linePreferences.urgentRecruitment,
             checkInReminder: linePreferences.checkInReminder,
             sopReminder: linePreferences.sopReminder !== false,
+            // `=== true`, not `!== false`: this one is opt-in, so a preferences
+            // object saved before the switch existed must stay off rather than
+            // being read as consent.
+            animalStatusAlerts: linePreferences.animalStatusAlerts === true,
             // Sent now. This choice used to stay in localStorage, so it was lost
             // on a new device -- and nothing on the server read it anyway.
             reminderTimingHours: linePreferences.reminderTimingHours || 1
@@ -1544,8 +1586,101 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                     </button>
                   </div>
 
+                  {/* Toggle 5: 本週動物狀態 -- the only one that starts off */}
+                  <div className="bg-[#FAF6EE]/80 hover:bg-[#FAF6EE] p-4 rounded-2xl border border-[#716053] flex items-start justify-between gap-4 transition">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">🐾</span>
+                        <span className="font-bold text-slate-900 text-sm">本週動物狀態提醒</span>
+                        {linePreferences.animalStatusAlerts === true ? (
+                          <span className="bg-emerald-100 text-emerald-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full">
+                            已開啟 (ON)
+                          </span>
+                        ) : (
+                          <span className="bg-slate-200 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                            預設關閉 (OFF)
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-600 leading-relaxed">
+                        收容所主系統每天回報動物狀況。開啟後，這裡會列出<strong>本週需要多留意的動物</strong>，
+                        LINE 也會一併通知。
+                        <strong className="text-slate-800">一切正常時完全不會發訊息</strong>——
+                        每週固定跳出來的通知，久了就沒有人在看了。
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleTogglePreference('animalStatusAlerts')}
+                      className={`w-12 h-6 rounded-full transition-colors relative cursor-pointer shrink-0 mt-1 ${
+                        linePreferences.animalStatusAlerts === true ? 'bg-emerald-500' : 'bg-slate-300'
+                      }`}
+                    >
+                      <div className={`w-5 h-5 rounded-full bg-white shadow-xs absolute top-0.5 transition-transform ${
+                        linePreferences.animalStatusAlerts === true ? 'right-0.5' : 'left-0.5'
+                      }`} />
+                    </button>
+                  </div>
+
                 </div>
               </div>
+
+              {/* ---------------------------------------------------------------
+                  本週動物狀態
+                  Only rendered once the volunteer has opted in. The server
+                  decides what counts as needing attention -- a status the
+                  shelter priced above zero minutes -- so nothing here is this
+                  component's judgement about an animal.
+                  --------------------------------------------------------------- */}
+              {linePreferences.animalStatusAlerts === true && (
+                <div className="bg-white rounded-[28px] p-6 border border-[#716053] space-y-3">
+                  <div className="flex items-center gap-2 text-slate-900 font-bold font-serif text-sm">
+                    <span className="text-base">🐾</span>
+                    <span>本週需要留意的動物</span>
+                  </div>
+
+                  {animalConcernsLoading ? (
+                    <p className="text-xs text-slate-500">讀取中…</p>
+                  ) : animalConcerns.length === 0 ? (
+                    <div className="bg-emerald-50/70 rounded-2xl p-4 border border-emerald-200">
+                      <p className="text-sm font-bold text-emerald-900">本週目前沒有需要特別留意的動物。</p>
+                      <p className="text-xs text-emerald-800 mt-1 leading-relaxed">
+                        這是好消息，不是還沒載入。狀況正常時這裡就是空的，LINE 也不會發任何訊息。
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {animalConcerns.map((c, i) => (
+                        <div key={`${c.animalName}-${c.optionLabel}-${i}`}
+                          className="bg-[#FAF6EE]/80 rounded-2xl px-4 py-3 border border-[#716053]">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-slate-900 text-sm">{c.animalName || '（未命名）'}</span>
+                            {c.shelterNumber && (
+                              <span className="text-[10px] text-slate-400">{c.shelterNumber}</span>
+                            )}
+                            <span className="bg-amber-100 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                              {c.optionLabel}
+                            </span>
+                            {c.requiredTier && (
+                              <span className="bg-sky-100 text-sky-900 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                需 {c.requiredTier}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-600 mt-1">
+                            要做的事：{c.dutyTitle}
+                          </p>
+                        </div>
+                      ))}
+                      <p className="text-[11px] text-slate-400 leading-relaxed pt-1">
+                        以上由收容所設定的「狀態 → 勤務」對照表判定，不是 AI 判斷的。
+                        覺得哪一項不合理，可以直接跟社工反映。
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Live Test Push Simulator Box */}
               <div className="bg-amber-50/70 rounded-[28px] p-6 border border-amber-200 space-y-4">

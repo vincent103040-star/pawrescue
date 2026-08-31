@@ -167,7 +167,7 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-xl font-bold font-serif italic text-[#716053]">AI 自動排班建議與推薦</h3>
+                <h3 className="text-xl font-bold font-serif italic text-[#716053]">AI 推薦適合的志工</h3>
                 <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1">
                   <Zap className="w-3 h-3 text-amber-600 fill-amber-500" />
                   累積時數與完成班次算力匹配

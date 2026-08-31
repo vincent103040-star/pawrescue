@@ -16,7 +16,8 @@
     "check:status-mail": "node --import tsx scripts/status-mail.test.ts",
     "mail:check": "node --use-system-ca --import tsx scripts/status-mail-check.ts",
     "check:status-db": "node --import tsx scripts/status-db.test.ts",
-    "status:ingest": "node --use-system-ca --import tsx scripts/status-ingest.ts"
+    "status:ingest": "node --use-system-ca --import tsx scripts/status-ingest.ts",
+    "check:duty-visibility": "node --import tsx scripts/duty-visibility.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

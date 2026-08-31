@@ -1,10 +1,10 @@
 import React from 'react';
-import { PawPrint, Calendar, Shield, UserCheck, PlusCircle, Sparkles, QrCode, BookOpen, LogOut, User } from 'lucide-react';
+import { PawPrint, Calendar, Shield, UserCheck, PlusCircle, Sparkles, QrCode, BookOpen, LogOut, User, Mail } from 'lucide-react';
 import { AdminUserSession } from '../types';
 
 interface AdminNavbarProps {
-  activeTab: 'dashboard' | 'positions' | 'signups' | 'roster' | 'sopManager';
-  setActiveTab: (tab: 'dashboard' | 'positions' | 'signups' | 'roster' | 'sopManager') => void;
+  activeTab: 'dashboard' | 'positions' | 'signups' | 'roster' | 'sopManager' | 'smartStaffing';
+  setActiveTab: (tab: 'dashboard' | 'positions' | 'signups' | 'roster' | 'sopManager' | 'smartStaffing') => void;
   pendingCount: number;
   openCreateModal: () => void;
   openCheckInModal?: () => void;
@@ -176,6 +176,18 @@ export const AdminNavbar: React.FC<AdminNavbarProps> = ({
           >
             <BookOpen className="w-4 h-4 text-emerald-300" />
             <span>5. 手冊與 SOP 內容管理</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('smartStaffing')}
+            className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap flex items-center space-x-1.5 transition cursor-pointer ${
+              activeTab === 'smartStaffing'
+                ? 'bg-[#716053] text-white shadow-xs'
+                : 'text-slate-600 hover:bg-[#F5E6D0]/40 hover:text-[#716053]'
+            }`}
+          >
+            <Mail className="w-4 h-4 text-sky-300" />
+            <span>6. 勤務項目&智慧開缺</span>
           </button>
         </div>
       </div>

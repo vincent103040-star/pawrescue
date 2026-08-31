@@ -17,6 +17,7 @@ import { AdminSopManager } from './components/AdminSopManager';
 import { AiServiceStatus } from './components/AiServiceStatus';
 import { ZoneManager } from './components/ZoneManager';
 import { DutyItemManager } from './components/DutyItemManager';
+import { AnimalStatusManager } from './components/AnimalStatusManager';
 import { RollCallPanel } from './components/RollCallPanel';
 import { VolunteerRoster } from './components/VolunteerRoster';
 import { SubstitutionBoard, OpenSubstitution } from './components/SubstitutionBoard';
@@ -88,7 +89,7 @@ export default function App() {
   });
 
   // Tab states for separate roles
-  const [adminActiveTab, setAdminActiveTab] = useState<'dashboard' | 'positions' | 'signups' | 'roster' | 'sopManager'>('dashboard');
+  const [adminActiveTab, setAdminActiveTab] = useState<'dashboard' | 'positions' | 'signups' | 'roster' | 'sopManager' | 'smartStaffing'>('dashboard');
   const [volunteerActiveTab, setVolunteerActiveTab] = useState<VolunteerActiveTab>('shifts');
 
   // The shelter's single physical location (previously 3 fixed hardcoded
@@ -1055,11 +1056,17 @@ export default function App() {
               />
             )}
 
+            {adminActiveTab === 'smartStaffing' && (
+              <div className="space-y-6 pt-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+                <DutyItemManager zones={zones} onToast={showToast} />
+                <AnimalStatusManager onToast={showToast} />
+              </div>
+            )}
+
             {adminActiveTab === 'sopManager' && (
               <>
                 <div className="space-y-6 pt-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
                   <ZoneManager onToast={showToast} onZonesChanged={() => { refreshZones(); refreshShifts(); }} />
-                  <DutyItemManager zones={zones} onToast={showToast} />
                   <AiServiceStatus />
                 </div>
                 <AdminSopManager onSendLineToast={showToast} />
