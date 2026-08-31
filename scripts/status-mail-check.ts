@@ -29,8 +29,18 @@ function explain(error: unknown): string {
   if (text.includes('ENOTFOUND') || text.includes('EAI_AGAIN')) {
     return '找不到郵件主機。請確認 STATUS_MAIL_HOST 拼字正確，以及這台電腦連得上網路。';
   }
-  if (text.includes('ETIMEDOUT') || text.includes('ECONNREFUSED')) {
+  if (text.includes('ECONNREFUSED')) {
     return '連不上郵件主機。可能是網路或防火牆擋住了 993 連接埠。';
+  }
+  // The connection was accepted and then went quiet. On this project that has
+  // meant antivirus mail scanning sitting in the middle: it terminates the TLS
+  // connection itself, so the handshake succeeds, and whatever it does upstream
+  // never comes back.
+  if (text.includes('TIMEOUT') || text.includes('ETIMEDOUT')) {
+    return '連上了，但對方沒有回應（逾時）。\n' +
+      '   最後印出的那一行「·」就是卡住的階段。\n' +
+      '   如果卡在「連線到…」或「登入成功…」，通常是防毒軟體的郵件防護還開著 —— ' +
+      '它會接下這條連線，但後面接不回真正的郵件主機。';
   }
   // Node ships its own CA list rather than using the operating system's. On a
   // network that re-signs TLS -- antivirus HTTPS scanning, a school or company
@@ -61,15 +71,40 @@ async function main() {
 
   // The address is printed because it is the setting most likely to be wrong
   // and it is not a secret. The password is never printed, not even its length.
-  console.log(`\n連線到 ${config.user} @ ${config.host}:${config.port}／${config.mailbox}`);
+  console.log(`\n信箱：${config.user}`);
 
-  const batches = await withMailbox(config, session => session.fetchUnread());
+  const { batches, skipped } = await withMailbox(
+    config,
+    session => session.fetchUnread(),
+    step => console.log(`  · ${step}`)
+  );
 
   line();
-  console.log(`連線成功。未讀郵件 ${batches.length} 封。\n`);
+  console.log(`連線成功。未讀郵件 ${batches.length + skipped.length} 封，` +
+    `其中 ${batches.length} 封是狀態批次。\n`);
+
+  // Summarised rather than listed. A real mailbox is mostly other people's
+  // notifications, and one line each for twenty of them buries the one message
+  // this tool exists to show. A few subjects are still printed: if a genuine
+  // batch is being passed over, this is where it would show up.
+  if (skipped.length > 0) {
+    const byReason = new Map<string, string[]>();
+    for (const message of skipped) {
+      const list = byReason.get(message.reason) || [];
+      list.push(message.subject || '(沒有主旨)');
+      byReason.set(message.reason, list);
+    }
+    for (const [reason, subjects] of byReason) {
+      console.log(`略過 ${subjects.length} 封（${reason}）`);
+      for (const subject of subjects.slice(0, 3)) console.log(`  · ${subject}`);
+      if (subjects.length > 3) console.log(`  · …另外 ${subjects.length - 3} 封`);
+    }
+    console.log('');
+  }
 
   if (batches.length === 0) {
-    console.log('信箱裡沒有未讀郵件。寄一封測試信過來，再執行一次就看得到。\n');
+    console.log('沒有讀到任何狀態批次。寄一封主旨符合格式的測試信過來，再執行一次。\n');
+    console.log('主旨格式：[StrayHub] 動物狀態 #1 2026-08-31T00:00+08:00 ~ 2026-08-31T06:00+08:00\n');
     return;
   }
 

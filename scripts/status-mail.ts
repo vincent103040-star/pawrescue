@@ -136,30 +136,65 @@ export function decodeCsvAttachment(
   return { text, warnings };
 }
 
+/** A message that was looked at and deliberately not opened. */
+export interface SkippedMessage {
+  uid: number;
+  subject: string;
+  from: string;
+  reason: string;
+}
+
+export interface UnreadMail {
+  batches: FetchedBatch[];
+  /** Named rather than discarded, so "it ignored my batch" is answerable. */
+  skipped: SkippedMessage[];
+}
+
 export interface MailSession {
   /** Unread messages in the mailbox. Marks nothing. */
-  fetchUnread(limit?: number): Promise<FetchedBatch[]>;
+  fetchUnread(limit?: number): Promise<UnreadMail>;
   /** Call once the batch's contents are stored -- not before. */
   markSeen(uid: number): Promise<void>;
 }
 
-/** Opens the mailbox, runs `fn`, and closes it however `fn` ends. */
+/**
+ * Opens the mailbox, runs `fn`, and closes it however `fn` ends.
+ *
+ * `onStep` is called as each stage begins. It exists because the failure this
+ * has to survive is not an error -- it is silence. Something sitting between
+ * here and the mail server (antivirus mail scanning, a proxy) can complete the
+ * TLS handshake and then never deliver the server's greeting, and the whole
+ * thing simply stops with nothing printed and no way to tell which stage it
+ * stopped at. The timeouts below turn that into a failure with a name; `onStep`
+ * says which name to expect.
+ */
 export async function withMailbox<T>(
   config: MailConfig,
-  fn: (session: MailSession) => Promise<T>
+  fn: (session: MailSession) => Promise<T>,
+  onStep: (message: string) => void = () => {}
 ): Promise<T> {
   const client = new ImapFlow({
     host: config.host,
     port: config.port,
     secure: true,
     auth: { user: config.user, pass: config.password },
-    logger: false
+    logger: false,
+    // ImapFlow's own defaults are 90s to connect and 5 minutes of socket
+    // silence. Correct for a long-running service; far too patient for
+    // something a person is watching a terminal for.
+    connectionTimeout: 20000,
+    greetingTimeout: 15000,
+    socketTimeout: 60000
   });
 
+  onStep(`連線到 ${config.host}:${config.port}…`);
   await client.connect();
+
   try {
+    onStep(`登入成功，開啟 ${config.mailbox}…`);
     const lock = await client.getMailboxLock(config.mailbox);
     try {
+      onStep('讀取郵件…');
       return await fn(session(client, config));
     } finally {
       lock.release();
@@ -171,34 +206,60 @@ export async function withMailbox<T>(
 
 function session(client: ImapFlow, config: MailConfig): MailSession {
   return {
-    async fetchUnread(limit = 50): Promise<FetchedBatch[]> {
+    /**
+     * Two passes, because the mailbox is full of things that are not batches.
+     *
+     * The first run against a real mailbox found 22 unread messages, all of
+     * them Google's own notifications, and downloaded every one in full to
+     * conclude each had no CSV attached. Every six hours, forever. So the cheap
+     * pass reads only envelopes, and a message's body is fetched only once its
+     * sender and subject say it is worth fetching.
+     */
+    async fetchUnread(limit = 50): Promise<UnreadMail> {
       const batches: FetchedBatch[] = [];
+      const skipped: SkippedMessage[] = [];
 
-      for await (const message of client.fetch({ seen: false }, { uid: true, source: true })) {
+      const candidates: Array<{ uid: number; subject: string; from: string }> = [];
+      for await (const message of client.fetch({ seen: false }, { uid: true, envelope: true })) {
+        candidates.push({
+          uid: message.uid,
+          subject: message.envelope?.subject || '',
+          from: message.envelope?.from?.[0]?.address || ''
+        });
+      }
+
+      for (const candidate of candidates) {
         if (batches.length >= limit) break;
+        const { uid, subject, from } = candidate;
 
-        const parsed = await simpleParser(message.source);
-        const uid = message.uid;
-        const subject = parsed.subject || '';
-        const from = parsed.from?.value?.[0]?.address || '';
-        const receivedAt = parsed.date?.toISOString() || '';
-        const warnings: string[] = [];
-
-        // A refused sender is left unread on purpose. It will be reported again
-        // on the next run, and it should be: an unexpected sender in a mailbox
-        // meant to receive from exactly one place deserves to keep asking for
-        // attention until a person looks at it.
+        // Sender first: nothing from an unexpected address gets opened at all.
+        // Refused messages are left unread on purpose. They will be reported
+        // again next run, and they should be -- an unexpected sender in a
+        // mailbox meant to receive from exactly one place deserves to keep
+        // asking for attention until a person looks at it.
         if (config.allowedSender && from.toLowerCase() !== config.allowedSender.toLowerCase()) {
-          batches.push({
-            uid, subject, from, receivedAt,
-            header: null,
-            attachments: [],
-            warnings: [
-              `寄件者是 ${from || '（讀不到）'}，不是設定的 ${config.allowedSender}，未讀取內容`
-            ]
-          });
+          skipped.push({ uid, subject, from, reason: `寄件者不是 ${config.allowedSender}` });
           continue;
         }
+
+        const header = parseBatchSubject(subject);
+        if (!header) {
+          skipped.push({ uid, subject, from, reason: '主旨不是批次格式' });
+          continue;
+        }
+
+        // Between listing the envelopes and asking for this body, the message
+        // can be gone -- moved or deleted from another client, or by a filter.
+        // Rare, but it returns `false` rather than throwing, so an unchecked
+        // read here would crash the whole run over one absent message.
+        const message = await client.fetchOne(String(uid), { source: true }, { uid: true });
+        if (!message) {
+          skipped.push({ uid, subject, from, reason: '取內容時信件已不在信箱裡' });
+          continue;
+        }
+
+        const parsed = await simpleParser(message.source);
+        const warnings: string[] = [];
 
         const attachments: MailAttachment[] = [];
         for (const attachment of parsed.attachments || []) {
@@ -209,14 +270,18 @@ function session(client: ImapFlow, config: MailConfig): MailSession {
           attachments.push({ filename, text: decoded.text });
         }
 
-        const header = parseBatchSubject(subject);
-        if (!header) warnings.push(`主旨讀不出批次序號：「${subject}」`);
-        if (attachments.length === 0) warnings.push('這封信沒有 CSV 附件');
+        // A batch subject with nothing attached is a real problem, not noise --
+        // the sender believed it sent something.
+        if (attachments.length === 0) warnings.push('主旨是批次格式，但沒有 CSV 附件');
 
-        batches.push({ uid, subject, from, receivedAt, header, attachments, warnings });
+        batches.push({
+          uid, subject, from,
+          receivedAt: parsed.date?.toISOString() || '',
+          header, attachments, warnings
+        });
       }
 
-      return batches;
+      return { batches, skipped };
     },
 
     async markSeen(uid: number): Promise<void> {
