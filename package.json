@@ -14,7 +14,8 @@
     "check:ocr-chunking": "node --import tsx scripts/ocr-chunking.test.ts",
     "check:status-csv": "node --import tsx scripts/status-csv.test.ts",
     "check:status-mail": "node --import tsx scripts/status-mail.test.ts",
-    "mail:check": "node --use-system-ca --import tsx scripts/status-mail-check.ts"
+    "mail:check": "node --use-system-ca --import tsx scripts/status-mail-check.ts",
+    "check:status-db": "node --import tsx scripts/status-db.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
