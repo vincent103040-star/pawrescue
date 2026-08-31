@@ -17,3 +17,6 @@ coverage/
 /data/sop-docs/
 /data/sop-videos/
 dogcat.png
+
+# Ingest logs: batch subjects, sender addresses and animal records.
+/data/logs/
