@@ -32,6 +32,19 @@ function explain(error: unknown): string {
   if (text.includes('ETIMEDOUT') || text.includes('ECONNREFUSED')) {
     return '連不上郵件主機。可能是網路或防火牆擋住了 993 連接埠。';
   }
+  // Node ships its own CA list rather than using the operating system's. On a
+  // network that re-signs TLS -- antivirus HTTPS scanning, a school or company
+  // proxy -- the certificate Node is shown was issued by that intermediary,
+  // whose CA is in the Windows store and not in Node's. Hence --use-system-ca
+  // in the npm script; this branch is for anyone running the file directly.
+  if (text.includes('UNABLE_TO_VERIFY_LEAF_SIGNATURE') ||
+      text.includes('UNABLE TO VERIFY THE FIRST CERTIFICATE') ||
+      text.includes('SELF_SIGNED_CERT_IN_CHAIN') ||
+      text.includes('SELF-SIGNED CERTIFICATE IN CERTIFICATE CHAIN')) {
+    return '驗不過郵件主機的憑證。請用 `npm run mail:check` 執行（它帶了 --use-system-ca，' +
+      '會改用 Windows 的憑證清單）。\n' +
+      '   會發生這件事，通常代表防毒軟體或所在網路在中間拆解 HTTPS 再重新簽章。';
+  }
   return raw;
 }
 
