@@ -161,6 +161,15 @@ export interface LineNotificationPreferences {
    * 決定。而且沒有異常時完全不發 —— 每週固定出現的通知會停止被閱讀。
    */
   animalStatusAlerts?: boolean;
+  /**
+   * 社工回覆自己留下的服務回饋時，要不要收到通知。
+   *
+   * 獨立一個開關，而不是搭 shiftChanges 的便車 —— 否則把班次異動靜音的人，
+   * 連自己主動提出的問題的答覆都會一起被擋掉，而且沒有辦法只要其中一種。
+   * 預設開啟，和其他「關於志工自己的事」的開關一致：問題是他問的，答覆自然
+   * 是他等的。
+   */
+  feedbackReply?: boolean;
 }
 
 export interface VolunteerProfile {
@@ -266,6 +275,16 @@ export interface AttendanceRecord {
    */
   feedbackAcknowledgedAt?: string;
   feedbackAcknowledgedBy?: string;
+  /**
+   * 社工回覆這則回饋時實際送出的內容、時間與回覆者。
+   *
+   * 之所以要存，理由和上面的「已參採」一樣：只存在於「已經送出去的 LINE 訊息」
+   * 裡的回覆，這邊沒有人看得到。下一個打開同一則回饋的社工不會知道已經回過，
+   * 於是又回一次；志工問「你們有回我嗎」也查不到。
+   */
+  feedbackReplyText?: string;
+  feedbackRepliedAt?: string;
+  feedbackRepliedBy?: string;
   lineReminderSent?: boolean; // whether a real LINE push confirming the feedback was sent
   photoUrl?: string; // relative URL to the AI-captioned check-out photo, if one was attached
 }

@@ -6,7 +6,7 @@ import { writeFileSync, mkdirSync, createWriteStream, statSync, readFileSync, un
 import { gzipSync } from 'zlib';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
-import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, cancelShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, getRollCall, getAbsenceCounts, setVolunteerAccountStatus, sweepSuspensions, countSuspensions, recordAppeal, getStatusHistory, hasAppealedSinceSuspension, ABSENCE_SUSPENSION_THRESHOLD, SUSPENSION_DAYS, APPEAL_WINDOW_DAYS, createSubstitutionRequest, getSubstitutionRequest, getOpenSubstitutionForSignup, getOpenSubstitutions, takeSubstitutionRequest, withdrawSubstitutionRequest, expireStaleSubstitutions, hoursUntilShift, SUBSTITUTION_NOTICE_HOURS, getReminderCandidates, markReminderSent, normalizeReminderLead, planShiftsForRange, generateDraftShifts, publishDraftShifts, discardDraftShifts, SHIFT_MERGE_GAP_MINUTES, getAllStatusDutyMappings, getUnmappedStatuses, upsertStatusDutyMapping, setStatusDutyMappingStatus, getShiftCapacityMinutes, setShiftCapacityMinutes, getRecentStatusBatches, getImportedBatchSequences, getStatusRecordsForBatch, getStatusWorkload, getAnimalConcerns } from './db';
+import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, cancelShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, setFeedbackReply, getVolunteerEmailByName, getRollCall, getAbsenceCounts, setVolunteerAccountStatus, sweepSuspensions, countSuspensions, recordAppeal, getStatusHistory, hasAppealedSinceSuspension, ABSENCE_SUSPENSION_THRESHOLD, SUSPENSION_DAYS, APPEAL_WINDOW_DAYS, createSubstitutionRequest, getSubstitutionRequest, getOpenSubstitutionForSignup, getOpenSubstitutions, takeSubstitutionRequest, withdrawSubstitutionRequest, expireStaleSubstitutions, hoursUntilShift, SUBSTITUTION_NOTICE_HOURS, getReminderCandidates, markReminderSent, normalizeReminderLead, planShiftsForRange, generateDraftShifts, publishDraftShifts, discardDraftShifts, SHIFT_MERGE_GAP_MINUTES, getAllStatusDutyMappings, getUnmappedStatuses, upsertStatusDutyMapping, setStatusDutyMappingStatus, getShiftCapacityMinutes, setShiftCapacityMinutes, getRecentStatusBatches, getImportedBatchSequences, getStatusRecordsForBatch, getStatusWorkload, getAnimalConcerns } from './db';
 import { findMissingSequences } from './scripts/status-csv';
 import { isDutyOnTodaysList } from './src/utils/dutyVisibility';
  import { PDFParse } from 'pdf-parse';
@@ -143,6 +143,55 @@ async function startServer() {
     const norm = (v: unknown) => String(v || '').toLowerCase().trim();
     return !!norm(a) && norm(a) === norm(b);
   };
+
+  type PushCategory = 'shiftChanges' | 'urgentRecruitment' | 'checkInReminder' | 'feedbackReply';
+
+  /**
+   * Sends one LINE message to one volunteer, honouring their notification
+   * preference.
+   *
+   * /api/line/push already refuses to send to somebody who switched a category
+   * off, but it is an HTTP route, so the pushes the server raises for itself
+   * could not go through it. Those sites each opened their own connection to
+   * the LINE API instead and, in doing so, skipped the check entirely: a
+   * volunteer who had turned a category off still received those messages and
+   * had no way to work out why the switch did nothing.
+   *
+   * Never throws. A push failing is not a reason to fail the action that
+   * triggered it, and callers that must not wait on LINE can drop the promise.
+   */
+  async function pushToVolunteer(opts: {
+    email?: string | null;
+    name?: string | null;
+    message: string;
+    category: PushCategory;
+  }): Promise<{ sent: boolean; reason?: string }> {
+    const email = opts.email || (opts.name ? getVolunteerEmailByName(opts.name) : null);
+
+    // Having no preference on file is not the same as a preference to refuse.
+    // An unrecognised name falls through to the linkage check below, which is
+    // what actually decides whether there is anybody to send to.
+    if (email && getLinePreferences(email)[opts.category] === false) {
+      return { sent: false, reason: 'preference-off' };
+    }
+
+    const linked = email ? getLineUserId(email) : (opts.name ? getLineUserIdByName(opts.name) : null);
+    if (!linked) return { sent: false, reason: 'not-linked' };
+
+    const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+    if (!token) return { sent: false, reason: 'no-token' };
+
+    try {
+      const lineRes = await fetch('https://api.line.me/v2/bot/message/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ to: linked.lineUserId, messages: [{ type: 'text', text: opts.message }] })
+      });
+      return lineRes.ok ? { sent: true } : { sent: false, reason: `line-${lineRes.status}` };
+    } catch {
+      return { sent: false, reason: 'network' };
+    }
+  }
 
   app.use(attachSession);
 
@@ -560,6 +609,76 @@ async function startServer() {
         pushContent: generateFallbackPush(),
         isFallback: true
       });
+    }
+  });
+
+  /**
+   * Drafts a coordinator's reply to the feedback a volunteer left after a shift.
+   *
+   * A draft, not the message. It lands in an editable box and a person decides
+   * what actually goes out, which is the whole reason replying is a separate
+   * step from marking the feedback acknowledged: a reply generated and sent
+   * without anybody reading it is a form letter, and a volunteer learns to
+   * ignore those faster than they learn to write feedback worth reading.
+   */
+  app.post('/api/ai/generate-feedback-reply', requireAdmin, async (req, res) => {
+    const { volunteerName, shiftTitle, zoneName, rating, feedbackComment } = req.body;
+    const stars = Math.max(1, Math.min(5, Number(rating) || 5));
+    const who = volunteerName || '志工夥伴';
+    const what = shiftTitle || '本次班次';
+
+    const generateFallbackReply = () => {
+      const opening = stars <= 3
+        ? '謝謝您這麼坦白地告訴我們，這些話對我們很重要。您提到的狀況社工團隊已經記下來，會在安排下一次班次前先處理。'
+        : '謝謝您留下這段回饋，讀到的時候我們都很開心。';
+      return `【浪浪家園】親愛的 ${who} 您好：
+
+${opening}
+
+` +
+        `關於您在【${what}】提到的內容，社工團隊已經完整看過並列入討論，有後續我們會再讓您知道。
+
+` +
+        '謝謝您為浪浪們花的這段時間 🐾';
+    };
+
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.json({ success: true, replyContent: generateFallbackReply(), isFallback: true });
+      }
+
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+      });
+
+      const prompt = `你是一位流浪動物之家的社工督導，正在回覆一位志工在服務結束後留下的回饋。
+
+志工資訊：
+- 姓名：${who}
+- 服務班次：${what}${zoneName ? `（${zoneName}）` : ''}
+- 評分：${stars} 星
+- 回饋原文：${feedbackComment || '（這位志工只給了評分，沒有留下文字）'}
+
+要求：
+1. 直接回應志工「實際提到的那件事」，不要只寫罐頭感謝。若他提出問題或建議，說明接下來會怎麼處理。
+2. 若評分是 3 星以下，先誠懇承接對方的不滿，不要辯解或找理由，並具體說明改善方向。
+3. 若評分是 4-5 星，簡短道謝並回應他提到的具體細節即可，不要過度熱情或灌美詞。
+4. 語氣要像一個真的讀過這段話的人，溫暖但不浮誇。
+5. 若志工沒有留下文字，就只簡短感謝他的服務與評分，不要編造他沒說過的內容。
+6. 長度 80-150 字，適合在手機 LINE 上閱讀。
+7. 不要加標題列，不要使用 Markdown 粗體或條列符號。`;
+
+      const response = await ai.models.generateContent({
+        model: AI_TEXT_MODEL,
+        contents: prompt
+      });
+
+      return res.json({ success: true, replyContent: stripMarkdown(response.text || '') });
+    } catch (error: any) {
+      console.warn('Gemini Feedback Reply API Error (fallback activated):', error?.message || error);
+      return res.json({ success: true, replyContent: generateFallbackReply(), isFallback: true });
     }
   });
 
@@ -1512,6 +1631,8 @@ ${contextText}
           // `!== false` because their default is on; this one must not be
           // turned on by a client that simply did not mention it.
           animalStatusAlerts: linePreferences.animalStatusAlerts === true,
+          // Default-on like the switches above it, so an absent field means on.
+          feedbackReply: linePreferences.feedbackReply !== false,
           // Stored rather than dropped: the sweep reads this to decide when to
           // send, and it used to live only in the volunteer's browser.
           reminderTimingHours: normalizeReminderLead(linePreferences.reminderTimingHours)
@@ -1572,6 +1693,55 @@ ${contextText}
     } catch (error: any) {
       console.error('Acknowledge Feedback Error:', error);
       return res.status(500).json({ success: false, error: error.message || '更新參採狀態失敗' });
+    }
+  });
+
+  /**
+   * Sends a coordinator's reply to a volunteer's feedback, and records it.
+   *
+   * Written down first, pushed second. A reply that reached the volunteer but
+   * was never stored is the failure that costs something here -- the next
+   * coordinator to open the same note has no way of knowing it was answered and
+   * answers it again. A stored reply whose push failed can be seen and sent
+   * again, so delivery is reported as its own field rather than folded into
+   * success: saving worked even when LINE did not.
+   *
+   * Admin-only via the /api/admin prefix, and the replier's name comes from the
+   * session rather than the body, so a reply cannot be attributed to a
+   * coordinator who did not write it.
+   */
+  app.post('/api/admin/attendance/:id/feedback-reply', async (req: any, res) => {
+    try {
+      const replyText = String(req.body?.replyText || '').trim();
+      if (!replyText) {
+        return res.status(400).json({ success: false, error: '回覆內容不可為空' });
+      }
+
+      const updated = setFeedbackReply(
+        req.params.id,
+        replyText,
+        String(req.session?.displayName || req.session?.identity || 'Admin')
+      );
+      if (!updated) {
+        return res.status(404).json({ success: false, error: '找不到該筆出勤紀錄' });
+      }
+
+      const delivery = await pushToVolunteer({
+        name: updated.volunteerName,
+        category: 'feedbackReply',
+        message: replyText
+      });
+
+      broadcastChange('attendance');
+      return res.json({
+        success: true,
+        record: updated,
+        delivered: delivery.sent,
+        deliveryReason: delivery.reason
+      });
+    } catch (error: any) {
+      console.error('Feedback Reply Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '送出回覆失敗' });
     }
   });
 
@@ -3803,19 +3973,19 @@ ${contextText}
       // Best-effort real LINE push thanking the volunteer and confirming their
       // feedback -- replaces the old simulated "SMS" notification. Fire-and-forget
       // (doesn't block the check-out response) and silently no-ops if this
-      // volunteer hasn't completed real LINE Login yet, same fallback pattern as
-      // /api/line/push.
-      const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
-      const linkedLine = getLineUserIdByName(updated.volunteerName);
-      if (lineToken && linkedLine) {
-        const stars = '⭐'.repeat(Math.max(1, Math.min(5, rating || 5)));
-        const pushText = `【浪浪家園】親愛的 ${updated.volunteerName} 您好，感謝您完成本次志工服務（${updated.shiftTitle}）！服務時數 ${hoursLogged} 小時，我們已收到您 ${stars} 的回饋，謝謝您的付出 🐾`;
-        fetch('https://api.line.me/v2/bot/message/push', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${lineToken}` },
-          body: JSON.stringify({ to: linkedLine.lineUserId, messages: [{ type: 'text', text: pushText }] })
-        }).catch(() => { /* best-effort, ignore failures */ });
-      }
+      // volunteer hasn't completed real LINE Login yet.
+      //
+      // Filed under checkInReminder because this is the attendance flow
+      // speaking, and somebody who switched that category off has said they do
+      // not want the attendance flow messaging them. It used to bypass the
+      // preference altogether by opening its own connection to the LINE API,
+      // so the switch in the volunteer's settings did nothing to it.
+      const stars = '⭐'.repeat(Math.max(1, Math.min(5, rating || 5)));
+      void pushToVolunteer({
+        name: updated.volunteerName,
+        category: 'checkInReminder',
+        message: `【浪浪家園】親愛的 ${updated.volunteerName} 您好，感謝您完成本次志工服務（${updated.shiftTitle}）！服務時數 ${hoursLogged} 小時，我們已收到您 ${stars} 的回饋，謝謝您的付出 🐾`
+      });
 
       broadcastChange('attendance');
       broadcastChange('volunteers'); // hours changed

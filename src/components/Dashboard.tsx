@@ -227,6 +227,101 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
+  // 回覆一則回饋：正在回哪一筆、草稿內容，以及兩種各自進行中的狀態。
+  // 刻意和「已參採」分開：社工常常想標記讀過但不打算回（純好評回什麼都是廢話），
+  // 也可能想回但還沒決定採不採納。綁成同一個動作會逼人每次都面對一個對話框，
+  // 久了就固定按跳過。
+  const [replyTarget, setReplyTarget] = useState<AttendanceRecord | null>(null);
+  const [replyDraft, setReplyDraft] = useState('');
+  const [isDraftingReply, setIsDraftingReply] = useState(false);
+  const [isSendingReply, setIsSendingReply] = useState(false);
+
+  /** 把伺服器回報的未送達原因，翻成社工看得懂的一句話。 */
+  const replyDeliveryNote = (reason?: string) => {
+    if (reason === 'preference-off') return '該志工已關閉此類通知';
+    if (reason === 'not-linked') return '該志工尚未綁定 LINE';
+    if (reason === 'no-token') return '系統尚未設定 LINE Token';
+    return '推播未成功';
+  };
+
+  /**
+   * 向 AI 要一份草稿填進編輯框。
+   *
+   * 失敗不擋路：伺服器在沒有金鑰或 Gemini 出錯時本來就會回一份罐頭範本，真的
+   * 連不上就讓社工自己寫。這個框的重點是「有人讀過並回話」，草稿只是省下
+   * 開頭那句的力氣，不是這件事的必要條件。
+   */
+  const draftReplyWithAi = async (record: AttendanceRecord) => {
+    setIsDraftingReply(true);
+    try {
+      const res = await authFetch('/api/ai/generate-feedback-reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          volunteerName: record.volunteerName,
+          shiftTitle: record.shiftTitle,
+          zoneName: resolveZone(record.zone).name,
+          rating: record.rating,
+          feedbackComment: record.feedbackComment
+        })
+      });
+      const data = await res.json().catch(() => ({} as any));
+      if (data?.success && data.replyContent) {
+        setReplyDraft(data.replyContent);
+      } else {
+        onSendLineToast('⚠️ AI 草稿產生失敗，請直接輸入回覆內容。');
+      }
+    } catch {
+      onSendLineToast('⚠️ 無法連線取得 AI 草稿，請直接輸入回覆內容。');
+    } finally {
+      setIsDraftingReply(false);
+    }
+  };
+
+  const openReplyModal = (record: AttendanceRecord) => {
+    setReplyTarget(record);
+    // 回過的就把原文帶出來，讓社工看得到自己上次說了什麼，再決定要不要補充。
+    setReplyDraft(record.feedbackReplyText || '');
+    if (!record.feedbackReplyText) void draftReplyWithAi(record);
+  };
+
+  const sendReply = async () => {
+    if (!replyTarget) return;
+    const text = replyDraft.trim();
+    if (!text) return;
+
+    setIsSendingReply(true);
+    try {
+      const res = await authFetch(`/api/admin/attendance/${encodeURIComponent(replyTarget.id)}/feedback-reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ replyText: text })
+      });
+      const data = await res.json().catch(() => ({} as any));
+      if (!data?.success) {
+        onSendLineToast(`⚠️ ${data?.error || '回覆未能送出，請重新整理後再試一次。'}`);
+        return;
+      }
+
+      const who = replyTarget.volunteerName;
+      onAttendanceChanged();
+      setReplyTarget(null);
+      setReplyDraft('');
+
+      // 「存下來了」和「送到了」是兩件事，分開講。志工可能關掉了這類通知、或還
+      // 沒綁 LINE —— 那時回覆仍然留在紀錄上，只是沒有推播出去，社工該知道差別。
+      onSendLineToast(
+        data.delivered
+          ? `💬 已回覆【${who}】，並透過 LINE 送達。`
+          : `💬 已回覆【${who}】並存入紀錄，但未送出 LINE（${replyDeliveryNote(data.deliveryReason)}）。`
+      );
+    } catch {
+      onSendLineToast('⚠️ 無法連線，回覆尚未送出。');
+    } finally {
+      setIsSendingReply(false);
+    }
+  };
+
   const todayStr = new Date().toISOString().split('T')[0];
 
   // Export CSV Helper Function
@@ -935,6 +1030,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     const ratingVal = item.rating || 5;
                     const isAcknowledged = !!item.feedbackAcknowledgedAt;
                     const isSavingAck = savingFeedbackIds.includes(item.id);
+                    const hasReplied = !!item.feedbackRepliedAt;
+                    // 低星回饋才是真正需要有人親自回話的那些。五星好評不回也不會
+                    // 少什麼，回了反而像罐頭 —— 所以只有這些會被標成待辦。
+                    const needsReply = !hasReplied && (item.rating || 5) <= 3;
 
                     return (
                       <div
@@ -992,34 +1091,68 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           </div>
                         </div>
 
+                        {/* 回覆過的話，內容直接攤在卡片上。這是下一個打開同一則回饋
+                            的人最需要先知道的事 —— 藏在 hover 提示裡等於沒說，手機
+                            上更是完全碰不到。 */}
+                        {hasReplied && (
+                          <div className="bg-sky-50/70 border border-sky-200 rounded-xl p-2.5 space-y-1">
+                            <div className="text-[10px] font-bold text-sky-900 flex items-center gap-1">
+                              <MessageSquare className="w-3 h-3 shrink-0" />
+                              <span>
+                                {item.feedbackRepliedBy || '社工'} 已於 {new Date(item.feedbackRepliedAt!).toLocaleString('zh-TW', { hour12: false })} 回覆
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-sky-950/80 leading-relaxed whitespace-pre-wrap">
+                              {item.feedbackReplyText}
+                            </p>
+                          </div>
+                        )}
+
                         {/* Footer Status and Actions */}
-                        <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-100 text-slate-500">
-                          <div className="flex items-center gap-2">
+                        <div className="flex items-center justify-between gap-2 flex-wrap text-[11px] pt-1 border-t border-slate-100 text-slate-500">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="inline-flex items-center gap-1 text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full font-bold text-[10px]">
                               <MessageSquare className="w-3 h-3 text-emerald-600" />
                               <span>回饋收集時間: {item.feedbackSubmittedAt || item.checkOutTime || '今天'}</span>
                             </span>
+                            {isAcknowledged && item.feedbackAcknowledgedBy && (
+                              <span className="inline-flex items-center gap-1 text-emerald-900 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full font-bold text-[10px]">
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>{item.feedbackAcknowledgedBy} 已參採</span>
+                              </span>
+                            )}
                           </div>
 
-                          <button
-                            onClick={() => toggleFeedbackAcknowledged(item)}
-                            disabled={isSavingAck}
-                            title={
-                              isAcknowledged && item.feedbackAcknowledgedBy
-                                ? `由 ${item.feedbackAcknowledgedBy} 於 ${new Date(item.feedbackAcknowledgedAt!).toLocaleString('zh-TW', { hour12: false })} 參採`
-                                : undefined
-                            }
-                            className={`px-2.5 py-1 rounded-xl font-bold transition flex items-center gap-1 cursor-pointer border disabled:opacity-50 ${
-                              isAcknowledged
-                                ? 'bg-emerald-700 text-white border-emerald-700'
-                                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
-                            }`}
-                          >
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>
-                              {isSavingAck ? '儲存中...' : isAcknowledged ? '社工已參採 👍' : '標記為已參採'}
-                            </span>
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => openReplyModal(item)}
+                              className={`px-2.5 py-1 rounded-xl font-bold transition flex items-center gap-1 cursor-pointer border ${
+                                hasReplied
+                                  ? 'bg-sky-50 text-sky-800 border-sky-200 hover:bg-sky-100'
+                                  : needsReply
+                                    ? 'bg-amber-500 text-white border-amber-500 hover:bg-amber-600'
+                                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                              }`}
+                            >
+                              <Send className="w-3.5 h-3.5" />
+                              <span>{hasReplied ? '再回覆一次' : needsReply ? '需要回覆' : '回覆志工'}</span>
+                            </button>
+
+                            <button
+                              onClick={() => toggleFeedbackAcknowledged(item)}
+                              disabled={isSavingAck}
+                              className={`px-2.5 py-1 rounded-xl font-bold transition flex items-center gap-1 cursor-pointer border disabled:opacity-50 ${
+                                isAcknowledged
+                                  ? 'bg-emerald-700 text-white border-emerald-700'
+                                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                              }`}
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>
+                                {isSavingAck ? '儲存中...' : isAcknowledged ? '社工已參採 👍' : '標記為已參採'}
+                              </span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -1311,6 +1444,88 @@ export const Dashboard: React.FC<DashboardProps> = ({
           onClose={() => setShowReportModal(false)}
           onSendLineToast={onSendLineToast}
         />
+      )}
+
+      {/* Modal: 回覆志工的服務回饋 */}
+      {replyTarget && (
+        <div className="fixed inset-0 z-50 bg-[#716053]/40 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-[32px] max-w-2xl w-full shadow-2xl p-6 sm:p-8 border border-[#716053] my-8 space-y-5 text-slate-800 font-sans">
+
+            <div className="flex items-start justify-between border-b border-[#716053] pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-[#716053] text-[#F5E6D0] flex items-center justify-center shrink-0">
+                  <MessageSquare className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold font-serif italic text-[#716053]">回覆志工的服務回饋</h3>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    給【{replyTarget.volunteerName}】 · {replyTarget.shiftTitle}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => { setReplyTarget(null); setReplyDraft(''); }}
+                className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer text-lg leading-none"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* 志工的原話。回覆的時候看得到自己在回什麼，才不會寫出罐頭。 */}
+            <div className="bg-[#FAF6EE] border border-[#716053]/30 rounded-2xl p-4 space-y-1.5">
+              <div className="flex items-center gap-2 text-[11px] font-bold text-[#716053]">
+                <span>{'⭐'.repeat(Math.max(1, Math.min(5, replyTarget.rating || 5)))}</span>
+                <span>{replyTarget.rating || 5}.0 星</span>
+              </div>
+              <p className="text-xs text-slate-700 leading-relaxed italic">
+                {replyTarget.feedbackComment || '（這位志工只給了評分，沒有留下文字）'}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <label className="text-xs font-bold text-[#716053]">回覆內容（送出前可自由修改）</label>
+                <button
+                  onClick={() => void draftReplyWithAi(replyTarget)}
+                  disabled={isDraftingReply}
+                  className="text-[11px] font-bold text-[#716053] hover:text-[#5a4d42] flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                >
+                  <Sparkles className={`w-3.5 h-3.5 ${isDraftingReply ? 'animate-pulse' : ''}`} />
+                  <span>{isDraftingReply ? 'AI 草擬中...' : '重新產生 AI 草稿'}</span>
+                </button>
+              </div>
+
+              <textarea
+                value={replyDraft}
+                onChange={e => setReplyDraft(e.target.value)}
+                rows={8}
+                placeholder={isDraftingReply ? 'AI 正在草擬回覆...' : '寫下要傳給這位志工的話...'}
+                className="w-full p-3 bg-white border border-[#716053] rounded-2xl text-xs leading-relaxed focus:outline-none focus:ring-2 focus:ring-[#716053] resize-none"
+              />
+
+              <p className="text-[10px] text-slate-500 leading-relaxed">
+                這段文字會原封不動透過 LINE 傳給志工，並存進這筆出勤紀錄。若志工關閉了此類通知或尚未綁定 LINE，回覆仍會存檔，只是不會推播出去。
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                onClick={() => { setReplyTarget(null); setReplyDraft(''); }}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => void sendReply()}
+                disabled={isSendingReply || !replyDraft.trim()}
+                className="px-5 py-2 rounded-xl text-xs font-extrabold bg-[#716053] text-[#F5E6D0] hover:bg-[#5a4d42] transition flex items-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Send className="w-4 h-4" />
+                <span>{isSendingReply ? '送出中...' : '送出回覆'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

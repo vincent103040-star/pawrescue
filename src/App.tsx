@@ -885,6 +885,15 @@ export default function App() {
   };
 
   const handleAssignVolunteerToShift = (shiftId: string, volunteer: VolunteerProfile) => {
+    // The zone belongs to the shift being filled. It used to be a hardcoded
+    // 'dog', so enrolling somebody straight into the cattery, the medical block
+    // or the puppy unit filed them as having applied to the dog run. That value
+    // is not only displayed: countZoneUsage counts it when reporting whether a
+    // zone is still referenced before it is disabled, and a substitute taking
+    // the shift over inherits it.
+    const shift = shifts.find(s => s.id === shiftId);
+    if (!shift) return;
+
     setShifts(prev => prev.map(s => {
       if (s.id === shiftId) {
         const newCount = Math.min(s.requiredCount, s.currentCount + 1);
@@ -905,7 +914,7 @@ export default function App() {
       volunteerPhone: volunteer.phone,
       lineId: volunteer.lineId,
       experienceLevel: volunteer.tier === '志工隊長' ? 'experienced' : volunteer.tier === '資深志工' ? 'intermediate' : 'beginner',
-      appliedZone: 'dog',
+      appliedZone: shift.zone,
       status: 'approved',
       appliedAt: new Date().toLocaleString('zh-TW', { hour12: false }),
       notes: '🤖 AI 自動排班建議智慧直錄名單',

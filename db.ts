@@ -718,6 +718,21 @@ export function getLineUserIdByName(name: string): { lineUserId: string; lineDis
   return row;
 }
 
+/**
+ * The address a volunteer's notification preferences are filed under, found by
+ * the name an attendance record carries.
+ *
+ * Attendance rows identify a volunteer by name, not email, so a push triggered
+ * by one had no way to reach their preferences -- which is how those pushes
+ * came to skip the preference check entirely. Returns null when the name
+ * matches nobody, and the caller then has no preference to honour.
+ */
+export function getVolunteerEmailByName(name: string): string | null {
+  const row = db.prepare('SELECT email FROM volunteers WHERE name = ?')
+    .get(name) as { email: string } | undefined;
+  return row?.email || null;
+}
+
 export interface StoredLinePreferences {
   shiftChanges: boolean;
   urgentRecruitment: boolean;
@@ -750,6 +765,18 @@ export interface StoredLinePreferences {
    * notification that arrives every week regardless stops being read.
    */
   animalStatusAlerts: boolean;
+  /**
+   * Whether to hear back when a coordinator replies to the feedback this
+   * volunteer left after a shift.
+   *
+   * Its own switch rather than riding on shiftChanges, which is the only
+   * category a reply could otherwise have travelled under. Somebody who
+   * silences shift admin would then also silence the answer to something they
+   * themselves raised, and there would be no way to want one without the
+   * other. On by default, like the rest of the switches about a volunteer's
+   * own business -- they asked the question, so the answer is expected.
+   */
+  feedbackReply: boolean;
 }
 
 /** What the dropdown offers. Anything else is clamped to the nearest of these. */
@@ -761,7 +788,8 @@ const DEFAULT_LINE_PREFERENCES: StoredLinePreferences = {
   checkInReminder: true,
   sopReminder: true,
   reminderTimingHours: 1,
-  animalStatusAlerts: false
+  animalStatusAlerts: false,
+  feedbackReply: true
 };
 
 /** Keeps a stored or submitted lead time to something the scheduler can honour. */
@@ -892,6 +920,9 @@ db.exec(`
     feedbackSubmittedAt TEXT,
     feedbackAcknowledgedAt TEXT NOT NULL DEFAULT '',
     feedbackAcknowledgedBy TEXT NOT NULL DEFAULT '',
+    feedbackReplyText TEXT NOT NULL DEFAULT '',
+    feedbackRepliedAt TEXT NOT NULL DEFAULT '',
+    feedbackRepliedBy TEXT NOT NULL DEFAULT '',
     lineReminderSent INTEGER NOT NULL DEFAULT 0,
     photoUrl TEXT
   )
@@ -1016,6 +1047,29 @@ try {
   // column already exists
 }
 
+// Migration: what a coordinator actually wrote back, and who sent it.
+//
+// Stored for the same reason the acknowledgement above is: a reply that only
+// exists as a LINE message that has already left is a reply nobody here can
+// see. The next coordinator opening the same feedback would have no way of
+// knowing it had been answered, and would answer it again -- and a volunteer
+// asking "did anyone reply to me?" could not be told.
+try {
+  db.exec(`ALTER TABLE attendance_records ADD COLUMN feedbackReplyText TEXT NOT NULL DEFAULT ''`);
+} catch {
+  // column already exists
+}
+try {
+  db.exec(`ALTER TABLE attendance_records ADD COLUMN feedbackRepliedAt TEXT NOT NULL DEFAULT ''`);
+} catch {
+  // column already exists
+}
+try {
+  db.exec(`ALTER TABLE attendance_records ADD COLUMN feedbackRepliedBy TEXT NOT NULL DEFAULT ''`);
+} catch {
+  // column already exists
+}
+
 /**
  * Marks a volunteer's service feedback as taken up by the social work team, or
  * clears that mark.
@@ -1040,6 +1094,35 @@ export function setFeedbackAcknowledged(
     acknowledged ? actor : '',
     id
   );
+
+  const row = db.prepare('SELECT * FROM attendance_records WHERE id = ?').get(id);
+  return row ? rowToAttendanceRecord(row) : null;
+}
+
+/**
+ * Records the reply a coordinator sent back to a volunteer's feedback.
+ *
+ * Written before the LINE push is attempted, not after: a reply that reached
+ * the volunteer but was never stored is the failure that matters here, and a
+ * stored reply whose push failed can at least be seen and sent again. The
+ * caller reports the delivery result separately.
+ *
+ * Returns null when the record does not exist, so the caller can answer 404
+ * rather than silently succeeding.
+ */
+export function setFeedbackReply(
+  id: string,
+  replyText: string,
+  actor: string
+): AttendanceRecord | null {
+  const existing = db.prepare('SELECT id FROM attendance_records WHERE id = ?').get(id);
+  if (!existing) return null;
+
+  db.prepare(`
+    UPDATE attendance_records
+    SET feedbackReplyText = ?, feedbackRepliedAt = ?, feedbackRepliedBy = ?
+    WHERE id = ?
+  `).run(replyText, new Date().toISOString(), actor, id);
 
   const row = db.prepare('SELECT * FROM attendance_records WHERE id = ?').get(id);
   return row ? rowToAttendanceRecord(row) : null;
@@ -1071,6 +1154,9 @@ function rowToAttendanceRecord(row: any): AttendanceRecord {
     signupId: row.signupId || undefined,
     feedbackAcknowledgedAt: row.feedbackAcknowledgedAt || undefined,
     feedbackAcknowledgedBy: row.feedbackAcknowledgedBy || undefined,
+    feedbackReplyText: row.feedbackReplyText || undefined,
+    feedbackRepliedAt: row.feedbackRepliedAt || undefined,
+    feedbackRepliedBy: row.feedbackRepliedBy || undefined,
     checkInAt: row.checkInAt || undefined,
     checkOutAt: row.checkOutAt || undefined,
     volunteerName: row.volunteerName,

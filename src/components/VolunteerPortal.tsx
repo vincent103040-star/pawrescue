@@ -148,25 +148,32 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
 
 
   // LINE Notification Preferences State
+  // 預設值單獨拉出來，因為它有兩個用途：沒有任何儲存紀錄時的初始值，以及舊紀錄
+  // 的補漏底稿。在某個開關被加進來之前存下的偏好不會有那個鍵，若直接回傳
+  // JSON.parse 的結果，該開關會停在 undefined —— 而 undefined 的第一次切換算出來
+  // 是 !undefined，正好等於它畫面上已經顯示的值，於是那顆開關按了不會動。
+  const DEFAULT_PREFERENCES: LineNotificationPreferences = {
+    shiftChanges: true,      // 班次異動
+    urgentRecruitment: true, // 緊急招募
+    checkInReminder: true,   // 簽到提醒
+    sopReminder: true,       // 簽到後的工作清單要不要附教材提醒
+    // 唯一預設關閉的一項。這是關於動物的訊息，不是志工自己的事，
+    // 替所有人預設開啟等於替他們決定要收。
+    animalStatusAlerts: false,
+    feedbackReply: true,     // 社工回覆自己留下的服務回饋
+    reminderTimingHours: 1
+  };
+
   const [linePreferences, setLinePreferences] = useState<LineNotificationPreferences>(() => {
     const saved = localStorage.getItem('volunteer_line_preferences');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        return { ...DEFAULT_PREFERENCES, ...JSON.parse(saved) };
       } catch (e) {
         // fallback
       }
     }
-    return {
-      shiftChanges: true,      // 班次異動
-      urgentRecruitment: true, // 緊急招募
-      checkInReminder: true,   // 簽到提醒
-      sopReminder: true,       // 簽到後的工作清單要不要附教材提醒
-      // 唯一預設關閉的一項。這是關於動物的訊息，不是志工自己的事，
-      // 替所有人預設開啟等於替他們決定要收。
-      animalStatusAlerts: false,
-      reminderTimingHours: 1
-    };
+    return DEFAULT_PREFERENCES;
   });
 
   /**
@@ -576,6 +583,8 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
             // object saved before the switch existed must stay off rather than
             // being read as consent.
             animalStatusAlerts: linePreferences.animalStatusAlerts === true,
+            // 預設開啟，所以缺少欄位視為要收 —— 與伺服器端的判讀一致。
+            feedbackReply: linePreferences.feedbackReply !== false,
             // Sent now. This choice used to stay in localStorage, so it was lost
             // on a new device -- and nothing on the server read it anyway.
             reminderTimingHours: linePreferences.reminderTimingHours || 1
@@ -616,6 +625,7 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
     if (linePreferences.shiftChanges) enabledList.push('班次異動');
     if (linePreferences.urgentRecruitment) enabledList.push('緊急招募');
     if (linePreferences.checkInReminder) enabledList.push('簽到提醒');
+    if (linePreferences.feedbackReply !== false) enabledList.push('社工回覆');
 
     onSendLineToast(
       `⚙️ 已更新個人設定與 LINE 通知偏好！目前接收項目：【${enabledList.length > 0 ? enabledList.join('、') : '全部關閉'}】`
@@ -1455,6 +1465,40 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
                     >
                       <div className={`w-5 h-5 rounded-full bg-white shadow-xs absolute top-0.5 transition-transform ${
                         linePreferences.shiftChanges ? 'right-0.5' : 'left-0.5'
+                      }`} />
+                    </button>
+                  </div>
+
+                  {/* Toggle: 社工回覆我的服務回饋 */}
+                  <div className="bg-[#FAF6EE]/80 hover:bg-[#FAF6EE] p-4 rounded-2xl border border-[#716053] flex items-start justify-between gap-4 transition">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">💬</span>
+                        <span className="font-bold text-slate-900 text-sm">社工回覆我的服務回饋</span>
+                        {linePreferences.feedbackReply !== false ? (
+                          <span className="bg-emerald-100 text-emerald-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full">
+                            已開啟 (ON)
+                          </span>
+                        ) : (
+                          <span className="bg-slate-200 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                            已停用 (OFF)
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-600 leading-relaxed">
+                        您在服務結束後留下的評分與建議，社工團隊讀過並親自回覆時，發送 LINE 訊息通知您。
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleTogglePreference('feedbackReply')}
+                      className={`w-12 h-6 rounded-full transition-colors relative cursor-pointer shrink-0 mt-1 ${
+                        linePreferences.feedbackReply !== false ? 'bg-emerald-500' : 'bg-slate-300'
+                      }`}
+                    >
+                      <div className={`w-5 h-5 rounded-full bg-white shadow-xs absolute top-0.5 transition-transform ${
+                        linePreferences.feedbackReply !== false ? 'right-0.5' : 'left-0.5'
                       }`} />
                     </button>
                   </div>
