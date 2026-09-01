@@ -1,5 +1,5 @@
 import { authFetch } from './session';
-export type LineNotificationType = 'shiftChanges' | 'urgentRecruitment' | 'checkInReminder';
+export type LineNotificationType = 'shiftChanges' | 'urgentRecruitment' | 'checkInReminder' | 'feedbackReply';
 
 /**
  * Sends a real LINE push message to one volunteer (identified by email — the backend
