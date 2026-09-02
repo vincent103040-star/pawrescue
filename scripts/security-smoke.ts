@@ -254,6 +254,38 @@ async function checkDatabaseNotServed() {
 }
 
 /**
+ * Vite's own deny list, still intact.
+ *
+ * server.fs.deny replaces the default rather than extending it, so adding an
+ * entry for data/ quietly dropped Vite's protection of .env, .env.*,
+ * certificates and .git. Nothing looked wrong at the time, because the entry
+ * that had just been added did work -- the check that was missing is not "is my
+ * new rule working" but "is the old rule still working".
+ *
+ * Asked through .env.example because it is the one file matching .env.* that is
+ * committed, and therefore certain to exist wherever this runs. It holds no
+ * secrets of its own; it stands in for .env.local, which sits beside it, matches
+ * the same pattern, and holds every key this server has.
+ */
+async function checkViteDefaultDenyIntact() {
+  console.log();
+  console.log('Vite 內建的 deny 清單沒有被自訂設定蓋掉');
+  const files: Array<[string, string]> = [
+    ['/.env.example', '# GEMINI_API_KEY']
+  ];
+  for (const [path, signature] of files) {
+    const res = await fetch(`${BASE}${path}`);
+    const body = (await res.text()).slice(0, signature.length);
+    record(
+      body !== signature,
+      `GET ${path}`,
+      `回傳的是檔案本身（${res.status}）—— .env.* 的保護已失效，.env.local 也一樣拿得到`
+    );
+  }
+  console.log(`  ${files.length} 項已檢查`);
+}
+
+/**
  * The sign-in endpoint has to stay open, so it is the one place where getting
  * the identity from the request body is fatal: it used to hand back a working
  * session for whatever email you typed. This is the specific request that used
@@ -306,6 +338,7 @@ async function main() {
   await checkPublic();
   await checkUnsignedAssets();
   await checkDatabaseNotServed();
+  await checkViteDefaultDenyIntact();
   await checkForgedLogin();
 
   const total = passed + failures.length;

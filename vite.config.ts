@@ -3,6 +3,21 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig, normalizePath} from 'vite';
 
+/**
+ * Makes a literal filesystem path safe to use as a deny pattern.
+ *
+ * server.fs.deny entries are picomatch patterns, and picomatch reads
+ * ( ) [ ] { } ! ? * + @ | as syntax. This path is not a pattern anybody wrote --
+ * it is whatever the project directory happens to be called on this machine.
+ * Here it is "remix-(修版)-浪浪家園...", and those parentheses were parsed as a
+ * glob group, so the pattern matched nothing whatsoever: the rule sat in this
+ * file looking correct while the database was still served over HTTP.
+ *
+ * The reason it went unnoticed is that it works on any path without these
+ * characters, which is every machine this was tested on.
+ */
+const escapeGlob = (p: string) => p.replace(/[()[\]{}!?*+@|]/g, '\\$&');
+
 export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
@@ -27,7 +42,24 @@ export default defineConfig(() => {
         // forward-slash path, and on Windows resolve() returns backslashes. The
         // pattern then never matches anything and the deny list reads as
         // configured while doing nothing -- which is how this was first written.
-        deny: [normalizePath(path.resolve(__dirname, 'data')) + '/**'],
+        //
+        // Vite's own defaults are repeated here on purpose. server.fs.deny
+        // replaces the default list rather than extending it -- mergeWithDefaults
+        // recurses into plain objects and assigns arrays straight over the top --
+        // so the first version of this line, which named only data/, silently
+        // switched off Vite's protection of .env, .env.*, certificates and .git.
+        //
+        // Nothing looked wrong, because the entry that had just been added did
+        // work: data/ was refused, which is what was being tested. The reading
+        // that would have caught it is not "is my new rule working" but "is the
+        // old rule still working", and security-smoke.ts now asks that.
+        deny: [
+          '.env',
+          '.env.*',
+          '*.{crt,pem}',
+          '**/.git/**',
+          escapeGlob(normalizePath(path.resolve(__dirname, 'data'))) + '/**',
+        ],
       },
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
