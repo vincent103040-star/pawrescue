@@ -139,7 +139,29 @@ npm run check:backup -- --local data/backups/volunteers-XXXX.db
 >
 > 那個訊息讀起來像權限給不夠，其實是「這個物件已經存在」——在 GCS 的 IAM 裡，覆寫算作 delete + create，開著版本控制也一樣。上傳指令都帶 `--no-clobber` 就是為了配合這個模型：同名的快照就是同一份快照，跳過它是對的。補上 delete 權限等於讓入侵者能刪光所有歷史備份，正好毀掉這層防護的唯一用途。
 
-`.env.local` **不要**放進同一個 bucket。弄丟它等於所有金鑰重新申請，但它外洩比資料庫外洩更糟 —— 有人能拿去冒用 LINE 官方帳號發訊息給全部志工。放 Secret Manager，或另一個權限更嚴的地方。
+**`.env.local` 不在這個 bucket，也不該在。**弄丟它等於所有金鑰重新申請，但它外洩比資料庫外洩更糟 —— 有人能拿去冒用 LINE 官方帳號對全部志工發訊息。它獨立放在 Secret Manager（`pawrescue-env-local`）。
+
+改過 `.env.local` 之後更新：
+
+```bash
+gcloud compute scp INSTANCE:~/pawrescue/.env.local /tmp/env.local --zone=ZONE
+wc -c /tmp/env.local          # 跟來源比對，數字要一樣
+gcloud secrets versions add pawrescue-env-local --data-file=/tmp/env.local
+gcloud secrets versions access latest --secret=pawrescue-env-local | wc -c   # 再比對一次
+shred -u /tmp/env.local
+```
+
+還原（機器沒了、建了新的）：
+
+```bash
+gcloud secrets versions access latest --secret=pawrescue-env-local > ~/pawrescue/.env.local
+```
+
+> **用 `scp`，不要用 `gcloud compute ssh --command="cat ..."` 接管道。**
+>
+> ssh 會把自己的訊息混進 stdout —— 金鑰產生、`Updating project ssh metadata`、`Waiting for SSH key to propagate`、known hosts 那些，第一次執行時特別多。第一版的 secret 就是這樣壞的：**1505 bytes 而不是 932**，而存進去的當下沒有任何異狀。所以上傳後一定要比對長度，否則要到還原那天才會發現拿回來的是一坨夾雜 SSH 訊息的檔案 —— 而那正是最不能出錯的時刻。
+
+VM **刻意沒有** `secretAccessor` 權限。還原是「機器沒了、建一台新的」時的人工動作，用個人帳號執行就好；正常運轉時 `.env.local` 早就在磁碟上，VM 不需要讀這個 secret。給了它只是多開一條路，讓入侵這台機器的人一次拿到全部金鑰 —— 跟備份 bucket 同一個道理：需要什麼給什麼。
 
 ---
 
