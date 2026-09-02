@@ -4,7 +4,7 @@ import './env';
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'fs';
 import path from 'path';
-import { randomUUID, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
+import { createHmac, randomUUID, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { VOLUNTEER_PROFILES, INITIAL_ATTENDANCE_RECORDS, INITIAL_SHIFTS, INITIAL_SHIFT_SIGNUPS, DEFAULT_SHELTER_LOCATION, DEFAULT_LINE_OFFICIAL_ACCOUNT } from './src/data/mockData';
 import { RULEBOOK_CORPUS } from './src/data/rulebookCorpus';
 // Shared with the duty form rather than reimplemented -- the first version had
@@ -214,7 +214,7 @@ function rowToProfile(row: any): VolunteerProfile {
     email: row.email,
     phone: row.phone,
     lineId: row.lineId,
-    avatar: row.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(row.name)}`,
+    avatar: signAssetUrl(row.avatar) || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(row.name)}`,
     skills: JSON.parse(row.skills),
     preferredZones: JSON.parse(row.preferredZones),
     totalHours: row.totalHours,
@@ -1178,7 +1178,7 @@ function rowToAttendanceRecord(row: any): AttendanceRecord {
     feedbackComment: row.feedbackComment || undefined,
     feedbackSubmittedAt: row.feedbackSubmittedAt || undefined,
     lineReminderSent: !!row.lineReminderSent,
-    photoUrl: row.photoUrl || undefined
+    photoUrl: signAssetUrl(row.photoUrl) || undefined
   };
 }
 
@@ -1802,6 +1802,75 @@ export function getAppSecret(name: string): string {
   const generated = randomBytes(32).toString('hex');
   db.prepare('INSERT INTO app_settings (key, value) VALUES (?, ?)').run(name, generated);
   return generated;
+}
+
+// ============================================================================
+// Signed asset URLs
+// ----------------------------------------------------------------------------
+// Volunteer avatars and check-out photographs are served as static files,
+// because <img src> cannot carry an Authorization header -- the browser issues
+// a bare GET and there is nowhere for the session token to go. So the proof
+// travels in the URL itself: an HMAC over the path and an expiry. This is the
+// same mechanism posterToken() already uses for the printed check-in poster,
+// with the path and a deadline signed in rather than one fixed string.
+//
+// This closes a hole rather than hardening one. An avatar's filename is derived
+// from the volunteer's email address, which is not a secret to anybody at the
+// shelter, so the URL of any volunteer's photograph could simply be worked out
+// and fetched by someone who had never signed in. Neither directory sits under
+// /api, so the default-deny rule never saw them.
+//
+// The expiry is quantised to a window rather than being "now + n" so that every
+// signature issued during the same window is byte-identical. A URL that changed
+// on every read would be a fresh cache key every time, and a roster of avatars
+// would be re-downloaded on every render -- not free on a 1 GB machine.
+// ============================================================================
+const ASSET_URL_WINDOW_SECONDS = 6 * 60 * 60;
+
+function assetUrlExpiry(): number {
+  const now = Math.floor(Date.now() / 1000);
+  // Two windows out, so a URL minted at the very end of a window still has a
+  // full window of life. Effective validity is therefore 6-12 hours: long
+  // enough that a coordinator who leaves the roster open all afternoon does not
+  // watch the photographs turn into broken images, short enough that a URL
+  // which leaks by being pasted somewhere stops working the same day.
+  return (Math.floor(now / ASSET_URL_WINDOW_SECONDS) + 2) * ASSET_URL_WINDOW_SECONDS;
+}
+
+function assetSignature(pathname: string, exp: number): string {
+  return createHmac('sha256', getAppSecret('asset_url_secret'))
+    .update(`${pathname}:${exp}`)
+    .digest('hex')
+    .slice(0, 32);
+}
+
+/**
+ * Signs a stored asset reference for handing to a browser. Anything that is not
+ * one of ours -- an empty value, or the seeded and fallback avatars that live on
+ * unsplash and dicebear -- is returned untouched: signing a URL we do not serve
+ * would only corrupt it.
+ */
+export function signAssetUrl(stored: string | null | undefined): string {
+  const value = String(stored || '');
+  if (!value.startsWith('/avatars/') && !value.startsWith('/photos/')) return value;
+  // Rows written before this existed carry a ?v=<upload time> cache-buster. It
+  // stays in the URL but out of the signature -- it selects nothing, so there is
+  // nothing to protect -- which is why no stored value has to be rewritten.
+  const [pathname, existingQuery] = value.split('?');
+  const exp = assetUrlExpiry();
+  const query = [existingQuery, `exp=${exp}`, `sig=${assetSignature(pathname, exp)}`]
+    .filter(Boolean)
+    .join('&');
+  return `${pathname}?${query}`;
+}
+
+/** True when this exact path was signed by us and has not expired yet. */
+export function isValidAssetSignature(pathname: string, exp: unknown, sig: unknown): boolean {
+  const expSeconds = Number(exp);
+  if (!Number.isInteger(expSeconds) || expSeconds < Date.now() / 1000) return false;
+  const given = Buffer.from(String(sig || ''));
+  const expected = Buffer.from(assetSignature(pathname, expSeconds));
+  return given.length === expected.length && timingSafeEqual(given, expected);
 }
 
 // ============================================================================

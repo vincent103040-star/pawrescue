@@ -185,6 +185,39 @@ async function checkPublic() {
 }
 
 /**
+ * Static files, not routes -- which is exactly why they were missed. /avatars
+ * and /photos hold volunteer photographs and check-out pictures, they sit
+ * outside /api so the default-deny middleware never saw them, and an avatar's
+ * filename is derived from the volunteer's email address. Working out the URL
+ * of somebody's photograph was arithmetic, and no route-level check anywhere
+ * in this file would have noticed.
+ *
+ * They are gated by a signature in the URL now. asset-url.test.ts covers the
+ * signing itself; what only a live server can show is that the gate is still
+ * wired in front of express.static -- delete that one argument and every unit
+ * test still passes.
+ */
+async function checkUnsignedAssets() {
+  console.log();
+  console.log('靜態個資目錄（沒有簽章應回 403）');
+  const paths = [
+    '/avatars/victim_example_com.jpg',
+    '/photos/att-1-abcdef12.jpg',
+    // A signature that is the right shape but was never ours.
+    `/avatars/victim_example_com.jpg?exp=${Math.floor(Date.now() / 1000) + 3600}&sig=${'f'.repeat(32)}`
+  ];
+  for (const path of paths) {
+    const res = await fetch(`${BASE}${path}`);
+    record(
+      res.status === 403,
+      `GET ${path.slice(0, 60)}`,
+      `預期 403，實際 ${res.status} —— 沒登入就拿得到志工照片`
+    );
+  }
+  console.log(`  ${paths.length} 項已檢查`);
+}
+
+/**
  * The sign-in endpoint has to stay open, so it is the one place where getting
  * the identity from the request body is fatal: it used to hand back a working
  * session for whatever email you typed. This is the specific request that used
@@ -235,6 +268,7 @@ async function main() {
 
   await checkProtected();
   await checkPublic();
+  await checkUnsignedAssets();
   await checkForgedLogin();
 
   const total = passed + failures.length;
