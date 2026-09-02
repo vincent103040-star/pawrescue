@@ -218,6 +218,42 @@ async function checkUnsignedAssets() {
 }
 
 /**
+ * The database itself, over HTTP. In development Vite serves the project
+ * directory, so data/volunteers.db -- every volunteer's name, phone, email and
+ * emergency contact, plus the signing secrets in app_settings -- was a plain
+ * GET away. .gitignore keeps that file out of git and does nothing about HTTP.
+ *
+ * Asserted as "the answer is not the file" rather than as a status code,
+ * because the two modes refuse it differently and both are correct: dev returns
+ * 403 from Vite's deny list, production has no such route and falls through to
+ * the SPA. A status assertion would pass in one and fail in the other, while
+ * the thing worth checking is identical in both.
+ *
+ * Each path carries the first bytes of its own content, because a shared
+ * assertion is not an assertion. Checking the embeddings file for a SQLite
+ * header, or a backup whose name this script cannot know from outside the
+ * machine, would pass whatever the server did.
+ */
+async function checkDatabaseNotServed() {
+  console.log();
+  console.log('資料庫不能從 HTTP 拿到');
+  const files: Array<[string, string]> = [
+    ['/data/volunteers.db', 'SQLite format 3'],
+    ['/data/rulebook_embeddings.json', '[{"id"']
+  ];
+  for (const [path, signature] of files) {
+    const res = await fetch(`${BASE}${path}`);
+    const body = (await res.text()).slice(0, signature.length);
+    record(
+      body !== signature,
+      `GET ${path}`,
+      `回傳的是檔案本身（${res.status}）—— 這條路徑可以直接下載到它`
+    );
+  }
+  console.log(`  ${files.length} 項已檢查`);
+}
+
+/**
  * The sign-in endpoint has to stay open, so it is the one place where getting
  * the identity from the request body is fatal: it used to hand back a working
  * session for whatever email you typed. This is the specific request that used
@@ -269,6 +305,7 @@ async function main() {
   await checkProtected();
   await checkPublic();
   await checkUnsignedAssets();
+  await checkDatabaseNotServed();
   await checkForgedLogin();
 
   const total = passed + failures.length;
