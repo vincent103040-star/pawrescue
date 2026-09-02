@@ -127,14 +127,17 @@ npm run check:backup -- --local data/backups/volunteers-XXXX.db
 
 擋的是最惡劣的那種：備份每天都成功，檔案每天都在，需要用的那天才發現它是空的、截斷的、或根本不是資料庫 —— 而中間那段時間，它看起來一直是好的。所以這支腳本問到底：雜湊對不對、`PRAGMA integrity_check` 過不過、資料表在不在、筆數跟 manifest 一不一樣、最後能不能真的讀出一筆志工資料。失敗回傳 1，可以直接掛在 cron 上。
 
-**排程與權限。**兩支都放進 crontab（先備份，隔一段時間再驗證）：
+**排程。**用 systemd timer 而不是 cron，理由是 **cron 的失敗是靜默的** —— 沒設 `MAILTO` 的話，備份可以連續壞三個月而沒有人知道。systemd 的失敗會進 `journalctl`，跟服務同一個地方，`systemctl list-timers` 也看得到下次什麼時候跑。
 
-```
-30 3 * * *  cd ~/pawrescue && BACKUP_BUCKET=gs://your-bucket npm run backup:offsite
-0  4 * * *  cd ~/pawrescue && BACKUP_BUCKET=gs://your-bucket npm run check:backup
-```
+一個 oneshot service 依序做兩件事（`backup:offsite && check:backup`，前者失敗就不會去驗一份不存在的東西），搭一個 `OnCalendar=*-*-* 03:30:00` 的 timer，加 `Persistent=true` 讓關機錯過的排程在開機後補跑，`ExecStart` 用 `/bin/bash -lc` 讓 PATH 跟 SSH 進去時一致。
 
-VM 的服務帳號對備份 bucket 建議只給 `roles/storage.objectCreator` —— 能寫、不能讀、不能刪。備份最常見的失效方式不是沒備份，是跟正本一起被毀掉；這台機器萬一被入侵，歷史備份也拿不走、刪不掉。再開 Object Versioning 和 Lifecycle rule 控制成本。
+裝好之後**立刻手動觸發一次** `sudo systemctl start pawrescue-backup.service`，不要等到隔天凌晨。排程最常見的死法是「手動跑得動、排程跑不動」——工作目錄、環境變數、權限都可能不一樣。
+
+**權限。**VM 的服務帳號對備份 bucket 給 `roles/storage.objectCreator` **加** `roles/storage.objectViewer` —— 能寫、能讀、**不能刪、不能覆寫**。讀取權限是 `check:backup` 需要的，而且不給它也沒買到什麼：能入侵這台機器的人本來就拿得到正本資料庫。真正要擋的是把歷史備份刪光或加密。再開 Object Versioning 和 Lifecycle rule 控制成本。
+
+> **不要因為看到 `does not have storage.objects.delete access` 就放寬權限。**
+>
+> 那個訊息讀起來像權限給不夠，其實是「這個物件已經存在」——在 GCS 的 IAM 裡，覆寫算作 delete + create，開著版本控制也一樣。上傳指令都帶 `--no-clobber` 就是為了配合這個模型：同名的快照就是同一份快照，跳過它是對的。補上 delete 權限等於讓入侵者能刪光所有歷史備份，正好毀掉這層防護的唯一用途。
 
 `.env.local` **不要**放進同一個 bucket。弄丟它等於所有金鑰重新申請，但它外洩比資料庫外洩更糟 —— 有人能拿去冒用 LINE 官方帳號發訊息給全部志工。放 Secret Manager，或另一個權限更嚴的地方。
 

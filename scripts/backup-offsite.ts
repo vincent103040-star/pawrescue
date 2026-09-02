@@ -175,19 +175,36 @@ function main() {
   // ---------------------------------------------------------------- 上傳
   log('\n上傳');
 
+  // --no-clobber 不是效率考量，是這個權限模型的必要條件。
+  //
+  // 備份 bucket 上的服務帳號只有 objectCreator + objectViewer：能寫、能讀、不能
+  // 刪。而在 GCS 的 IAM 裡，覆寫一個已存在的物件算作 delete + create，所以任何
+  // 覆寫都會被拒絕 —— 就算 bucket 開著版本控制也一樣。
+  //
+  // 平常看不出來，因為快照檔名帶時間戳，每天都不一樣。但服務只要幾天沒重啟，
+  // data/backups/ 的最新快照就不會換名字，排程於是每天上傳同一個檔名、每天失敗。
+  // 而失敗訊息說的是「does not have storage.objects.delete access」，讀起來像是
+  // 權限給不夠 —— 它不是。補上 delete 權限，就等於讓入侵這台機器的人可以把所有
+  // 歷史備份刪光，那正是這個權限模型存在的理由。
+  //
+  // 備份的語意本來就是 write-once：同名的快照就是同一份快照，跳過它是對的。
   const dbDest = `${BUCKET}/db/volunteers-${stamp}.db`;
   const manifestDest = `${BUCKET}/db/manifest-${stamp}.json`;
-  run('gcloud', ['storage', 'cp', snap.file, dbDest]);
-  run('gcloud', ['storage', 'cp', manifestFile, manifestDest]);
+  run('gcloud', ['storage', 'cp', '--no-clobber', snap.file, dbDest]);
+  run('gcloud', ['storage', 'cp', '--no-clobber', manifestFile, manifestDest]);
   log(`  資料庫與 manifest -> ${BUCKET}/db/`);
 
   // 媒體用 rsync 而不是每天打包重傳。照片和頭像只會新增、不會被改寫，所以
   // 同步只送新的那些 —— 每天重傳整包會讓流量隨著服務時間線性成長，而內容
   // 其實幾乎沒變。這裡刻意不帶 --delete-unmatched-destination-objects：
   // 這邊刪掉的東西，異地那份應該留著。
+  //
+  // --no-clobber 同上：只能新增，不能覆寫。代價是志工換了頭像之後（檔名由
+  // email 決定，會重複使用），異地留著的是舊那張。對備份來說這是可以接受的
+  // 取捨 —— 換來的是任何人都刪不掉這裡已經存在的東西。
   for (const dir of manifest.mediaDirs) {
     const src = path.join(DATA_DIR, dir);
-    run('gcloud', ['storage', 'rsync', '--recursive', src, `${BUCKET}/media/${dir}`]);
+    run('gcloud', ['storage', 'rsync', '--recursive', '--no-clobber', src, `${BUCKET}/media/${dir}`]);
     log(`  ${dir}/ -> ${BUCKET}/media/${dir}`);
   }
 
