@@ -6,7 +6,7 @@ import { writeFileSync, mkdirSync, createWriteStream, statSync, readFileSync, un
 import { gzipSync } from 'zlib';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
-import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, cancelShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, setFeedbackReply, getVolunteerEmailByName, getRollCall, getAbsenceCounts, setVolunteerAccountStatus, sweepSuspensions, countSuspensions, recordAppeal, getStatusHistory, hasAppealedSinceSuspension, ABSENCE_SUSPENSION_THRESHOLD, SUSPENSION_DAYS, APPEAL_WINDOW_DAYS, createSubstitutionRequest, getSubstitutionRequest, getOpenSubstitutionForSignup, getOpenSubstitutions, takeSubstitutionRequest, withdrawSubstitutionRequest, expireStaleSubstitutions, hoursUntilShift, SUBSTITUTION_NOTICE_HOURS, getReminderCandidates, markReminderSent, normalizeReminderLead, planShiftsForRange, generateDraftShifts, publishDraftShifts, discardDraftShifts, SHIFT_MERGE_GAP_MINUTES, getAllStatusDutyMappings, getUnmappedStatuses, upsertStatusDutyMapping, setStatusDutyMappingStatus, getShiftCapacityMinutes, setShiftCapacityMinutes, getRecentStatusBatches, getImportedBatchSequences, getStatusRecordsForBatch, getStatusWorkload, getAnimalConcerns } from './db';
+import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, cancelShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, isValidAssetSignature, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, setFeedbackReply, getVolunteerEmailByName, getRollCall, getAbsenceCounts, setVolunteerAccountStatus, sweepSuspensions, countSuspensions, recordAppeal, getStatusHistory, hasAppealedSinceSuspension, ABSENCE_SUSPENSION_THRESHOLD, SUSPENSION_DAYS, APPEAL_WINDOW_DAYS, createSubstitutionRequest, getSubstitutionRequest, getOpenSubstitutionForSignup, getOpenSubstitutions, takeSubstitutionRequest, withdrawSubstitutionRequest, expireStaleSubstitutions, hoursUntilShift, SUBSTITUTION_NOTICE_HOURS, getReminderCandidates, markReminderSent, normalizeReminderLead, planShiftsForRange, generateDraftShifts, publishDraftShifts, discardDraftShifts, SHIFT_MERGE_GAP_MINUTES, getAllStatusDutyMappings, getUnmappedStatuses, upsertStatusDutyMapping, setStatusDutyMappingStatus, getShiftCapacityMinutes, setShiftCapacityMinutes, getRecentStatusBatches, getImportedBatchSequences, getStatusRecordsForBatch, getStatusWorkload, getAnimalConcerns } from './db';
 import { findMissingSequences } from './scripts/status-csv';
 import { isDutyOnTodaysList } from './src/utils/dutyVisibility';
  import { PDFParse } from 'pdf-parse';
@@ -429,13 +429,30 @@ async function startServer() {
     });
   });
 
+  // Both of these directories hold personal data -- the photograph a volunteer
+  // uploaded of themselves, and the picture taken at check-out -- and neither
+  // sits under /api, so the default-deny middleware above never sees them. They
+  // are gated by a signature carried in the URL instead, because <img src>
+  // cannot send an Authorization header; signAssetUrl() in db.ts explains the
+  // shape and what it does and does not buy.
+  //
+  // Failing to sign fails closed. A URL built by hand, or one this server hands
+  // out having forgotten to sign it, is refused -- so the way to get this wrong
+  // is a visibly broken image, not a quiet leak.
+  function requireAssetSignature(prefix: string) {
+    return (req: any, res: any, next: any) => {
+      if (isValidAssetSignature(prefix + req.path, req.query.exp, req.query.sig)) return next();
+      return res.status(403).json({ success: false, error: '照片連結已失效，請重新整理頁面' });
+    };
+  }
+
   const photosDir = path.join(process.cwd(), 'data', 'photos');
   mkdirSync(photosDir, { recursive: true });
-  app.use('/photos', express.static(photosDir));
+  app.use('/photos', requireAssetSignature('/photos'), express.static(photosDir));
 
   const avatarsDir = path.join(process.cwd(), 'data', 'avatars');
   mkdirSync(avatarsDir, { recursive: true });
-  app.use('/avatars', express.static(avatarsDir));
+  app.use('/avatars', requireAssetSignature('/avatars'), express.static(avatarsDir));
 
   const sopDocsDir = path.join(process.cwd(), 'data', 'sop-docs');
   mkdirSync(sopDocsDir, { recursive: true });
