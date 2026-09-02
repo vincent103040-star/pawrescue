@@ -359,20 +359,35 @@ npm run check:security      # 89 → 101 項,多了 3 項針對靜態目錄的�
 前面拿掉重建,冒煙測試失敗 2/101,而 22 項單元測試**全過**。單元測試驗得到密碼學,
 驗不到中介層還掛在那裡。
 
-### 順手挖到、還沒修的
+### dev 模式曾經把整個資料庫送出去(09-02 已修)
 
-**dev 模式會把整個資料庫送出去。**`npm run dev` 之下,
-`curl http://localhost:3000/data/volunteers.db` 回 200,而且真的是 SQLite 檔案 ——
-Vite 的 dev middleware 從專案根目錄供檔,`data/` 也在裡面。
-`.gitignore` 擋得住 git,擋不住 HTTP。
+`npm run dev` 之下,`curl http://localhost:3000/data/volunteers.db` 回 200,
+而且真的是 SQLite 檔案 —— Vite 的 dev middleware 從專案根目錄供檔,`data/` 也在裡面。
+`.gitignore` 擋得住 git,擋不住 HTTP。備份檔(`data/backups/`)同樣拿得到,
+而資料庫裡還存著 `app_settings` 的簽章密鑰。
 
-**production 不受影響**,實測過:`NODE_ENV=production` 走 `express.static(dist)`,
-同一個請求落到 SPA fallback,回的是 index.html。
+**production 從來不受影響**,實測過:`NODE_ENV=production` 走 `express.static(dist)`,
+同一個請求落到 SPA fallback,回的是 index.html。但 `vite.config.ts` 的 `allowedHosts`
+裡有那個對外網域,代表 dev server 曾經對外開過 —— 在 VM 上跑一次 `npm run dev` 就會外洩。
 
-但 `vite.config.ts` 的 `allowedHosts` 裡有那個對外網域,代表 dev server 曾經對外開過。
-在 VM 上跑一次 `npm run dev`,等於把全體志工的姓名、電話、email、緊急聯絡人一次送出去 ——
-而且資料庫裡現在還存著 `app_settings` 的簽章密鑰。
-修法大概是 `server.fs.deny`,或在 `vite.middlewares` 前面攔掉 `/data`。
+修法是 `vite.config.ts` 的 `server.fs.deny`。**兩個坑,兩個都踩過才寫對:**
+
+- **不能用 `'**/data/**'` 這種 glob。**它會連 `src/data/` 一起封掉,而 `mockData` 和 `zones`
+  在那裡、每一頁都 import —— 整個前端會壞,而且症狀看起來像建置錯誤,不像這一行造成的。
+  所以 pattern 錨定在專案根目錄的 `data/`。
+- **Windows 上要用 `normalizePath()`,不能只用 `path.resolve()`。**Vite 比對的是正斜線路徑,
+  `resolve()` 在 Windows 給的是反斜線,pattern 於是**永遠不匹配** ——
+  deny 清單看起來設好了,實際上什麼都沒做。第一版就是這樣,而且沒有任何症狀。
+
+`.env.local` 一直是安全的,Vite 預設的 `fs.deny` 就含 `.env*`(實測 403)。
+
+`npm run check:security` 多兩項守著它。斷言寫成「回傳的不是那個檔案」而不是比對狀態碼 ——
+dev 回 403、production 落到 SPA fallback,兩種都正確,而值得檢查的事在兩邊是同一件。
+每個路徑各自比對自己的開頭位元組:拿 SQLite 的檔頭去驗 embeddings 檔,不管伺服器做了什麼都會通過。
+
+**但這只補掉個資那一塊。**dev 模式下 Vite 本來就會把整個專案原始碼送出去
+(`/db.ts` 回 200,437 KB),那是 dev server 的設計。真正的規則是
+**VM 上永遠不要跑 `npm run dev`**。
 
 ### 這幾天學到的事
 
@@ -384,3 +399,5 @@ Vite 的 dev middleware 從專案根目錄供檔,`data/` 也在裡面。
 - **「不好找」不是「不准看」。**簽退照片的檔名猜不到,所以它看起來是安全的,而它只是隱密。
 - **測試要驗的是「這個防護還在嗎」,不只是「這個函式算得對嗎」。**
   故意把防護拿掉跑一次,才知道哪一層真的守得住。
+- **設定看起來設好了,不代表它在做事。**Windows 的反斜線讓 `fs.deny` 靜靜地不匹配任何東西。
+  沒有錯誤訊息、沒有警告,只有「我以為擋住了」 —— 所以每一道防護都要真的戳一次才算數。
