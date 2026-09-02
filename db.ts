@@ -1796,11 +1796,32 @@ db.exec(`
   )
 `);
 
+/**
+ * Read once, then held for the life of the process.
+ *
+ * Nothing in here ever updates or deletes a row -- a secret is generated on
+ * first use and then stands, which is the whole point of the table -- so
+ * re-reading one only asks the same question again. That would be a fair price
+ * for staying simple if it were rare. It is not: assetSignature() calls this
+ * once per signature and rowToProfile signs once per row, so a single
+ * getAllVolunteers() paid for it once per volunteer, synchronously, on the
+ * event loop everything else is waiting on.
+ */
+const appSecretCache = new Map<string, string>();
+
 export function getAppSecret(name: string): string {
+  const cached = appSecretCache.get(name);
+  if (cached !== undefined) return cached;
+
   const row = db.prepare('SELECT value FROM app_settings WHERE key = ?').get(name) as any;
-  if (row) return row.value;
+  if (row) {
+    appSecretCache.set(name, row.value);
+    return row.value;
+  }
+
   const generated = randomBytes(32).toString('hex');
   db.prepare('INSERT INTO app_settings (key, value) VALUES (?, ?)').run(name, generated);
+  appSecretCache.set(name, generated);
   return generated;
 }
 
