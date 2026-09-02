@@ -99,7 +99,44 @@ sudo systemctl restart pawrescue
 
 `npm run build` 會做兩件事：Vite 打包前端到 `dist/assets/`，esbuild 把後端打包成 `dist/server.cjs`。生產模式下 Express 直接服務 `dist/`。
 
-資料庫每次啟動都會自動備份到 `data/backups/`（用 `VACUUM INTO`，服務執行中取快照是安全的），保留最近 14 份。
+---
+
+## 備份
+
+三層，每一層擋的是不同的失效方式。
+
+**第一層：本機快照。**資料庫每次啟動、以及每天，都會自動備份到 `data/backups/`（用 `VACUUM INTO`，服務執行中取快照是安全的），保留最近 14 份。擋的是「改壞了想倒回去」。
+
+**第二層：異地。**
+
+```bash
+BACKUP_BUCKET=gs://your-bucket npm run backup:offsite
+npm run backup:offsite -- --dry-run     # 只做本地的部分，不碰網路
+```
+
+擋的是「快照跟正本一起沒了」——機器故障、誤刪整個目錄、或有人拿到這台機器。它上傳的是 `data/backups/` 裡最新的那一份，**不是** `data/volunteers.db`：那個檔案開著 WAL，跑著的時候直接複製會拿到不一致的快照，而壞掉的備份跟好的長得一模一樣。
+
+資料庫和 manifest 每天各是一個新物件；頭像、照片、教材用 `rsync` 累積（只會新增，所以只傳新的）。manifest 記下雜湊和**每個資料表的筆數** —— 大小和雜湊只能證明檔案沒壞，證明不了裡面有東西。
+
+**第三層：確認它還原得回來。**
+
+```bash
+BACKUP_BUCKET=gs://your-bucket npm run check:backup
+npm run check:backup -- --local data/backups/volunteers-XXXX.db
+```
+
+擋的是最惡劣的那種：備份每天都成功，檔案每天都在，需要用的那天才發現它是空的、截斷的、或根本不是資料庫 —— 而中間那段時間，它看起來一直是好的。所以這支腳本問到底：雜湊對不對、`PRAGMA integrity_check` 過不過、資料表在不在、筆數跟 manifest 一不一樣、最後能不能真的讀出一筆志工資料。失敗回傳 1，可以直接掛在 cron 上。
+
+**排程與權限。**兩支都放進 crontab（先備份，隔一段時間再驗證）：
+
+```
+30 3 * * *  cd ~/pawrescue && BACKUP_BUCKET=gs://your-bucket npm run backup:offsite
+0  4 * * *  cd ~/pawrescue && BACKUP_BUCKET=gs://your-bucket npm run check:backup
+```
+
+VM 的服務帳號對備份 bucket 建議只給 `roles/storage.objectCreator` —— 能寫、不能讀、不能刪。備份最常見的失效方式不是沒備份，是跟正本一起被毀掉；這台機器萬一被入侵，歷史備份也拿不走、刪不掉。再開 Object Versioning 和 Lifecycle rule 控制成本。
+
+`.env.local` **不要**放進同一個 bucket。弄丟它等於所有金鑰重新申請，但它外洩比資料庫外洩更糟 —— 有人能拿去冒用 LINE 官方帳號發訊息給全部志工。放 Secret Manager，或另一個權限更嚴的地方。
 
 ---
 

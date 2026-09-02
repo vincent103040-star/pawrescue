@@ -18,7 +18,9 @@
     "check:status-db": "node --import tsx scripts/status-db.test.ts",
     "status:ingest": "node --use-system-ca --import tsx scripts/status-ingest.ts",
     "check:duty-visibility": "node --import tsx scripts/duty-visibility.test.ts",
-    "check:asset-urls": "node --import tsx scripts/asset-url.test.ts"
+    "check:asset-urls": "node --import tsx scripts/asset-url.test.ts",
+    "backup:offsite": "node --import tsx scripts/backup-offsite.ts",
+    "check:backup": "node --import tsx scripts/backup-verify.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
