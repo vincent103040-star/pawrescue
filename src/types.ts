@@ -48,6 +48,12 @@ export interface ZoneConfig {
   badgeBg: string;
   icon: string;
   description: string;
+  /**
+   * 停用的場域仍然要能正確顯示既有的班次與紀錄（歷史資料不會憑空消失），
+   * 但不該再出現在「新增班次」或月曆篩選這類會建立新關聯的介面上。
+   * 這個欄位就是那條界線：純顯示用 resolveZone()，建立新關聯前先看這個。
+   */
+  status: 'active' | 'disabled';
 }
 
 export type SkillLevel = 'beginner' | 'intermediate' | 'experienced';

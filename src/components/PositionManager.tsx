@@ -205,81 +205,97 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
         </div>
       )}
 
-      {/* Mode Switcher & Zone Filter Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-[#716053] shadow-2xs">
-        {/* View Mode Tabs */}
-        <div className="flex items-center gap-1.5 bg-[#FAF6EE] p-1 rounded-xl border border-[#716053]">
-          <button
-            onClick={() => setViewMode('calendar')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-              viewMode === 'calendar'
-                ? 'bg-[#716053] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Calendar className="w-3.5 h-3.5 text-amber-300" />
-            <span>📅 全頁拖曳月曆視圖 (Google Calendar 雙向同步)</span>
-          </button>
-
-          <button
-            onClick={() => setViewMode('grid')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-              viewMode === 'grid'
-                ? 'bg-[#716053] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <LayoutGrid className="w-3.5 h-3.5" />
-            <span>🎴 卡片清單視圖</span>
-          </button>
-        </div>
-
-        {/* Zone Filter Pills for Grid Mode */}
-        {viewMode === 'grid' && (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-bold text-[#716053] mr-1 uppercase tracking-wider">區域：</span>
+      {/* 月曆／卡片清單的切換按鈕。單獨抽出來是因為兩種模式都要用得到它：
+          卡片模式下它畫在這裡自己的列上，月曆模式下它會被塞進 ShiftCalendarView
+          裡跟同步狀態、地點合併成一列（見該元件的 viewModeSwitcher prop）——
+          月曆模式時這個元件根本不會掛載，所以按鈕沒辦法交給它自己畫，只能由
+          這裡準備好一份，兩邊共用同一份 JSX 與同一組 onClick，不必維護兩份
+          容易跑掉的複本。 */}
+      {(() => {
+        const viewToggleButtons = (
+          <div className="flex items-center gap-1.5 bg-[#FAF6EE] p-1 rounded-xl border border-[#716053]">
             <button
-              onClick={() => setFilterZone('all')}
-              className={`px-3 py-1 rounded-full text-xs font-bold transition cursor-pointer ${
-                filterZone === 'all'
+              onClick={() => setViewMode('calendar')}
+              className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                viewMode === 'calendar'
                   ? 'bg-[#716053] text-white shadow-xs'
-                  : 'bg-white text-slate-600 border border-[#716053] hover:bg-[#F5E6D0]/40'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              全部
+              <Calendar className="w-3.5 h-3.5 text-amber-300" />
+              <span>📅 全頁拖曳月曆視圖 (Google Calendar 雙向同步)</span>
             </button>
 
-            {Object.keys(ZONE_CONFIGS).map(zKey => {
-              const zConf = resolveZone(zKey);
-              return (
-                <button
-                  key={zKey}
-                  onClick={() => setFilterZone(zKey)}
-                  className={`px-3 py-1 rounded-full text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
-                    filterZone === zKey
-                      ? 'bg-[#716053] text-white shadow-xs'
-                      : 'bg-white text-slate-600 border border-[#716053] hover:bg-[#F5E6D0]/40'
-                  }`}
-                >
-                  <span>{zConf.icon}</span>
-                  <span>{zConf.name}</span>
-                </button>
-              );
-            })}
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                viewMode === 'grid'
+                  ? 'bg-[#716053] text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>🎴 卡片清單視圖</span>
+            </button>
           </div>
-        )}
-      </div>
+        );
 
-      {/* Main View Content: Full Calendar or Grid List */}
-      {viewMode === 'calendar' ? (
-        <ShiftCalendarView
-          shifts={shifts}
-          onUpdateShift={onUpdateShift}
-          onDeleteShift={onDeleteShift}
-          onOpenAiGenerator={onOpenAiGenerator}
-          onSendLineToast={onSendLineToast}
-        />
-      ) : (
+        return (
+          <>
+            {/* Mode Switcher & Zone Filter Bar -- 卡片模式才需要這整條列；
+                月曆模式的切換按鈕已經交給 ShiftCalendarView 去跟同步狀態、
+                地點合併顯示，這裡不再重複畫一次。 */}
+            {viewMode === 'grid' && (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-[#716053] shadow-2xs">
+                {viewToggleButtons}
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-bold text-[#716053] mr-1 uppercase tracking-wider">區域：</span>
+                  <button
+                    onClick={() => setFilterZone('all')}
+                    className={`px-3 py-1 rounded-full text-xs font-bold transition cursor-pointer ${
+                      filterZone === 'all'
+                        ? 'bg-[#716053] text-white shadow-xs'
+                        : 'bg-white text-slate-600 border border-[#716053] hover:bg-[#F5E6D0]/40'
+                    }`}
+                  >
+                    全部
+                  </button>
+
+                  {Object.keys(ZONE_CONFIGS)
+                    .filter(zKey => ZONE_CONFIGS[zKey].status !== 'disabled')
+                    .map(zKey => {
+                    const zConf = resolveZone(zKey);
+                    return (
+                      <button
+                        key={zKey}
+                        onClick={() => setFilterZone(zKey)}
+                        className={`px-3 py-1 rounded-full text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
+                          filterZone === zKey
+                            ? 'bg-[#716053] text-white shadow-xs'
+                            : 'bg-white text-slate-600 border border-[#716053] hover:bg-[#F5E6D0]/40'
+                        }`}
+                      >
+                        <span>{zConf.icon}</span>
+                        <span>{zConf.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Main View Content: Full Calendar or Grid List */}
+            {viewMode === 'calendar' ? (
+              <ShiftCalendarView
+                shifts={shifts}
+                onUpdateShift={onUpdateShift}
+                onDeleteShift={onDeleteShift}
+                onOpenAiGenerator={onOpenAiGenerator}
+                onSendLineToast={onSendLineToast}
+                viewModeSwitcher={viewToggleButtons}
+              />
+            ) : (
         /* Shifts Grid */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredShifts.map(shift => {
@@ -403,6 +419,9 @@ export const PositionManager: React.FC<PositionManagerProps> = ({
           })}
         </div>
       )}
+          </>
+        );
+      })()}
 
       {/* Modal: AI Schedule Recommendation */}
       {aiScheduleModalShift && (

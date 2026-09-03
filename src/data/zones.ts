@@ -150,7 +150,8 @@ export function zoneRecordToConfig(zone: ZoneRecord): ZoneConfig {
     textClass: palette.textClass,
     badgeBg: palette.badgeBg,
     icon: zone.icon,
-    description: zone.description
+    description: zone.description,
+    status: zone.status
   };
 }
 
@@ -184,6 +185,7 @@ export function resolveZone(id: string | undefined | null): ZoneConfig {
     textClass: palette.textClass,
     badgeBg: palette.badgeBg,
     icon: '❔',
-    description: '這個場域已被移除或停用，僅保留既有紀錄的顯示。'
+    description: '這個場域已被移除或停用，僅保留既有紀錄的顯示。',
+    status: 'disabled'
   };
 }
