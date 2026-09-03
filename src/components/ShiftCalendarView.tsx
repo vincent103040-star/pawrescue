@@ -42,6 +42,15 @@ interface ShiftCalendarViewProps {
   isVolunteerMode?: boolean;
   onApplyClick?: (shift: PositionShift) => void;
   myAppliedShiftIds?: string[];
+  /**
+   * 月曆／卡片清單的切換按鈕，由外層（PositionManager 或 VolunteerPortal）
+   * 組好傳進來，這個元件只負責把它放進自己的合併列。
+   *
+   * 之所以是「接一段做好的 JSX」而不是把 viewMode/setViewMode 當狀態往上提，
+   * 是因為那顆按鈕在切到卡片清單模式時，這個元件根本不會被掛載——所以按鈕
+   * 本來就得留在外層才能一直存在，兩種畫面模式都能點得到。
+   */
+  viewModeSwitcher?: React.ReactNode;
 }
 
 export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
@@ -52,7 +61,8 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
   onSendLineToast,
   isVolunteerMode = false,
   onApplyClick,
-  myAppliedShiftIds = []
+  myAppliedShiftIds = [],
+  viewModeSwitcher
 }) => {
   // Calendar Navigation State (Default to August 2026 based on mock data date range)
   const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 7, 1)); // Month index 7 = August
@@ -292,31 +302,16 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
   return (
     <div className="space-y-6">
       
-      {/* Google Calendar Sync Status Bar */}
-      <div className="bg-[#FFFDF7] border border-[#716053] rounded-[28px] p-5 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-[#716053] text-amber-300 flex items-center justify-center shrink-0 shadow-xs font-bold text-lg">
-            🗓️
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-bold font-serif text-slate-900 text-base">
-                {isVolunteerMode ? '志工排班月曆時間表 (Google 日曆即時連線)' : 'Google Calendar Appointment Schedule 雙向同步服務'}
-              </h3>
-              <span className="bg-emerald-100 text-emerald-800 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border border-emerald-300 inline-flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                <span>即時連線中</span>
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              {isVolunteerMode 
-                ? '提示：點擊下方月曆上的任意班次可查看詳細工作內容並線上報名，報名後將自動同步至您的 Google 日曆與手機行程。' 
-                : '提示：您可以直接在下方月曆中按住拖曳班次至新日期，系統將透過 Google Workspace Calendar API 自動更新對應預約時段並推播通知。'}
-            </p>
-          </div>
-        </div>
+      {/* 檢視切換、Google 日曆同步狀態、園區地點合併成一列。
+          這三塊原本分散在外層的模式切換列，與這裡各自獨立的兩列（一列是標題
+          加說明文字加「即時連線中」徽章的說明橫幅，一列是月份導覽＋地點＋
+          場域篩選），佔了三整列版面卻大半是裝飾文字。現在收成一列：切換按鈕
+          由外層傳進來，最後同步時間、同步按鈕與地點仍是這個元件自己的狀態，
+          只是搬了位置；標題、說明文字與徽章單純是重複資訊，直接移除。 */}
+      <div className="bg-[#FFFDF7] border border-[#716053] rounded-[28px] p-4 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+        {viewModeSwitcher}
 
-        <div className="flex flex-wrap items-center gap-2.5 self-start md:self-auto shrink-0">
+        <div className="flex flex-wrap items-center gap-2.5">
           <span className="text-[11px] text-slate-400 font-mono">
             最後同步：{gcalLastSyncedTime}
           </span>
@@ -339,12 +334,80 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
               <span>重新整理班表</span>
             </button>
           )}
+
+          {/* Shelter Location -- admin-editable, replaces the old fixed 3-branch
+              selector. Volunteers see it read-only. Moved up from the header
+              controls row below so it sits with the other status info instead
+              of taking a whole row of its own. */}
+          {shelterLocation && (
+            !isEditingLocation ? (
+              <div className="flex items-center gap-2 bg-[#FAF6EE] px-3 py-2 rounded-2xl border border-[#716053] text-xs">
+                <MapPin className="w-4 h-4 text-rose-600 shrink-0" />
+                <div className="min-w-0">
+                  <span className="font-bold text-slate-800">{shelterLocation.name}</span>
+                  <span className="text-slate-500 ml-1.5 truncate">{shelterLocation.address}</span>
+                  {!shelterLocation.geocoded && (
+                    <span className="ml-1.5 text-amber-600 text-[10px] font-bold">（尚未定位）</span>
+                  )}
+                </div>
+                {!isVolunteerMode && (
+                  <button
+                    onClick={handleStartEditLocation}
+                    className="text-[#716053] hover:bg-white p-1 rounded-lg transition cursor-pointer shrink-0"
+                    title="編輯園區地點"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="bg-white border border-amber-300 rounded-2xl p-3 space-y-2 text-xs w-full lg:w-auto lg:min-w-[320px]">
+                <input
+                  type="text"
+                  value={locationDraft.name}
+                  onChange={e => setLocationDraft({ ...locationDraft, name: e.target.value })}
+                  placeholder="園區名稱"
+                  className="w-full p-2 bg-[#FAF6EE] border border-[#716053] rounded-xl font-bold focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                />
+                <input
+                  type="text"
+                  value={locationDraft.address}
+                  onChange={e => setLocationDraft({ ...locationDraft, address: e.target.value })}
+                  placeholder="完整地址（將用於 Google 地圖定位與導航）"
+                  className="w-full p-2 bg-[#FAF6EE] border border-[#716053] rounded-xl focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                />
+                <input
+                  type="text"
+                  value={locationDraft.openHours}
+                  onChange={e => setLocationDraft({ ...locationDraft, openHours: e.target.value })}
+                  placeholder="開放時間"
+                  className="w-full p-2 bg-[#FAF6EE] border border-[#716053] rounded-xl focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => setIsEditingLocation(false)}
+                    className="px-3 py-1.5 rounded-xl font-bold text-slate-500 hover:bg-slate-100 cursor-pointer"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={handleSaveLocation}
+                    disabled={isSavingLocation || !locationDraft.name.trim() || !locationDraft.address.trim()}
+                    className="px-4 py-1.5 rounded-xl font-bold bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 cursor-pointer"
+                  >
+                    {isSavingLocation ? '定位中...' : '儲存並重新定位'}
+                  </button>
+                </div>
+              </div>
+            )
+          )}
         </div>
       </div>
 
-      {/* Calendar Header Controls */}
+      {/* Calendar Header Controls -- 地點搬到上面那一列之後，這裡只剩月份
+          導覽與場域篩選，左右各半重新排版。 */}
       <div className="bg-white rounded-[28px] border border-[#716053] p-5 shadow-xs flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-        
+
         {/* Navigation & Month Title */}
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1 bg-[#FAF6EE] p-1 rounded-2xl border border-[#716053]">
@@ -379,72 +442,11 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
           </div>
         </div>
 
-        {/* Shelter Location -- admin-editable, replaces the old fixed 3-branch
-            selector. Volunteers see it read-only. */}
-        {shelterLocation && (
-          !isEditingLocation ? (
-            <div className="flex items-center gap-2 bg-[#FAF6EE] px-3 py-2 rounded-2xl border border-[#716053] text-xs">
-              <MapPin className="w-4 h-4 text-rose-600 shrink-0" />
-              <div className="min-w-0">
-                <span className="font-bold text-slate-800">{shelterLocation.name}</span>
-                <span className="text-slate-500 ml-1.5 truncate">{shelterLocation.address}</span>
-                {!shelterLocation.geocoded && (
-                  <span className="ml-1.5 text-amber-600 text-[10px] font-bold">（尚未定位）</span>
-                )}
-              </div>
-              {!isVolunteerMode && (
-                <button
-                  onClick={handleStartEditLocation}
-                  className="text-[#716053] hover:bg-white p-1 rounded-lg transition cursor-pointer shrink-0"
-                  title="編輯園區地點"
-                >
-                  <Edit2 className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="bg-white border border-amber-300 rounded-2xl p-3 space-y-2 text-xs w-full lg:w-auto lg:min-w-[320px]">
-              <input
-                type="text"
-                value={locationDraft.name}
-                onChange={e => setLocationDraft({ ...locationDraft, name: e.target.value })}
-                placeholder="園區名稱"
-                className="w-full p-2 bg-[#FAF6EE] border border-[#716053] rounded-xl font-bold focus:ring-2 focus:ring-amber-400 focus:outline-none"
-              />
-              <input
-                type="text"
-                value={locationDraft.address}
-                onChange={e => setLocationDraft({ ...locationDraft, address: e.target.value })}
-                placeholder="完整地址（將用於 Google 地圖定位與導航）"
-                className="w-full p-2 bg-[#FAF6EE] border border-[#716053] rounded-xl focus:ring-2 focus:ring-amber-400 focus:outline-none"
-              />
-              <input
-                type="text"
-                value={locationDraft.openHours}
-                onChange={e => setLocationDraft({ ...locationDraft, openHours: e.target.value })}
-                placeholder="開放時間"
-                className="w-full p-2 bg-[#FAF6EE] border border-[#716053] rounded-xl focus:ring-2 focus:ring-amber-400 focus:outline-none"
-              />
-              <div className="flex justify-end gap-2">
-                <button
-                  onClick={() => setIsEditingLocation(false)}
-                  className="px-3 py-1.5 rounded-xl font-bold text-slate-500 hover:bg-slate-100 cursor-pointer"
-                >
-                  取消
-                </button>
-                <button
-                  onClick={handleSaveLocation}
-                  disabled={isSavingLocation || !locationDraft.name.trim() || !locationDraft.address.trim()}
-                  className="px-4 py-1.5 rounded-xl font-bold bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 cursor-pointer"
-                >
-                  {isSavingLocation ? '定位中...' : '儲存並重新定位'}
-                </button>
-              </div>
-            </div>
-          )
-        )}
-
-        {/* Zone Filters */}
+        {/* Zone Filters -- 已停用的場域不再出現在這份清單裡：那些場域底下的
+            歷史班次仍會正常顯示（見 resolveZone），只是不再提供新的篩選入口，
+            跟「園區場域設定」畫面裡標記「已停用」的定義一致。之前這裡直接列出
+            ZONE_CONFIGS 的每一把 key，管理員登入時該物件含有已停用的場域，
+            篩選列因此會出現跟場域設定畫面對不起來的按鈕。 */}
         <div className="flex flex-wrap items-center gap-1.5 text-xs">
           <span className="text-slate-400 font-bold text-[11px] mr-1">過濾場域：</span>
           <button
@@ -457,7 +459,9 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
           >
             全部場域
           </button>
-          {Object.keys(ZONE_CONFIGS).map(zKey => {
+          {Object.keys(ZONE_CONFIGS)
+            .filter(zKey => ZONE_CONFIGS[zKey].status !== 'disabled')
+            .map(zKey => {
             const z = resolveZone(zKey);
             return (
               <button

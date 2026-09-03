@@ -737,62 +737,75 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
 
       {activePortalTab === 'shifts' && (
         <div className="space-y-6">
-          {/* Top Bar with Mode Switch and Stats */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-[24px] border border-[#716053] shadow-xs">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-base font-bold font-serif text-slate-900">
-                  📅 職位與班次時間表
-                </span>
-                <span className="bg-amber-100 text-amber-900 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border border-amber-300">
-                  志工專屬排班
-                </span>
+          {/* 切換按鈕抽出來共用，理由跟管理端的 PositionManager 一樣：月曆模式
+              下這個按鈕會被塞進 ShiftCalendarView，跟同步狀態、地點合併成一列
+              （見該元件的 viewModeSwitcher prop）；月曆模式時這裡不會掛載它，
+              所以按鈕只能由這一層準備好，卡片模式與月曆模式共用同一份 JSX。 */}
+          {(() => {
+            const viewToggleButtons = (
+              <div className="flex items-center bg-[#FAF6EE] p-1.5 rounded-2xl border border-[#716053] shrink-0 self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('calendar')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                    viewMode === 'calendar'
+                      ? 'bg-[#716053] text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Calendar className="w-3.5 h-3.5 text-amber-300" />
+                  <span>月曆排班視圖</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setViewMode('grid')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                    viewMode === 'grid'
+                      ? 'bg-[#716053] text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <LayoutGrid className="w-3.5 h-3.5 text-sky-300" />
+                  <span>卡片清單視圖</span>
+                </button>
               </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                可切換月曆視圖或卡片清單，點選班次可查看工作說明並進行線上預約搶班（報名後自動同步 Google 日曆）。
-              </p>
-            </div>
+            );
 
-            {/* View Mode Switcher */}
-            <div className="flex items-center bg-[#FAF6EE] p-1.5 rounded-2xl border border-[#716053] shrink-0 self-start sm:self-auto">
-              <button
-                type="button"
-                onClick={() => setViewMode('calendar')}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                  viewMode === 'calendar'
-                    ? 'bg-[#716053] text-white shadow-2xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Calendar className="w-3.5 h-3.5 text-amber-300" />
-                <span>月曆排班視圖</span>
-              </button>
+            return (
+              <>
+                {/* Top Bar with Mode Switch and Stats */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-[24px] border border-[#716053] shadow-xs">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-base font-bold font-serif text-slate-900">
+                        📅 職位與班次時間表
+                      </span>
+                      <span className="bg-amber-100 text-amber-900 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border border-amber-300">
+                        志工專屬排班
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      可切換月曆視圖或卡片清單，點選班次可查看工作說明並進行線上預約搶班（報名後自動同步 Google 日曆）。
+                    </p>
+                  </div>
 
-              <button
-                type="button"
-                onClick={() => setViewMode('grid')}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                  viewMode === 'grid'
-                    ? 'bg-[#716053] text-white shadow-2xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <LayoutGrid className="w-3.5 h-3.5 text-sky-300" />
-                <span>卡片清單視圖</span>
-              </button>
-            </div>
-          </div>
+                  {/* 卡片模式才在這裡畫切換按鈕；月曆模式已經交給 ShiftCalendarView
+                      跟同步狀態、地點合併顯示，這裡不重複畫一次。 */}
+                  {viewMode === 'grid' && viewToggleButtons}
+                </div>
 
-          {/* Render Calendar View or Grid View */}
-          {viewMode === 'calendar' ? (
-            <ShiftCalendarView
-              shifts={shifts}
-              isVolunteerMode={true}
-              onApplyClick={handleOpenApply}
-              myAppliedShiftIds={myAppliedShiftIds}
-              onSendLineToast={onSendLineToast}
-            />
-          ) : (
+                {/* Render Calendar View or Grid View */}
+                {viewMode === 'calendar' ? (
+                  <ShiftCalendarView
+                    shifts={shifts}
+                    isVolunteerMode={true}
+                    onApplyClick={handleOpenApply}
+                    myAppliedShiftIds={myAppliedShiftIds}
+                    onSendLineToast={onSendLineToast}
+                    viewModeSwitcher={viewToggleButtons}
+                  />
+                ) : (
             <div className="space-y-6">
               {/* Zone Filter Tabs for Grid View */}
               <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-[24px] border border-[#716053]">
@@ -984,6 +997,9 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
               </div>
             </div>
           )}
+              </>
+            );
+          })()}
         </div>
       )}
 
