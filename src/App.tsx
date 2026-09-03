@@ -3,14 +3,27 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { Suspense, useState, useEffect, useMemo } from 'react';
 import { LoginPortal } from './components/LoginPortal';
+import { lazyScreen } from './components/lazyScreen';
+
+const Dashboard = lazyScreen(() => import('./components/Dashboard').then(m => ({ default: m.Dashboard })));
+
+/** 首次進入某個畫面時的載入提示。 */
+const ScreenLoading: React.FC = () => (
+  <div className="py-24 flex items-center justify-center text-sm text-[#716053] font-sans">
+    載入中...
+  </div>
+);
+const PositionManager = lazyScreen(() => import('./components/PositionManager').then(m => ({ default: m.PositionManager })));
+const ApplicantReview = lazyScreen(() => import('./components/ApplicantReview').then(m => ({ default: m.ApplicantReview })));
+const VolunteerPortal = lazyScreen(() => import('./components/VolunteerPortal').then(m => ({ default: m.VolunteerPortal })));
 import { AdminNavbar } from './components/AdminNavbar';
 import { VolunteerNavbar, VolunteerActiveTab } from './components/VolunteerNavbar';
-import { Dashboard } from './components/Dashboard';
-import { PositionManager } from './components/PositionManager';
-import { ApplicantReview } from './components/ApplicantReview';
-import { VolunteerPortal } from './components/VolunteerPortal';
+
+
+
+
 import { VolunteerMyShifts } from './components/VolunteerMyShifts';
 import { VolunteerSopGuide } from './components/VolunteerSopGuide';
 import { AdminSopManager } from './components/AdminSopManager';
@@ -988,6 +1001,7 @@ export default function App() {
           />
 
           <main className="pb-16">
+            <Suspense fallback={<ScreenLoading />}>
             {adminActiveTab === 'dashboard' && (
               <Dashboard
                 shifts={shifts}
@@ -1081,6 +1095,7 @@ export default function App() {
                 <AdminSopManager onSendLineToast={showToast} />
               </>
             )}
+            </Suspense>
           </main>
         </>
       )}
@@ -1101,6 +1116,7 @@ export default function App() {
           />
 
           <main className="pb-16">
+            <Suspense fallback={<ScreenLoading />}>
             {volunteerActiveTab === 'shifts' && (
               <VolunteerPortal
                 shifts={shifts}
@@ -1184,6 +1200,7 @@ export default function App() {
                 onOpenRulebookModal={() => setIsRulebookModalOpen(true)}
               />
             )}
+            </Suspense>
           </main>
         </>
       )}

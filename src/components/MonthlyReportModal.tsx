@@ -3,6 +3,7 @@ import { ShelterLocation, PositionShift, ShiftSignup } from '../types';
 import { Download, X, FileSpreadsheet, FileText, Printer, CheckCircle2, ShieldCheck, Sparkles, Building2, Users, Clock, AlertTriangle, Loader2 } from 'lucide-react';
 
 import { authFetch } from '../utils/session';
+import { calculateShiftDurationHours } from '../utils/shiftHours';
 import { captureElement } from '../utils/domToCanvas';
 interface MonthlyReportModalProps {
   month: string; // e.g., '2026-08'
@@ -25,27 +26,6 @@ export interface MonthlyStat {
   statusBadgeBg: string;
 }
 
-// Helper to calculate shift duration in hours from timeRange string (e.g. "10:00 - 13:00")
-export const calculateShiftDurationHours = (timeRange: string): number => {
-  try {
-    const parts = timeRange.split('-').map(p => p.trim());
-    if (parts.length === 2) {
-      const [startH, startM] = parts[0].split(':').map(Number);
-      const [endH, endM] = parts[1].split(':').map(Number);
-      if (!isNaN(startH) && !isNaN(endH)) {
-        const startTotalMinutes = startH * 60 + (startM || 0);
-        const endTotalMinutes = endH * 60 + (endM || 0);
-        const diffMinutes = endTotalMinutes - startTotalMinutes;
-        if (diffMinutes > 0) {
-          return Math.round((diffMinutes / 60) * 10) / 10;
-        }
-      }
-    }
-  } catch (e) {
-    // fallback
-  }
-  return 3.5;
-};
 
 export const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({
   month,
