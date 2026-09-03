@@ -105,12 +105,12 @@ export const DASHBOARD_MODULE_DEFS: ModuleDefinition[] = [
   },
   {
     id: 'zone_shortage',
-    name: '7. 動物之家場域 (Zone) 色標管理與即時排班卡片',
+    name: '7. 急缺志工班次與招募推播',
     category: 'core',
     categoryLabel: '📊 基礎核心數據',
-    icon: '🎨',
-    description: '依貓舍(粉)、犬舍(棕)、幼犬隔離(綠)、醫療(藍)、後勤(金)分區色標檢視人力。',
-    badge: '場域色彩',
+    icon: '🚨',
+    description: '列出人力尚未補齊的班次，可直接發布 LINE 招募推播或代志工報名。',
+    badge: '缺額班次',
     badgeColor: 'bg-[#F5E6D0] text-[#716053] border-[#716053]',
     defaultVisible: true
   }
