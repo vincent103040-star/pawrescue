@@ -1,12 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { PositionShift, ShiftSignup, ShelterLocation, AttendanceRecord } from '../types';
 import { AlertCircle, CheckCircle2, Users, Calendar, MapPin, ArrowRight, ShieldAlert, Sparkles, Filter, Eye, ChevronRight, QrCode, LogOut, Send, Zap, FileSpreadsheet, FileText, Download, Building2, Clock, BarChart3, Star, Smartphone, MessageSquare, ThumbsUp, Search, RefreshCw, SlidersHorizontal, LayoutGrid, EyeOff, Megaphone } from 'lucide-react';
-import { UrgentShortageModal } from './UrgentShortageModal';
-import { HeatmapChart } from './HeatmapChart';
-import { MonthlyReportModal, calculateShiftDurationHours } from './MonthlyReportModal';
-import { ResourceWarningMap } from './ResourceWarningMap';
-import { DailyDutyTaskboard } from './DailyDutyTaskboard';
 import { DashboardModuleCard } from './DashboardModuleCard';
+import { lazyScreen } from './lazyScreen';
+import { calculateShiftDurationHours } from '../utils/shiftHours';
 import { authFetch } from '../utils/session';
 import { resolveZone } from '../data/zones';
 import { 
@@ -16,6 +13,34 @@ import {
   DEFAULT_COLLAPSED_MODULES,
   DASHBOARD_MODULE_CONFIGS
 } from './DashboardModuleCustomizer';
+
+// 看板最重的五塊，改成用到才載入。
+//
+// 三個模組多半是關著的（熱力圖、AI 預測地圖、月報預設就不顯示），兩個 modal 要
+// 點了才會開，但在這之前它們全都躺在主 bundle 裡，每個開啟看板的人都得先下載。
+// 熱力圖還帶著 d3。
+//
+// 月報那個之所以切得出去，是因為 calculateShiftDurationHours 先被搬到
+// utils/shiftHours。只要這裡還從 MonthlyReportModal import 任何東西——哪怕只是
+// 一個純函式——整個檔案就會留在主 bundle，lazy 會安靜地失效。
+const HeatmapChart = lazyScreen(() => import('./HeatmapChart').then(m => ({ default: m.HeatmapChart })));
+const ResourceWarningMap = lazyScreen(() => import('./ResourceWarningMap').then(m => ({ default: m.ResourceWarningMap })));
+const DailyDutyTaskboard = lazyScreen(() => import('./DailyDutyTaskboard').then(m => ({ default: m.DailyDutyTaskboard })));
+const UrgentShortageModal = lazyScreen(() => import('./UrgentShortageModal').then(m => ({ default: m.UrgentShortageModal })));
+const MonthlyReportModal = lazyScreen(() => import('./MonthlyReportModal').then(m => ({ default: m.MonthlyReportModal })));
+
+/**
+ * 模組載入中的佔位。
+ *
+ * 邊框和圓角刻意跟 DashboardModuleCard 一致，讓載入完成的那一刻只是內容填進來，
+ * 而不是整個版面往下跳。
+ */
+const ModuleLoading: React.FC = () => (
+  <div className="bg-white rounded-[32px] border border-[#716053] p-10 flex items-center justify-center gap-2 text-xs text-slate-400 font-sans">
+    <RefreshCw className="w-4 h-4 animate-spin" />
+    <span>載入模組中...</span>
+  </div>
+);
 
 interface DashboardProps {
   shifts: PositionShift[];
@@ -667,6 +692,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {(() => {
       // 2. D3.js Volunteer Engagement Heatmap
       const mod2 = visibleModules.heatmap && (
+        <Suspense fallback={<ModuleLoading />}>
         <HeatmapChart
           shifts={shifts}
           onOpenUrgentModal={() => setShowUrgentModal(true)}
@@ -675,10 +701,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
           onToggleCollapse={() => handleToggleModuleCollapse('heatmap')}
           onHide={() => handleHideModule('heatmap')}
         />
+        </Suspense>
       );
 
       // 3. 🔮 Gemini 3.6 Flash AI 資源需求預警與雙週物資人力缺口地圖
       const mod3 = visibleModules.ai_warning_map && (
+        <Suspense fallback={<ModuleLoading />}>
         <ResourceWarningMap
           shifts={shifts}
           onSendLineToast={onSendLineToast}
@@ -686,10 +714,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
           onToggleCollapse={() => handleToggleModuleCollapse('ai_warning_map')}
           onHide={() => handleHideModule('ai_warning_map')}
         />
+        </Suspense>
       );
 
       // 4. 📋 每日志工勤務看板 & SOP 執行追蹤
       const mod4 = visibleModules.daily_duty && (
+        <Suspense fallback={<ModuleLoading />}>
         <DailyDutyTaskboard
           shifts={shifts}
           onSendLineToast={onSendLineToast}
@@ -697,6 +727,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           onToggleCollapse={() => handleToggleModuleCollapse('daily_duty')}
           onHide={() => handleHideModule('daily_duty')}
         />
+        </Suspense>
       );
 
       // 5. 📊 月度據點績效統計與總結匯出中心 (CSV / PDF)
@@ -1307,6 +1338,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
       {/* Modal: Urgent Shortage Auto Push */}
       {showUrgentModal && (
+        <Suspense fallback={null}>
         <UrgentShortageModal
           shifts={shifts}
           shelterLocation={shelterLocation}
@@ -1314,10 +1346,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
           onSendLineToast={onSendLineToast}
           onApplyForShift={onApplyForShift}
         />
+        </Suspense>
       )}
 
       {/* Modal: Monthly Report PDF / CSV Preview */}
       {showReportModal && (
+        <Suspense fallback={null}>
         <MonthlyReportModal
           month={selectedExportMonth}
           shelterLocation={shelterLocation}
@@ -1326,6 +1360,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           onClose={() => setShowReportModal(false)}
           onSendLineToast={onSendLineToast}
         />
+        </Suspense>
       )}
 
       {/* Modal: 回覆志工的服務回饋 */}
