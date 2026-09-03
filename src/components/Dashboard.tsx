@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { PositionShift, ShiftSignup, ShelterLocation, AttendanceRecord } from '../types';
-import { ZONE_CONFIGS } from '../data/mockData';
 import { AlertCircle, CheckCircle2, Users, Calendar, MapPin, ArrowRight, ShieldAlert, Sparkles, Filter, Eye, ChevronRight, QrCode, LogOut, Send, Zap, FileSpreadsheet, FileText, Download, Building2, Clock, BarChart3, Star, Smartphone, MessageSquare, ThumbsUp, Search, RefreshCw, SlidersHorizontal, LayoutGrid, EyeOff, Megaphone } from 'lucide-react';
 import { UrgentShortageModal } from './UrgentShortageModal';
 import { HeatmapChart } from './HeatmapChart';
@@ -396,22 +395,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
     return (s.requiredCount - s.currentCount) / s.requiredCount > 0.5;
   });
 
-  // Group by zone
-  const zoneStats = Object.keys(ZONE_CONFIGS).map(zoneKey => {
-    const config = resolveZone(zoneKey);
-    const zoneShifts = filteredShifts.filter(s => s.zone === zoneKey);
-    const required = zoneShifts.reduce((acc, s) => acc + s.requiredCount, 0);
-    const filled = zoneShifts.reduce((acc, s) => acc + s.currentCount, 0);
-    const gap = required - filled;
-    return {
-      config,
-      shifts: zoneShifts,
-      required,
-      filled,
-      gap,
-      isFull: gap <= 0 && required > 0
-    };
-  });
+  // 尚未補滿人力的班次。清單本身、模組的徽章與收合摘要都讀這一份，免得同一個
+  // 條件寫三次然後各自漂移 —— 那種不一致沒有錯誤訊息，只會讓徽章上的數字跟底下
+  // 列出來的筆數對不起來。
+  const understaffedShifts = filteredShifts.filter(s => s.requiredCount > s.currentCount);
+  const totalMissingPeople = understaffedShifts.reduce(
+    (acc, s) => acc + (s.requiredCount - s.currentCount),
+    0
+  );
 
   const pendingApps = shiftSignups.filter(a => a.status === 'pending');
 
@@ -1168,10 +1159,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
       const mod7 = visibleModules.zone_shortage && (
         <DashboardModuleCard
           moduleId="zone_shortage"
-          title="7. 場域色標與分區排班卡片列表"
-          subtitle="依據場域屬性（狗園放風、貓舍清潔、幼犬餵食、醫療協助）進行即時招募與報名管理"
-          icon={<Building2 className="w-5 h-5 text-amber-300" />}
-          badgeText="5 大場域"
+          title="7. 急缺志工班次與招募推播"
+          subtitle="人力尚未補齊的班次，可直接發布 LINE 招募或代志工報名"
+          icon={<Megaphone className="w-5 h-5 text-amber-300" />}
+          badgeText={`${understaffedShifts.length} 個缺額班次`}
           badgeColor="bg-[#F5E6D0] text-[#716053]"
           isCollapsed={collapsedModules.zone_shortage}
           onToggleCollapse={() => handleToggleModuleCollapse('zone_shortage')}
@@ -1213,121 +1204,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
           }
           collapsedSummary={
             <span>
-              5大場域排班概況：{zoneStats.map(z => `${z.config.name} (${z.filled}/${z.required}人)`).join('、')}
+              {understaffedShifts.length === 0
+                ? '目前所有班次的人力都已補齊'
+                : `${understaffedShifts.length} 個班次尚缺人力，合計還需 ${totalMissingPeople} 人`}
             </span>
           }
         >
           <div className="space-y-6">
-            {/* Zone-based Staffing Cards (Red, Green, Blue, Yellow, Purple) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {zoneStats.map(({ config, shifts: zShifts, required, filled, gap, isFull }) => (
-          <div
-            key={config.id}
-            className={`rounded-[28px] border border-[#716053] bg-white p-6 transition shadow-xs hover:border-[#716053] flex flex-col justify-between space-y-4`}
-          >
-            <div>
-              {/* Card Title & Icon */}
-              <div className="flex items-start justify-between">
-                <div className="flex items-center space-x-3">
-                  <span className="text-3xl p-2.5 bg-[#FAF6EE] rounded-2xl shadow-2xs border border-[#716053]">
-                    {config.icon}
-                  </span>
-                  <div>
-                    <h4 className="font-bold font-serif text-[#716053] text-base">
-                      {config.name}
-                    </h4>
-                    <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full inline-block mt-1 ${config.badgeBg}`}>
-                      日曆色彩標籤: {config.color}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Status Badge */}
-                {gap > 0 ? (
-                  <span className="bg-rose-500 text-white text-[11px] font-bold px-3 py-1 rounded-full animate-pulse shadow-2xs">
-                    缺 {gap} 人 (救援中)
-                  </span>
-                ) : required > 0 ? (
-                  <span className="bg-emerald-700 text-white text-[11px] font-bold px-3 py-1 rounded-full shadow-2xs">
-                    喵力滿點 (已滿班)
-                  </span>
-                ) : (
-                  <span className="bg-slate-100 text-slate-500 text-[11px] font-medium px-3 py-1 rounded-full">
-                    無排班
-                  </span>
-                )}
-              </div>
-
-              {/* Description */}
-              <p className="text-xs text-slate-600 mt-3 leading-relaxed font-sans">
-                {config.description}
-              </p>
-
-              {/* Progress */}
-              <div className="mt-4 pt-3 border-t border-[#716053]">
-                <div className="flex justify-between text-xs font-medium mb-1.5 text-slate-700">
-                  <span className="font-sans text-slate-500">登記入數狀態</span>
-                  <span className="font-bold text-[#716053]">{filled} / {required} 人 ({required > 0 ? Math.round((filled / required) * 100) : 0}%)</span>
-                </div>
-                <div className="w-full bg-[#FAF6EE] rounded-full h-2.5 overflow-hidden">
-                  <div
-                    className="h-2.5 rounded-full transition-all duration-500"
-                    style={{
-                      width: `${required > 0 ? Math.min((filled / required) * 100, 100) : 0}%`,
-                      backgroundColor: config.color
-                    }}
-                  ></div>
-                </div>
-              </div>
-
-              {/* Shifts in this zone */}
-              <div className="mt-4 space-y-2">
-                <p className="text-[11px] font-bold text-[#716053] uppercase tracking-wider">
-                  本區待補班次 ({zShifts.length})：
-                </p>
-                {zShifts.length === 0 ? (
-                  <p className="text-xs text-slate-400 italic">目前該區域尚無發布班次</p>
-                ) : (
-                  zShifts.slice(0, 2).map(s => (
-                    <div
-                      key={s.id}
-                      className="bg-[#FFFDF7] p-3 rounded-2xl border border-[#716053] text-xs flex justify-between items-center"
-                    >
-                      <div>
-                        <p className="font-semibold text-slate-800 line-clamp-1">{s.title}</p>
-                        <p className="text-[11px] text-slate-500">{s.date} ({s.timeRange})</p>
-                      </div>
-                      <button
-                        onClick={() => onApplyForShift(s.id)}
-                        disabled={s.currentCount >= s.requiredCount}
-                        className={`px-3 py-1 rounded-full text-[11px] font-bold cursor-pointer transition ${
-                          s.currentCount >= s.requiredCount
-                            ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                            : 'bg-[#716053] hover:bg-[#5A4A3F] text-white shadow-2xs'
-                        }`}
-                      >
-                        {s.currentCount >= s.requiredCount ? '已滿班' : '報名支援'}
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            <div className="mt-4 pt-3 border-t border-[#716053] flex justify-between items-center text-xs">
-              <span className="text-slate-500">自動綁定 Google 地圖據點</span>
-              <button
-                onClick={() => onNavigateToTab('positions')}
-                className="font-bold text-[#716053] hover:underline flex items-center gap-0.5 cursor-pointer"
-              >
-                <span>管理本區班次</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-
       {/* Staffing Gap Immediate Attention List */}
       <div className="bg-white rounded-[32px] border border-[#716053] p-6 sm:p-8 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-[#716053] gap-2">
@@ -1356,8 +1239,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
 
         <div className="mt-4 divide-y divide-[#716053]/10">
-          {filteredShifts
-            .filter(s => s.requiredCount > s.currentCount)
+          {understaffedShifts
             .map(shift => {
               const zoneConf = resolveZone(shift.zone);
               const remaining = shift.requiredCount - shift.currentCount;
