@@ -5,6 +5,7 @@
 
 import React, { Suspense, useState, useEffect, useMemo } from 'react';
 import { LoginPortal } from './components/LoginPortal';
+import { ShiftSignupSplash } from './components/ShiftSignupSplash';
 import { lazyScreen } from './components/lazyScreen';
 
 const Dashboard = lazyScreen(() => import('./components/Dashboard').then(m => ({ default: m.Dashboard })));
@@ -68,6 +69,22 @@ export default function App() {
     const saved = localStorage.getItem('paw_user_role');
     return (saved as UserRole) || null;
   });
+
+  /**
+   * 溫馨過場畫面，只在 LINE 官方帳號選單「班次報名」那顆按鈕（帶著
+   * ?tab=shifts 開啟這個頁面）出現。
+   *
+   * 用 useState 的惰性初始化在第一次 render 就同步讀一次網址，而不是等
+   * useEffect 才判斷——後者要等到瀏覽器畫完第一幀之後才會跑，會讓使用者先
+   * 瞄到一瞬間的登入畫面或班次列表，過場才蓋上去，那個閃爍比沒有過場還難看。
+   * 下面既有的深連結 useEffect（處理 ?tab=、?checkin=）稍後才會清掉網址參數，
+   * 讀取順序上不會搶到它前面。
+   */
+  const [showShiftSplash, setShowShiftSplash] = useState(
+    () => new URLSearchParams(window.location.search).get('tab') === 'shifts'
+  );
+  const [shiftSplashMinTimeElapsed, setShiftSplashMinTimeElapsed] = useState(false);
+  const [shiftSplashDataSettled, setShiftSplashDataSettled] = useState(false);
 
   const [adminSession, setAdminSession] = useState<AdminUserSession | null>(() => {
     const saved = localStorage.getItem('paw_admin_session');
@@ -206,7 +223,11 @@ export default function App() {
   useEffect(() => {
     if (!userRole) return;
     refreshZones();
-    refreshShifts();
+    // .finally() rather than folding into refreshShifts() itself: every other
+    // call site of refreshShifts() (after creating a shift, a live-update push,
+    // and so on) has nothing to do with the splash -- only this first load,
+    // right after a role is known, is what the splash is waiting on.
+    refreshShifts().finally(() => setShiftSplashDataSettled(true));
     refreshShiftSignups();
     refreshAttendance();
     refreshVolunteers();
@@ -287,6 +308,32 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 溫馨過場：至少播滿 3 秒；若這台裝置已經有登入紀錄，多等班次資料回來，
+  // 避免動畫先關掉、底下畫面卻還在轉圈圈。
+  useEffect(() => {
+    if (!showShiftSplash) return;
+    const t = setTimeout(() => setShiftSplashMinTimeElapsed(true), 3000);
+    return () => clearTimeout(t);
+  }, [showShiftSplash]);
+
+  // 硬上限：訊號不穩時，「等資料回來」不能等成「卡住不動」——志工是在園區用
+  // 手機開這個連結，網路本來就不保證穩定。3 秒的溫馨畫面，最多再多等 3 秒
+  // 資料，共 6 秒後不論資料到了沒都放行，讓使用者至少看得到畫面本身。
+  useEffect(() => {
+    if (!showShiftSplash) return;
+    const t = setTimeout(() => setShowShiftSplash(false), 6000);
+    return () => clearTimeout(t);
+  }, [showShiftSplash]);
+
+  useEffect(() => {
+    if (!showShiftSplash || !shiftSplashMinTimeElapsed) return;
+    // 這台裝置沒有登入紀錄的話，班次資料根本不會開始抓（見上面那個 bootstrap
+    // effect 的 `if (!userRole) return`），繼續等 shiftSplashDataSettled 只會
+    // 讓人對著感謝畫面卡住，看不到登入選項。
+    if (userRole !== 'volunteer' || shiftSplashDataSettled) {
+      setShowShiftSplash(false);
+    }
+  }, [showShiftSplash, shiftSplashMinTimeElapsed, shiftSplashDataSettled, userRole]);
 
   // Deep-link support for the LINE Rich Menu: tapping a menu tile opens this app
   // with e.g. ?tab=sop or ?checkin=1. If the volunteer is already logged in on this
@@ -950,6 +997,12 @@ export default function App() {
   const mySignupsCount = myEmailLower
     ? shiftSignups.filter(a => (a.volunteerEmail || '').trim().toLowerCase() === myEmailLower).length
     : 0;
+
+  // 0. 溫馨過場：不管待會要顯示登入頁還是志工的班次列表都先蓋在最上面，
+  //    所以放在下面兩個分支之前，這樣不用在兩邊各插一份重複的畫面。
+  if (showShiftSplash) {
+    return <ShiftSignupSplash />;
+  }
 
   // 1. IF NOT LOGGED IN -> RENDER LOGIN PORTAL
   if (!userRole) {
