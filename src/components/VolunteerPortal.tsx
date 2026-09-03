@@ -663,20 +663,26 @@ export const VolunteerPortal: React.FC<VolunteerPortalProps> = ({
   return (
     <div className="space-y-8 py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
       
-      {/* Volunteer Welcome Card with Accumulated Hours & Next Tier Milestone Progress */}
-      <VolunteerWelcomeCard
-        currentUser={currentUser || null}
-        attendanceRecords={attendanceRecords}
-        onOpenCheckInModal={onOpenCheckInModal}
-        onNavigateTab={(tab) => {
-          if (tab === 'growth' || tab === 'settings' || tab === 'shifts') {
-            setActivePortalTab(tab);
-          }
-          if (onNavigateToTab) {
-            onNavigateToTab(tab);
-          }
-        }}
-      />
+      {/* 累積時數與晉升進度只跟「志工成長晉升歷程」這個分頁有關，放在班次瀏覽
+          或設定分頁上只是重複資訊、多佔一屏。簽到按鈕與晉升清單捷徑都不是這裡
+          唯一的入口：簽到在最上方的 VolunteerNavbar 已經有獨立按鈕，晉升清單
+          本來就只是切到 growth 分頁的捷徑，而 growth 分頁本身在頂部分頁列隨時
+          點得到 —— 所以只在這裡顯示不會少任何功能。 */}
+      {activePortalTab === 'growth' && (
+        <VolunteerWelcomeCard
+          currentUser={currentUser || null}
+          attendanceRecords={attendanceRecords}
+          onOpenCheckInModal={onOpenCheckInModal}
+          onNavigateTab={(tab) => {
+            if (tab === 'growth' || tab === 'settings' || tab === 'shifts') {
+              setActivePortalTab(tab);
+            }
+            if (onNavigateToTab) {
+              onNavigateToTab(tab);
+            }
+          }}
+        />
+      )}
 
       {/* Sub Navigation Bar for Volunteer Portal */}
       <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-2.5 rounded-[24px] border border-[#716053] shadow-xs">
