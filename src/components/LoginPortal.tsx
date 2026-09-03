@@ -562,10 +562,21 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
               {/* Returning volunteers who bound LINE during onboarding can skip
                   straight past Google. New volunteers can't start here: LINE only
                   returns an opaque userId, so there's no verified identity behind
-                  it until it's been bound to a Google-verified record. */}
-              <div className="flex items-center gap-2 pt-1">
+                  it until it's been bound to a Google-verified record.
+
+                  Which is why this button is outlined rather than filled, and says
+                  so on its face. The rule was already stated twice -- in the divider
+                  above and the notice below -- and a first-time volunteer still
+                  reached for the green LINE button, because a filled brand-coloured
+                  button outranks any sentence next to it. They only found out after
+                  a round trip through LINE's authorisation screen and back. Keeping
+                  LINE's green on the border and the label preserves recognition for
+                  the people this button is actually for. */}
+              <div className="flex items-center gap-2 pt-2">
                 <div className="flex-1 h-px bg-[#E6DCCB]"></div>
-                <span className="text-[10px] text-slate-400 font-bold">已註冊過的志工</span>
+                <span className="text-[10px] text-slate-500 font-bold whitespace-nowrap">
+                  以下限已完成註冊的志工
+                </span>
                 <div className="flex-1 h-px bg-[#E6DCCB]"></div>
               </div>
 
@@ -577,11 +588,12 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
                     setLineLoginError(err.message || '無法開啟 LINE 授權，請稍後再試。')
                   );
                 }}
-                className="w-full py-3 bg-[#06C755] hover:brightness-95 text-white font-extrabold rounded-2xl text-sm shadow-sm transition flex items-center justify-center gap-2.5 cursor-pointer active:scale-95"
+                className="w-full py-3 bg-white border-2 border-[#06C755] text-[#06C755] hover:bg-[#06C755]/5 font-bold rounded-2xl text-sm transition flex items-center justify-center gap-2 cursor-pointer active:scale-95"
               >
                 <MessageSquare className="w-5 h-5" />
                 <span>使用 LINE 帳號登入</span>
-                <ArrowRight className="w-4 h-4 text-white/80" />
+                <span className="text-[10px] font-bold opacity-70">（限已註冊）</span>
+                <ArrowRight className="w-4 h-4 opacity-70" />
               </button>
 
               {lineLoginError && (
