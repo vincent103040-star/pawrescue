@@ -17,6 +17,7 @@ import { Handshake, Clock, AlertTriangle, Loader2, CalendarDays } from 'lucide-r
 import { SubstitutionRequest } from '../types';
 import { resolveZone } from '../data/zones';
 import { timeUntilLabel } from '../utils/shiftTime';
+import { ListSkeleton } from './ListSkeleton';
 
 /**
  * A request as the list endpoint sends it: the stored record plus the bits of
@@ -39,10 +40,12 @@ interface SubstitutionBoardProps {
   myEmail: string;
   busyId?: string | null;
   onTake: (requestId: string) => void;
+  /** 初次載入還沒有結果——用來避免在資料回來之前就宣告「沒有代班請求」。 */
+  isLoading?: boolean;
 }
 
 export const SubstitutionBoard: React.FC<SubstitutionBoardProps> = ({
-  requests, myEmail, busyId, onTake
+  requests, myEmail, busyId, onTake, isLoading = false
 }) => {
   const mine = String(myEmail || '').trim().toLowerCase();
   const takeable = requests.filter(r => r.requesterEmail !== mine);
@@ -61,7 +64,9 @@ export const SubstitutionBoard: React.FC<SubstitutionBoardProps> = ({
         </div>
       </div>
 
-      {takeable.length === 0 ? (
+      {isLoading ? (
+        <ListSkeleton count={2} columns={1} />
+      ) : takeable.length === 0 ? (
         <p className="text-sm text-slate-400 text-center py-8">
           目前沒有待接手的代班請求 —— 大家的班都有人顧著 🐾
         </p>
