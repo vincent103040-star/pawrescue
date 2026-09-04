@@ -3,6 +3,7 @@ import { PositionShift, ShiftSignup, ShelterLocation, AttendanceRecord, Voluntee
 import { ZONE_CONFIGS } from '../data/mockData';
 import { Calendar, Clock, MapPin, CheckCircle2, AlertCircle, QrCode, Star, ArrowUpRight, Award, ExternalLink, ShieldCheck, Heart, FileText, Check, ChevronRight, Handshake, XCircle, Undo2 } from 'lucide-react';
 import { CertificateModal } from './CertificateModal';
+import { ListSkeleton } from './ListSkeleton';
 import { buildGoogleCalendarLink } from '../utils/googleCalendar';
 import { hoursUntilShift, SUBSTITUTION_NOTICE_HOURS, timeUntilLabel } from '../utils/shiftTime';
 
@@ -19,6 +20,12 @@ interface VolunteerMyShiftsProps {
   substitutions?: SubstitutionRequest[];
   onRequestSubstitution?: (appId: string, reason: string) => void;
   onWithdrawSubstitution?: (requestId: string) => void;
+  /**
+   * 初次載入還沒有結果。用來把「還不知道」跟「確定沒有」分開——沒有這個旗標，
+   * 資料還在路上時畫面會直接宣告「目前尚無此狀態的班次紀錄」，對一個排了三個
+   * 班的志工來說那是假的。
+   */
+  isLoading?: boolean;
 }
 
 export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
@@ -32,7 +39,8 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
   onCancelSignup,
   substitutions = [],
   onRequestSubstitution,
-  onWithdrawSubstitution
+  onWithdrawSubstitution,
+  isLoading = false
 }) => {
   const [cancelConfirmAppId, setCancelConfirmAppId] = useState<string | null>(null);
   const [subFormAppId, setSubFormAppId] = useState<string | null>(null);
@@ -229,7 +237,9 @@ export const VolunteerMyShifts: React.FC<VolunteerMyShiftsProps> = ({
       </div>
 
       {/* Shifts Application Cards */}
-      {filteredApps.length === 0 ? (
+      {isLoading ? (
+        <ListSkeleton count={2} columns={2} />
+      ) : filteredApps.length === 0 ? (
         <div className="bg-white rounded-[32px] p-12 text-center border border-[#716053] space-y-4">
           <div className="w-16 h-16 rounded-full bg-[#FAF6EE] text-slate-400 flex items-center justify-center mx-auto">
             <Heart className="w-8 h-8 text-slate-400" />

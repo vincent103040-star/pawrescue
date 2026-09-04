@@ -84,7 +84,18 @@ export default function App() {
     () => new URLSearchParams(window.location.search).get('tab') === 'shifts'
   );
   const [shiftSplashMinTimeElapsed, setShiftSplashMinTimeElapsed] = useState(false);
-  const [shiftSplashDataSettled, setShiftSplashDataSettled] = useState(false);
+
+  /**
+   * 登入後第一批資料是否已經有結果（成功或失敗都算）。
+   *
+   * 存在的理由是：清單「還沒載到」和「確實是空的」在程式裡本來是同一個條件
+   * （`length === 0`），畫面因此會在資料還沒回來時就說「目前尚無班次紀錄」——
+   * 一句很有自信的假話。有了這個旗標，那兩件事才分得開。
+   *
+   * 過場動畫也讀同一個旗標。它原本只等班次一支 API，但「畫面準備好了」本來
+   * 就該包含志工自己的報名與出勤，兩個旗標其實是同一件事，就不分成兩個了。
+   */
+  const [initialDataSettled, setInitialDataSettled] = useState(false);
 
   const [adminSession, setAdminSession] = useState<AdminUserSession | null>(() => {
     const saved = localStorage.getItem('paw_admin_session');
@@ -223,15 +234,22 @@ export default function App() {
   useEffect(() => {
     if (!userRole) return;
     refreshZones();
-    // .finally() rather than folding into refreshShifts() itself: every other
-    // call site of refreshShifts() (after creating a shift, a live-update push,
-    // and so on) has nothing to do with the splash -- only this first load,
-    // right after a role is known, is what the splash is waiting on.
-    refreshShifts().finally(() => setShiftSplashDataSettled(true));
-    refreshShiftSignups();
-    refreshAttendance();
+    // 只有「剛拿到身分、第一次抓」這一輪要記錄結果；refreshShifts() 等函式在
+    // 別處還有很多呼叫點（發布班次之後、收到即時更新推播…），那些跟「初次載入
+    // 完成了沒」無關，所以旗標掛在這裡的呼叫上，不是塞進函式本身。
+    //
+    // allSettled 而不是 all：任何一支失敗（離線、4xx）也算「有結果了」。骨架屏
+    // 要回答的是「還在等嗎」，不是「成功了嗎」——失敗時該讓底下的空狀態或錯誤
+    // 顯示出來，繼續轉圈圈才是最糟的結果。
+    const coreLoads = [
+      refreshShifts(),
+      refreshShiftSignups(),
+      refreshAttendance(),
+      refreshSubstitutions()
+    ];
+    Promise.allSettled(coreLoads).then(() => setInitialDataSettled(true));
+
     refreshVolunteers();
-    refreshSubstitutions();
 
     // A sign-in builds the session out of what the login screen knows, which is
     // the profile and nothing else. The record on file carries more -- the
@@ -328,12 +346,12 @@ export default function App() {
   useEffect(() => {
     if (!showShiftSplash || !shiftSplashMinTimeElapsed) return;
     // 這台裝置沒有登入紀錄的話，班次資料根本不會開始抓（見上面那個 bootstrap
-    // effect 的 `if (!userRole) return`），繼續等 shiftSplashDataSettled 只會
+    // effect 的 `if (!userRole) return`），繼續等 initialDataSettled 只會
     // 讓人對著感謝畫面卡住，看不到登入選項。
-    if (userRole !== 'volunteer' || shiftSplashDataSettled) {
+    if (userRole !== 'volunteer' || initialDataSettled) {
       setShowShiftSplash(false);
     }
-  }, [showShiftSplash, shiftSplashMinTimeElapsed, shiftSplashDataSettled, userRole]);
+  }, [showShiftSplash, shiftSplashMinTimeElapsed, initialDataSettled, userRole]);
 
   // Deep-link support for the LINE Rich Menu: tapping a menu tile opens this app
   // with e.g. ?tab=sop or ?checkin=1. If the volunteer is already logged in on this
@@ -1204,6 +1222,7 @@ export default function App() {
                   substitutions={substitutions}
                   onRequestSubstitution={handleRequestSubstitution}
                   onWithdrawSubstitution={handleWithdrawSubstitution}
+                  isLoading={!initialDataSettled}
                 />
                 <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
                   <SubstitutionBoard
@@ -1211,6 +1230,7 @@ export default function App() {
                     myEmail={volunteerSession?.email || ''}
                     busyId={takingSubstitutionId}
                     onTake={handleTakeSubstitution}
+                    isLoading={!initialDataSettled}
                   />
                 </div>
               </div>
