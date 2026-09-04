@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { PawPrint, Shield, Heart, Sparkles, Calendar, MapPin, MessageSquare, CheckCircle2, ArrowRight, User, Phone, Users, ShieldCheck, Award, QrCode, BookOpen, Clock, HeartHandshake, ChevronRight, Check, Smartphone, KeyRound, Star, Quote, Home, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { PawPrint, Shield, Heart, Sparkles, Calendar, MapPin, MessageSquare, ArrowRight, User, Phone, Users, ShieldCheck, Award, QrCode, BookOpen, Clock, HeartHandshake, ChevronRight, Check, Smartphone, KeyRound, Star, Quote, Home, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { AdminUserSession, VolunteerUserSession, LineOfficialAccount } from '../types';
 import { GooglePhoneAuthModal } from './GooglePhoneAuthModal';
 import { startLineLogin } from '../utils/lineLogin';
@@ -264,102 +264,6 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
           </div>
         </div>
 
-        {/* Volunteer Testimonials — real quotes, so the login page carries their voice */}
-        <div className="max-w-5xl mx-auto space-y-4">
-          <div className="text-center space-y-1">
-            <h3 className="text-lg font-bold font-serif italic text-slate-900">志工們，怎麼說 💬</h3>
-            <p className="text-xs text-slate-500">來自服務回饋紀錄的真實心得</p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {VOLUNTEER_TESTIMONIALS.map((t, idx) => (
-              <div key={idx} className="bg-white rounded-[24px] border border-[#716053] p-5 shadow-2xs space-y-3">
-                <Quote className="w-5 h-5 text-amber-400 fill-amber-200" />
-                <p className="text-xs text-slate-700 leading-relaxed">{t.quote}</p>
-                <div className="flex items-center gap-2.5 pt-1 border-t border-[#716053]">
-                  <img
-                    src={t.avatar}
-                    alt=""
-                    className="w-9 h-9 rounded-full object-cover border-2 border-white shadow-xs"
-                  />
-                  <div className="overflow-hidden">
-                    <div className="text-xs font-bold text-slate-900 truncate">{t.name}</div>
-                    <div className="text-[10px] text-slate-500 truncate">{t.role}</div>
-                  </div>
-                  <div className="ml-auto flex items-center gap-0.5 shrink-0">
-                    {Array.from({ length: t.rating }).map((_, i) => (
-                      <Star key={i} className="w-3 h-3 text-amber-400 fill-amber-400" />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Adoption Success Wall — photos represent the outcome volunteering leads to */}
-        <div className="max-w-5xl mx-auto space-y-4">
-          <div className="text-center space-y-1">
-            <h3 className="text-lg font-bold font-serif italic text-slate-900">領養成功牆 🏠</h3>
-            <p className="text-xs text-slate-500">每一位志工的陪伴，都在為牠們鋪一條回家的路</p>
-          </div>
-          <div
-            className="relative grid grid-cols-2 sm:grid-cols-4 gap-4"
-            onMouseMove={handleSuccessWallMouseMove}
-            onMouseLeave={() => setPawPos(null)}
-          >
-            {pawPos && (
-              <div
-                className="pointer-events-none absolute z-20 text-xl transition-[left,top] duration-150 ease-out select-none"
-                style={{ left: pawPos.x - 12, top: pawPos.y - 12 }}
-              >
-                🐾
-              </div>
-            )}
-
-            {ADOPTION_SUCCESS_STORIES.map((s, idx) => (
-              <div
-                key={idx}
-                className="group relative rounded-[20px] overflow-hidden aspect-[4/5] shadow-2xs border border-[#716053]"
-              >
-                <img
-                  src={s.photo}
-                  alt={s.petName}
-                  className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
-                />
-                {/* Always-visible bottom label */}
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-3 pt-8">
-                  <div className="flex items-center gap-1 text-[10px] font-extrabold text-emerald-300">
-                    <Home className="w-3 h-3" />
-                    <span>已找到永遠的家</span>
-                  </div>
-                  <div className="text-white font-bold text-sm font-serif">{s.petName}</div>
-                  <div className="flex items-center gap-1 text-[10px] text-white/80 mt-0.5">
-                    <Users className="w-3 h-3" />
-                    <span>{s.caredBy.length} 位志工接力守護過牠</span>
-                  </div>
-                </div>
-                {/* Hover-reveal story */}
-                <div className="absolute inset-0 bg-black/80 backdrop-blur-xs p-4 flex flex-col justify-center opacity-0 group-hover:opacity-100 transition duration-300">
-                  <p className="text-[11px] text-white/95 leading-relaxed">{s.story}</p>
-                  <div className="mt-2.5 space-y-1">
-                    <p className="text-[9px] text-white/60 font-bold uppercase tracking-wider">陪伴過牠的志工</p>
-                    <div className="flex flex-wrap gap-1">
-                      {s.caredBy.map((name, i) => (
-                        <span
-                          key={i}
-                          className="text-[10px] font-bold text-amber-200 bg-amber-500/20 border border-amber-400/30 px-2 py-0.5 rounded-full"
-                        >
-                          {name}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
         {/* Two Major Identity Cards */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-5xl mx-auto items-stretch">
           
@@ -383,30 +287,6 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed">
                   專為園區主管、招募社工與值日組長打造的後台總控制台。
                 </p>
-              </div>
-
-              {/* Function Features List */}
-              <div className="bg-[#FAF6EE] p-4.5 rounded-2xl border border-[#716053] space-y-2.5 text-xs text-slate-700 font-sans">
-                <div className="font-bold text-[#716053] mb-1 flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  <span>後台專有功能清單：</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#716053] mt-1.5 shrink-0"></span>
-                  <span><strong>缺工統計預警看板</strong>：各場域即時人力、缺工熱點地圖、當日值日生任務板</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#716053] mt-1.5 shrink-0"></span>
-                  <span><strong>職位與班次發布</strong>：AI 一鍵生成招募貼文、AI 智慧自動配對排班</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#716053] mt-1.5 shrink-0"></span>
-                  <span><strong>報名與審核流程</strong>：時段衝突即時預警、錄取推播 LINE 與日曆</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#716053] mt-1.5 shrink-0"></span>
-                  <span><strong>志工人才庫名冊</strong>：志工等級維護、服務時數紀錄、月度排班報表匯出</span>
-                </div>
               </div>
             </div>
 
@@ -490,34 +370,6 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed">
                   專為熱心志工夥伴量身打造的預約搶班、出勤簽到與成長歷程門戶。
                 </p>
-              </div>
-
-              {/* Function Features List */}
-              <div className="bg-amber-50/60 p-4.5 rounded-2xl border border-amber-200/60 space-y-2.5 text-xs text-slate-700 font-sans">
-                <div className="font-bold text-amber-900 mb-1 flex items-center gap-1.5">
-                  <Heart className="w-4 h-4 text-rose-500 fill-rose-500" />
-                  <span>志工專屬功能清單：</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-600 mt-1.5 shrink-0"></span>
-                  <span><strong>班次瀏覽與線上搶班</strong>：貓舍、大狗散步、幼犬育幼、醫療區一鍵登記</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-600 mt-1.5 shrink-0"></span>
-                  <span><strong>我的排班與出勤紀錄</strong>：審核進度、日曆排程對齊、服務時數與評價回饋</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-600 mt-1.5 shrink-0"></span>
-                  <span><strong>志工成長晉升歷程</strong>：實習 ➔ 正式 ➔ 資深志工考核清單與達標通知</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-600 mt-1.5 shrink-0"></span>
-                  <span><strong>LINE 通知與個人偏好</strong>：自訂班次異動、急召推播、簽到通知時間</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-600 mt-1.5 shrink-0"></span>
-                  <span><strong>志工安全守則與園區 SOP</strong>：犬貓接觸防護規範、出勤 QR 簽到/簽退</span>
-                </div>
               </div>
             </div>
 
@@ -612,6 +464,102 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
 
           </div>
 
+        </div>
+
+        {/* Volunteer Testimonials — real quotes, so the login page carries their voice */}
+        <div className="max-w-5xl mx-auto space-y-4">
+          <div className="text-center space-y-1">
+            <h3 className="text-lg font-bold font-serif italic text-slate-900">志工們，怎麼說 💬</h3>
+            <p className="text-xs text-slate-500">來自服務回饋紀錄的真實心得</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {VOLUNTEER_TESTIMONIALS.map((t, idx) => (
+              <div key={idx} className="bg-white rounded-[24px] border border-[#716053] p-5 shadow-2xs space-y-3">
+                <Quote className="w-5 h-5 text-amber-400 fill-amber-200" />
+                <p className="text-xs text-slate-700 leading-relaxed">{t.quote}</p>
+                <div className="flex items-center gap-2.5 pt-1 border-t border-[#716053]">
+                  <img
+                    src={t.avatar}
+                    alt=""
+                    className="w-9 h-9 rounded-full object-cover border-2 border-white shadow-xs"
+                  />
+                  <div className="overflow-hidden">
+                    <div className="text-xs font-bold text-slate-900 truncate">{t.name}</div>
+                    <div className="text-[10px] text-slate-500 truncate">{t.role}</div>
+                  </div>
+                  <div className="ml-auto flex items-center gap-0.5 shrink-0">
+                    {Array.from({ length: t.rating }).map((_, i) => (
+                      <Star key={i} className="w-3 h-3 text-amber-400 fill-amber-400" />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Adoption Success Wall — photos represent the outcome volunteering leads to */}
+        <div className="max-w-5xl mx-auto space-y-4">
+          <div className="text-center space-y-1">
+            <h3 className="text-lg font-bold font-serif italic text-slate-900">領養成功牆 🏠</h3>
+            <p className="text-xs text-slate-500">每一位志工的陪伴，都在為牠們鋪一條回家的路</p>
+          </div>
+          <div
+            className="relative grid grid-cols-2 sm:grid-cols-4 gap-4"
+            onMouseMove={handleSuccessWallMouseMove}
+            onMouseLeave={() => setPawPos(null)}
+          >
+            {pawPos && (
+              <div
+                className="pointer-events-none absolute z-20 text-xl transition-[left,top] duration-150 ease-out select-none"
+                style={{ left: pawPos.x - 12, top: pawPos.y - 12 }}
+              >
+                🐾
+              </div>
+            )}
+
+            {ADOPTION_SUCCESS_STORIES.map((s, idx) => (
+              <div
+                key={idx}
+                className="group relative rounded-[20px] overflow-hidden aspect-[4/5] shadow-2xs border border-[#716053]"
+              >
+                <img
+                  src={s.photo}
+                  alt={s.petName}
+                  className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
+                />
+                {/* Always-visible bottom label */}
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-3 pt-8">
+                  <div className="flex items-center gap-1 text-[10px] font-extrabold text-emerald-300">
+                    <Home className="w-3 h-3" />
+                    <span>已找到永遠的家</span>
+                  </div>
+                  <div className="text-white font-bold text-sm font-serif">{s.petName}</div>
+                  <div className="flex items-center gap-1 text-[10px] text-white/80 mt-0.5">
+                    <Users className="w-3 h-3" />
+                    <span>{s.caredBy.length} 位志工接力守護過牠</span>
+                  </div>
+                </div>
+                {/* Hover-reveal story */}
+                <div className="absolute inset-0 bg-black/80 backdrop-blur-xs p-4 flex flex-col justify-center opacity-0 group-hover:opacity-100 transition duration-300">
+                  <p className="text-[11px] text-white/95 leading-relaxed">{s.story}</p>
+                  <div className="mt-2.5 space-y-1">
+                    <p className="text-[9px] text-white/60 font-bold uppercase tracking-wider">陪伴過牠的志工</p>
+                    <div className="flex flex-wrap gap-1">
+                      {s.caredBy.map((name, i) => (
+                        <span
+                          key={i}
+                          className="text-[10px] font-bold text-amber-200 bg-amber-500/20 border border-amber-400/30 px-2 py-0.5 rounded-full"
+                        >
+                          {name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* System Architecture Feature Overview */}
