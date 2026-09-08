@@ -6,7 +6,7 @@ import { writeFileSync, mkdirSync, createWriteStream, statSync, readFileSync, un
 import { gzipSync } from 'zlib';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
-import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, cancelShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, isValidAssetSignature, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, setFeedbackReply, getVolunteerEmailByName, getRollCall, getAbsenceCounts, setVolunteerAccountStatus, sweepSuspensions, countSuspensions, recordAppeal, getStatusHistory, hasAppealedSinceSuspension, ABSENCE_SUSPENSION_THRESHOLD, SUSPENSION_DAYS, APPEAL_WINDOW_DAYS, createSubstitutionRequest, getSubstitutionRequest, getOpenSubstitutionForSignup, getOpenSubstitutions, takeSubstitutionRequest, withdrawSubstitutionRequest, expireStaleSubstitutions, hoursUntilShift, SUBSTITUTION_NOTICE_HOURS, getReminderCandidates, markReminderSent, normalizeReminderLead, planShiftsForRange, generateDraftShifts, getStatusSupplementSummary, publishDraftShifts, discardDraftShifts, SHIFT_MERGE_GAP_MINUTES, getAllStatusDutyMappings, getUnmappedStatuses, upsertStatusDutyMapping, setStatusDutyMappingStatus, getShiftCapacityMinutes, setShiftCapacityMinutes, getRecentStatusBatches, getImportedBatchSequences, getStatusRecordsForBatch, getStatusWorkload, getAnimalConcerns } from './db';
+import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, cancelShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, isValidAssetSignature, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, setFeedbackReply, getVolunteerEmailByName, getRollCall, getAbsenceCounts, setVolunteerAccountStatus, sweepSuspensions, countSuspensions, recordAppeal, getStatusHistory, hasAppealedSinceSuspension, ABSENCE_SUSPENSION_THRESHOLD, SUSPENSION_DAYS, APPEAL_WINDOW_DAYS, createSubstitutionRequest, getSubstitutionRequest, getOpenSubstitutionForSignup, getOpenSubstitutions, takeSubstitutionRequest, withdrawSubstitutionRequest, expireStaleSubstitutions, hoursUntilShift, SUBSTITUTION_NOTICE_HOURS, getReminderCandidates, markReminderSent, normalizeReminderLead, planShiftsForRange, generateDraftShifts, getStatusSupplementSummary, describeRosterReach, getDutyRosterReach, publishDraftShifts, discardDraftShifts, SHIFT_MERGE_GAP_MINUTES, getAllStatusDutyMappings, getUnmappedStatuses, upsertStatusDutyMapping, setStatusDutyMappingStatus, getShiftCapacityMinutes, setShiftCapacityMinutes, getRecentStatusBatches, getImportedBatchSequences, getStatusRecordsForBatch, getStatusWorkload, getAnimalConcerns } from './db';
 import { findMissingSequences } from './scripts/status-csv';
 import { isDutyOnTodaysList } from './src/utils/dutyVisibility';
  import { PDFParse } from 'pdf-parse';
@@ -2368,13 +2368,26 @@ ${contextText}
 
   app.get('/api/admin/status-mappings', (req, res) => {
     try {
+      const mappings = getAllStatusDutyMappings();
       return res.json({
         success: true,
-        mappings: getAllStatusDutyMappings(),
+        mappings,
         // Sent together because they are read together: the screen's whole job
         // is turning the second list into the first.
         unmapped: getUnmappedStatuses(),
-        dutyItems: getActiveDutyItems().map(d => ({ id: d.id, title: d.title, zoneId: d.zoneId })),
+        // Each duty says whether the roster generator can reach it. Without
+        // this the screen happily accepts a rule pointing at a one-off duty or
+        // one with no end time -- the minutes are then computed, displayed on
+        // this screen, and silently reach no shift. The mistake is made here,
+        // so the warning belongs here too, not only on the roster preview
+        // where its consequence eventually shows up.
+        dutyItems: getActiveDutyItems().map(d => ({
+          id: d.id, title: d.title, zoneId: d.zoneId,
+          unreachableReason: describeRosterReach(d)
+        })),
+        // Covers duties the picker no longer offers -- disabled or deleted --
+        // which is exactly the case an existing rule can be left pointing at.
+        dutyReach: getDutyRosterReach(mappings.map(m => m.dutyItemId)),
         shiftCapacityMinutes: getShiftCapacityMinutes()
       });
     } catch (error: any) {

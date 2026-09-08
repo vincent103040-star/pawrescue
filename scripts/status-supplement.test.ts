@@ -241,6 +241,27 @@ async function main() {
   check(summary.offRoster.some(o => o.dutyItemId === noClock.id && o.reason.includes('停用')),
     '勤務停用之後，理由從「沒填時間」換成「已停用」');
 
+  // ------------------------------------- the warning reaches the editing screen
+  // The rule is written on the mapping screen and fails on the roster screen.
+  // One verdict function serves both, so this checks that it says the same
+  // thing to both -- the drift these two would otherwise develop is a rule
+  // that reads as fine where it is created and broken where it is used.
+  console.log('\n寫規則的當下就看得出讀不讀得到');
+
+  const reach = db.getDutyRosterReach([oneOff.id, noClock.id, clean.id, 'duty-does-not-exist']);
+
+  check(reach[clean.id] === '', '正常的每日勤務：沒有警告', `實際「${reach[clean.id]}」`);
+  check(reach[oneOff.id].includes('每日'), '一次性勤務：說得出是哪一種讀不到');
+  check(reach[noClock.id].includes('停用'), '已停用的勤務：理由是停用');
+  check(reach['duty-does-not-exist'].includes('刪除'),
+    '規則指向一個不存在的勤務時，回報「已刪除」而不是當成正常');
+  check(db.describeRosterReach(null).includes('刪除'), '沒有勤務可看時也答得出來');
+
+  const fromSummary = summary.offRoster.find(o => o.dutyItemId === oneOff.id)?.reason;
+  check(fromSummary === reach[oneOff.id],
+    '排班畫面與編輯畫面說的是同一句話（同一個判斷，不是兩份會走鐘的複本）',
+    `班表「${fromSummary}」 vs 編輯「${reach[oneOff.id]}」`);
+
   // -------------------------------------------------- applying it is opt-in
   console.log('\n要不要算進草稿，是一個要按下去的決定');
 

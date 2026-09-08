@@ -4462,6 +4462,44 @@ export interface StatusSupplementSummary {
   unpricedStatuses: Array<{ optionLabel: string; optionCode: string; animalCount: number }>;
 }
 
+/**
+ * Whether the roster generator can ever reach this duty, and if not, why.
+ *
+ * Read in two places on purpose, and defined once for the same reason the
+ * weekday parser is: the rule is written on the mapping screen and its
+ * consequence shows up on the roster screen, and if those two disagreed the
+ * shelter would be told a rule is fine in the place where it is created and
+ * broken in the place where it fails to work.
+ *
+ * planShiftsForRange only ever reads active, daily duties that have a usable
+ * time window (`triggerType = 'daily'` plus a parseable start and end), so a
+ * rule pointing anywhere else prices minutes that reach no shift at all.
+ * Empty string means reachable.
+ */
+export function describeRosterReach(duty: {
+  status?: string; triggerType?: string; startTime?: string; endTime?: string;
+} | null | undefined): string {
+  if (!duty) return '勤務項目已被刪除';
+  if (duty.status !== 'active') return '勤務項目已停用';
+  if (duty.triggerType !== 'daily') return '不是「每日固定」勤務，整期排班讀不到它';
+  if (!parseWindow(`${duty.startTime || ''}-${duty.endTime || ''}`)) {
+    return '沒有填起訖時間，排不進班表';
+  }
+  return '';
+}
+
+/** The same verdict for a batch of duties, keyed by id. Missing ids included. */
+export function getDutyRosterReach(dutyItemIds: string[]): Record<string, string> {
+  const reach: Record<string, string> = {};
+  for (const id of new Set(dutyItemIds.filter(Boolean))) {
+    const row = db.prepare(
+      'SELECT status, triggerType, startTime, endTime FROM duty_items WHERE id = ?'
+    ).get(id) as any;
+    reach[id] = describeRosterReach(row);
+  }
+  return reach;
+}
+
 export function getStatusSupplementSummary(sinceDays = 7): StatusSupplementSummary {
   const organizationId = currentOrganizationId();
   const cutoff = new Date(Date.now() - sinceDays * 86400000).toISOString();
@@ -4478,14 +4516,10 @@ export function getStatusSupplementSummary(sinceDays = 7): StatusSupplementSumma
       'SELECT id, title, status, triggerType, startTime, endTime FROM duty_items WHERE id = ?'
     ).get(dutyItemId) as any;
 
-    // Each branch is a different repair, so each says which one. "0 人" with no
-    // reason sends somebody to re-check the mail pipeline when the actual fix
-    // is a missing end time on one duty.
-    let reason = '';
-    if (!duty) reason = '這條規則指向的勤務項目已經被刪除';
-    else if (duty.status !== 'active') reason = '這條規則指向的勤務項目已停用';
-    else if (duty.triggerType !== 'daily') reason = '不是「每日固定」勤務，整期排班讀不到它';
-    else if (!parseWindow(`${duty.startTime}-${duty.endTime}`)) reason = '這個勤務沒有填起訖時間，排不進班表';
+    // Each cause is a different repair, so the reason travels with the number.
+    // "0 人" on its own sends somebody to re-check the mail pipeline when the
+    // actual fix is a missing end time on one duty.
+    const reason = describeRosterReach(duty);
 
     if (reason) {
       offRoster.push({
