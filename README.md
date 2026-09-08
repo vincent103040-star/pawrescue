@@ -168,9 +168,10 @@ VM **刻意沒有** `secretAccessor` 權限。還原是「機器沒了、建一�
 ## 檢查
 
 ```bash
-npm run lint                # TypeScript 型別檢查
-npm run check:security      # 89 項授權檢查，需要伺服器在跑
-npm run check:ocr-chunking  # 13 項 OCR 頁碼對照檢查
+npm run lint                    # TypeScript 型別檢查
+npm run check:security          # 104 項授權檢查，需要伺服器在跑
+npm run check:ocr-chunking      # 13 項 OCR 頁碼對照檢查
+npm run check:status-supplement # 32 項「動物狀態 → 班表人力」檢查
 ```
 
 `check:security` 只發出唯讀、或本來就該被拒絕的請求，所以通過時不會改變任何資料，失敗時揭露一個漏洞而不是製造一個。每次部署前跑。
@@ -203,6 +204,8 @@ npm run ocr:pdfs                # 正式匯入
 - **GPS 可以被偽造。**有螢幕的據點靠每 60 秒輪動的簽到碼補強，沒有螢幕的據點只能靠定位，這一塊較弱。
 - **教學影片的內容沒有進問答索引**，只有標題和說明。
 - **「每月取消三次」的規則還沒實作。**取消已改成軟性標記所以算得出來，但還沒有人去算它。
+- **動物狀態算出來的加班人力只是報告，不會自己進班表。**試算畫面會並排顯示「基準 3 人 ｜ 動物狀態另計 +2 人」，
+  要不要算進草稿由社工勾選。已發布的班次不會因為動物狀況變化而增減——臨時個案走緊急招募。
 
 ---
 

@@ -2902,6 +2902,129 @@ function peakConcurrent(items: Array<{ start: number; end: number; people: numbe
   return Math.max(1, peak);
 }
 
+/** One duty item, already parsed into the shape the planner works in. */
+interface PlannableDuty {
+  id: string;
+  start: number;
+  end: number;
+  people: number;
+  title: string;
+  minutes: number;
+  weekdays: string;
+}
+
+/** What this week's animals add to one block, and the working behind it. */
+export interface StatusSupplement {
+  /**
+   * Extra people at the block's busiest moment -- through peakConcurrent, not
+   * by adding the per-duty figures up.
+   */
+  extraPeople: number;
+  minutes: number;
+  animalCount: number;
+  duties: Array<{
+    dutyItemId: string;
+    dutyTitle: string;
+    minutes: number;
+    animalCount: number;
+    extraPeople: number;
+    /** The divisor, reported so the number can be argued with. */
+    windowMinutes: number;
+    perPersonMinutes: number;
+  }>;
+}
+
+/**
+ * Recent animal observations, grouped by the duty a rule points them at.
+ *
+ * The mapping table is the only thing that can answer "which zone, and when":
+ * animal_status_records carries no location at all -- just the animal, the
+ * status and when it was seen. The duty item the shelter chose when it wrote
+ * the rule does carry it, along with a time window and the weekdays it runs
+ * on, so the workload lands wherever that duty already sits and nothing new
+ * has to be invented to place it.
+ *
+ * Minutes mapped to a duty the roster generator never reads are not lost
+ * quietly -- getStatusSupplementSummary lists them and says why.
+ */
+function statusMinutesByDutyItem(
+  sinceDays: number
+): Map<string, { minutes: number; animals: Set<string> }> {
+  const byDuty = new Map<string, { minutes: number; animals: Set<string> }>();
+  for (const concern of getAnimalConcerns(sinceDays)) {
+    const entry = byDuty.get(concern.dutyItemId) || { minutes: 0, animals: new Set<string>() };
+    entry.minutes += concern.minutesPerAnimal;
+    entry.animals.add(concern.animalId);
+    byDuty.set(concern.dutyItemId, entry);
+  }
+  return byDuty;
+}
+
+/**
+ * What the animals add to one block of duties.
+ *
+ * Each priced duty becomes a second, virtual demand in its own time window,
+ * and the block is measured again with those included. Going back through
+ * peakConcurrent rather than summing is the same rule the baseline uses, for
+ * the same reason: two status-driven duties that run one after the other need
+ * one extra person, not two. It also makes the two numbers comparable, which
+ * they would not be if one were a peak and the other a total.
+ */
+function supplementForBlock(
+  block: PlannableDuty[],
+  statusByDuty: Map<string, { minutes: number; animals: Set<string> }>,
+  shiftCapacityMinutes: number
+): StatusSupplement {
+  const virtual: Array<{ start: number; end: number; people: number }> = [];
+  const duties: StatusSupplement['duties'] = [];
+  const animals = new Set<string>();
+  let minutes = 0;
+
+  for (const item of block) {
+    const found = statusByDuty.get(item.id);
+    if (!found || found.minutes <= 0) continue;
+
+    const windowMinutes = item.end - item.start;
+    // How much one volunteer gets done inside this window. Capped by the
+    // window's own length, and by shiftCapacityMinutes -- the shelter's own
+    // answer to "how many minutes of a shift are actually hands on animals",
+    // already stored and already editable. Taking the smaller of the two can
+    // only ever ask for one person too many, never one too few, which is the
+    // right direction for a number a human is about to check.
+    //
+    // Whether the divisor should be the window or something the shelter sets
+    // per duty is a real question, and deliberately not answered here: this
+    // number is shown with its working (windowMinutes, perPersonMinutes) so
+    // it can be argued with before anyone acts on it.
+    const perPersonMinutes = Math.max(1, Math.min(windowMinutes, shiftCapacityMinutes));
+    const extraPeople = Math.ceil(found.minutes / perPersonMinutes);
+
+    virtual.push({ start: item.start, end: item.end, people: extraPeople });
+    duties.push({
+      dutyItemId: item.id,
+      dutyTitle: item.title,
+      minutes: found.minutes,
+      animalCount: found.animals.size,
+      extraPeople,
+      windowMinutes,
+      perPersonMinutes
+    });
+    minutes += found.minutes;
+    for (const animal of found.animals) animals.add(animal);
+  }
+
+  if (virtual.length === 0) {
+    return { extraPeople: 0, minutes: 0, animalCount: 0, duties: [] };
+  }
+
+  return {
+    extraPeople: peakConcurrent([...block, ...virtual]) - peakConcurrent(block),
+    minutes,
+    animalCount: animals.size,
+    duties
+  };
+}
+
 export interface PlannedShift {
   zoneId: string;
   zoneName: string;
@@ -2911,6 +3034,23 @@ export interface PlannedShift {
   tasks: string[];
   /** Person-hours the duties in this block actually add up to. */
   personHours: number;
+  /**
+   * What the animals observed recently would add on top -- reported beside
+   * requiredCount, deliberately not inside it.
+   *
+   * Folding it in would make the published roster move with the animals, and
+   * the plan says not to: the baseline layer goes out a fortnight ahead and
+   * then stays put, because a volunteer whose booked shift is changed under
+   * them stops trusting the roster, and that trust is the thing the whole
+   * system exists to build. So this is a number a coordinator reads and
+   * decides about, and generateDraftShifts only applies it when asked.
+   *
+   * It is also the honest shape while the pipeline upstream is still carrying
+   * placeholder statuses: a figure shown beside the roster can be wrong and
+   * noticed, whereas the same figure baked into requiredCount is wrong and
+   * invisible.
+   */
+  status: StatusSupplement;
 }
 
 /**
@@ -2920,22 +3060,23 @@ export interface PlannedShift {
  * saved drafts -- a preview computed separately is a preview that can disagree
  * with what you get.
  */
-export function planShiftsForRange(startDate: string, days: number): PlannedShift[] {
+export function planShiftsForRange(
+  startDate: string, days: number, statusSinceDays = 7
+): PlannedShift[] {
   const zones = getActiveZones();
   const duties = db.prepare(`
-    SELECT zoneId, title, startTime, endTime, weekdays, requiredPeople, estimatedMinutes
+    SELECT id, zoneId, title, startTime, endTime, weekdays, requiredPeople, estimatedMinutes
     FROM duty_items
     WHERE status = 'active' AND triggerType = 'daily'
   `).all() as any[];
 
-  const byZone = new Map<string, Array<{
-    start: number; end: number; people: number; title: string; minutes: number; weekdays: string;
-  }>>();
+  const byZone = new Map<string, PlannableDuty[]>();
   for (const duty of duties) {
     const window = parseWindow(`${duty.startTime}-${duty.endTime}`);
     if (!window) continue; // no usable times -- nothing to schedule it into
     const list = byZone.get(duty.zoneId) || [];
     list.push({
+      id: String(duty.id),
       start: window[0], end: window[1],
       people: Math.max(1, Number(duty.requiredPeople) || 1),
       title: duty.title,
@@ -2944,6 +3085,16 @@ export function planShiftsForRange(startDate: string, days: number): PlannedShif
     });
     byZone.set(duty.zoneId, list);
   }
+
+  // The other half of "how many people does this shelter need" -- read once,
+  // outside the loop, because it does not vary by day. It cannot, and that is
+  // the honest limit of this number: it is a reading of the animals as they
+  // are now, applied to every day of a fortnight. Good enough to say "this
+  // period looks heavier than the duty list alone suggests", not good enough
+  // to decide a Tuesday three weeks out, which is exactly why it stays beside
+  // requiredCount instead of inside it.
+  const statusByDuty = statusMinutesByDutyItem(statusSinceDays);
+  const shiftCapacityMinutes = getShiftCapacityMinutes();
 
   const planned: PlannedShift[] = [];
   const start = new Date(`${startDate}T00:00:00+08:00`);
@@ -2956,7 +3107,7 @@ export function planShiftsForRange(startDate: string, days: number): PlannedShif
     for (const zone of zones) {
       // Only the duties that actually run on this weekday. Without this the
       // Saturday adoption event would open a shift on all fourteen days.
-      const items = (byZone.get(zone.id) || [])
+      const items: PlannableDuty[] = (byZone.get(zone.id) || [])
         .filter(item => dutyRunsOn(item.weekdays, date))
         .slice()
         .sort((a, b) => a.start - b.start);
@@ -2964,7 +3115,7 @@ export function planShiftsForRange(startDate: string, days: number): PlannedShif
 
       // Merge into blocks. A short gap stays inside one shift: a volunteer who
       // is already on site does not go home for thirty minutes and come back.
-      let block: typeof items = [];
+      let block: PlannableDuty[] = [];
       let blockEnd = -1;
       const flush = () => {
         if (block.length === 0) return;
@@ -2977,7 +3128,8 @@ export function planShiftsForRange(startDate: string, days: number): PlannedShif
           timeRange: `${hhmm(from)}-${hhmm(to)}`,
           requiredCount: peakConcurrent(block),
           tasks: block.map(i => i.title),
-          personHours: Math.round(block.reduce((n, i) => n + i.people * i.minutes, 0) / 6) / 10
+          personHours: Math.round(block.reduce((n, i) => n + i.people * i.minutes, 0) / 6) / 10,
+          status: supplementForBlock(block, statusByDuty, shiftCapacityMinutes)
         });
         block = [];
       };
@@ -3000,12 +3152,24 @@ export function planShiftsForRange(startDate: string, days: number): PlannedShif
  * left exactly as it is -- published or not, booked or not -- because the
  * coordinator may have adjusted it, and regenerating a period should never be
  * able to undo that or to double-book a day.
+ *
+ * includeStatusSupplement folds the animal-driven headcount into requiredCount.
+ * Off by default, and it has to stay that way: the caller who wants it has
+ * seen the number and the working behind it on the preview, whereas a default
+ * would apply an estimate nobody read. When it is on, the shift's description
+ * says so and by how much -- a coordinator looking at a draft a week later
+ * should not have to guess why it asks for five people instead of three.
  */
-export function generateDraftShifts(startDate: string, days: number): {
-  created: PlannedShift[]; skipped: PlannedShift[];
+export function generateDraftShifts(
+  startDate: string,
+  days: number,
+  options: { includeStatusSupplement?: boolean } = {}
+): {
+  created: PlannedShift[]; skipped: PlannedShift[]; supplementedPeople: number;
 } {
   const created: PlannedShift[] = [];
   const skipped: PlannedShift[] = [];
+  let supplementedPeople = 0;
 
   for (const plan of planShiftsForRange(startDate, days)) {
     const id = `auto-${plan.zoneId}-${plan.date}-${plan.timeRange.slice(0, 5).replace(':', '')}`;
@@ -3014,6 +3178,9 @@ export function generateDraftShifts(startDate: string, days: number): {
     ).get(id, plan.zoneId, plan.date, plan.timeRange);
     if (clash) { skipped.push(plan); continue; }
 
+    const applied = options.includeStatusSupplement === true ? plan.status.extraPeople : 0;
+    supplementedPeople += applied;
+
     insertShift({
       id,
       title: `${plan.zoneName}日常照護`,
@@ -3021,9 +3188,12 @@ export function generateDraftShifts(startDate: string, days: number): {
       date: plan.date,
       timeRange: plan.timeRange,
       shiftType: 'regular' as any,
-      requiredCount: plan.requiredCount,
+      requiredCount: plan.requiredCount + applied,
       skillRequired: '' as any,
-      description: `依「${plan.zoneName}」的每日勤務項目自動產生，發布前可調整。`,
+      description: `依「${plan.zoneName}」的每日勤務項目自動產生，發布前可調整。`
+        + (applied > 0
+          ? `其中 ${applied} 人是依近期動物狀態加計的（${plan.status.minutes} 分鐘、${plan.status.animalCount} 隻）。`
+          : ''),
       tasks: plan.tasks,
       locationDetails: '',
       status: 'draft',
@@ -3031,7 +3201,7 @@ export function generateDraftShifts(startDate: string, days: number): {
     } as any);
     created.push(plan);
   }
-  return { created, skipped };
+  return { created, skipped, supplementedPeople };
 }
 
 /** Publishes every draft in a date range. Returns how many went live. */
@@ -4257,6 +4427,137 @@ export function getAnimalConcerns(sinceDays = 7): AnimalConcern[] {
       AND r.observedAtUtc >= ?
     ORDER BY m.minutesPerAnimal DESC, r.animalName
   `).all(currentOrganizationId(), currentOrganizationId(), cutoff) as any[];
+}
+
+/**
+ * Why the roster's animal-driven column reads the way it does.
+ *
+ * Its whole job is to tell one zero from another. "No extra people needed"
+ * looks identical whether nobody has written a rule yet, nobody has sent an
+ * observation yet, or the animals genuinely need nothing -- and right now the
+ * first of those is the true answer, because the mapping table ships empty on
+ * purpose and the statuses upstream are still placeholders. A panel that just
+ * printed 0 would report a system that is not yet connected as a shelter with
+ * nothing to do.
+ */
+export interface StatusSupplementSummary {
+  sinceDays: number;
+  /** Rules that are active and priced above zero. */
+  activeRuleCount: number;
+  /** Observations stored in the window at all, priced or not. */
+  observationCount: number;
+  totalMinutes: number;
+  /** Minutes the roster generator can actually see. */
+  rosterMinutes: number;
+  /** Minutes a rule prices, but that no generated shift will ever reach. */
+  offRosterMinutes: number;
+  offRoster: Array<{
+    dutyItemId: string;
+    dutyTitle: string;
+    minutes: number;
+    animalCount: number;
+    reason: string;
+  }>;
+  /** Observed, but nobody has priced it -- so it counts as nothing. */
+  unpricedStatuses: Array<{ optionLabel: string; optionCode: string; animalCount: number }>;
+}
+
+/**
+ * Whether the roster generator can ever reach this duty, and if not, why.
+ *
+ * Read in two places on purpose, and defined once for the same reason the
+ * weekday parser is: the rule is written on the mapping screen and its
+ * consequence shows up on the roster screen, and if those two disagreed the
+ * shelter would be told a rule is fine in the place where it is created and
+ * broken in the place where it fails to work.
+ *
+ * planShiftsForRange only ever reads active, daily duties that have a usable
+ * time window (`triggerType = 'daily'` plus a parseable start and end), so a
+ * rule pointing anywhere else prices minutes that reach no shift at all.
+ * Empty string means reachable.
+ */
+export function describeRosterReach(duty: {
+  status?: string; triggerType?: string; startTime?: string; endTime?: string;
+} | null | undefined): string {
+  if (!duty) return '勤務項目已被刪除';
+  if (duty.status !== 'active') return '勤務項目已停用';
+  if (duty.triggerType !== 'daily') return '不是「每日固定」勤務，整期排班讀不到它';
+  if (!parseWindow(`${duty.startTime || ''}-${duty.endTime || ''}`)) {
+    return '沒有填起訖時間，排不進班表';
+  }
+  return '';
+}
+
+/** The same verdict for a batch of duties, keyed by id. Missing ids included. */
+export function getDutyRosterReach(dutyItemIds: string[]): Record<string, string> {
+  const reach: Record<string, string> = {};
+  for (const id of new Set(dutyItemIds.filter(Boolean))) {
+    const row = db.prepare(
+      'SELECT status, triggerType, startTime, endTime FROM duty_items WHERE id = ?'
+    ).get(id) as any;
+    reach[id] = describeRosterReach(row);
+  }
+  return reach;
+}
+
+export function getStatusSupplementSummary(sinceDays = 7): StatusSupplementSummary {
+  const organizationId = currentOrganizationId();
+  const cutoff = new Date(Date.now() - sinceDays * 86400000).toISOString();
+  const byDuty = statusMinutesByDutyItem(sinceDays);
+
+  const offRoster: StatusSupplementSummary['offRoster'] = [];
+  let totalMinutes = 0;
+  let rosterMinutes = 0;
+
+  for (const [dutyItemId, entry] of byDuty) {
+    totalMinutes += entry.minutes;
+
+    const duty = db.prepare(
+      'SELECT id, title, status, triggerType, startTime, endTime FROM duty_items WHERE id = ?'
+    ).get(dutyItemId) as any;
+
+    // Each cause is a different repair, so the reason travels with the number.
+    // "0 人" on its own sends somebody to re-check the mail pipeline when the
+    // actual fix is a missing end time on one duty.
+    const reason = describeRosterReach(duty);
+
+    if (reason) {
+      offRoster.push({
+        dutyItemId,
+        dutyTitle: duty?.title || '（已刪除）',
+        minutes: entry.minutes,
+        animalCount: entry.animals.size,
+        reason
+      });
+    } else {
+      rosterMinutes += entry.minutes;
+    }
+  }
+
+  const rules = db.prepare(`
+    SELECT COUNT(*) AS n FROM status_duty_mappings
+    WHERE organizationId = ? AND status = 'active' AND minutesPerAnimal > 0
+  `).get(organizationId) as { n: number };
+
+  const seen = db.prepare(`
+    SELECT COUNT(*) AS n FROM animal_status_records
+    WHERE organizationId = ? AND observedAtUtc >= ?
+  `).get(organizationId, cutoff) as { n: number };
+
+  return {
+    sinceDays,
+    activeRuleCount: Number(rules?.n || 0),
+    observationCount: Number(seen?.n || 0),
+    totalMinutes,
+    rosterMinutes,
+    offRosterMinutes: totalMinutes - rosterMinutes,
+    offRoster: offRoster.sort((a, b) => b.minutes - a.minutes),
+    unpricedStatuses: getUnmappedStatuses().map(s => ({
+      optionLabel: s.optionLabel || s.optionCode,
+      optionCode: s.optionCode,
+      animalCount: s.animalCount
+    }))
+  };
 }
 
 export interface StatusWorkload {

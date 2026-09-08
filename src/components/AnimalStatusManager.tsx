@@ -46,7 +46,8 @@ interface UnmappedStatus {
   lastObservedAt: string;
 }
 
-interface DutyOption { id: string; title: string; zoneId: string; }
+/** `unreachableReason` empty means the roster generator can actually reach it. */
+interface DutyOption { id: string; title: string; zoneId: string; unreachableReason: string; }
 
 interface Workload {
   shiftCapacityMinutes: number;
@@ -88,6 +89,8 @@ export const AnimalStatusManager: React.FC<{ onToast: (m: string) => void }> = (
   const [mappings, setMappings] = useState<Mapping[]>([]);
   const [unmapped, setUnmapped] = useState<UnmappedStatus[]>([]);
   const [duties, setDuties] = useState<DutyOption[]>([]);
+  /** Why each already-mapped duty is out of the roster's reach, keyed by id. */
+  const [dutyReach, setDutyReach] = useState<Record<string, string>>({});
   const [workload, setWorkload] = useState<Workload | null>(null);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [missing, setMissing] = useState<number[]>([]);
@@ -114,6 +117,7 @@ export const AnimalStatusManager: React.FC<{ onToast: (m: string) => void }> = (
         setMappings(map.mappings || []);
         setUnmapped(map.unmapped || []);
         setDuties(map.dutyItems || []);
+        setDutyReach(map.dutyReach || {});
         setCapacityDraft(String(map.shiftCapacityMinutes ?? 180));
       }
       if (work.success) setWorkload(work.workload);
@@ -204,6 +208,14 @@ export const AnimalStatusManager: React.FC<{ onToast: (m: string) => void }> = (
   }
 
   const dutyName = (id: string) => duties.find(d => d.id === id)?.title || '（勤務已停用或刪除）';
+  /**
+   * Why a rule pointing at this duty will never reach a shift. Empty when it
+   * will. Checked against the picker first so a duty being edited right now
+   * reads the fresh verdict, then against the map, which also covers the
+   * disabled and deleted duties the picker no longer lists.
+   */
+  const unreachable = (id: string): string =>
+    duties.find(d => d.id === id)?.unreachableReason ?? dutyReach[id] ?? '';
   const localTime = (iso: string) => {
     if (!iso) return '—';
     const d = new Date(iso);
@@ -398,8 +410,29 @@ export const AnimalStatusManager: React.FC<{ onToast: (m: string) => void }> = (
                 className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white"
               >
                 <option value="">請選擇…</option>
-                {duties.map(d => <option key={d.id} value={d.id}>{d.title}</option>)}
+                {duties.map(d => (
+                  <option key={d.id} value={d.id}>
+                    {d.title}{d.unreachableReason ? '（排班讀不到）' : ''}
+                  </option>
+                ))}
               </select>
+              {/*
+                Said at the moment the rule is written, not only when somebody
+                later wonders why the roster did not change. The rule is still
+                allowed -- the duty may be about to gain a time window, and
+                refusing it would just move the problem -- but it must not look
+                like it works.
+              */}
+              {unreachable(form.dutyItemId) && (
+                <span className="mt-1.5 flex items-start gap-1.5 text-[11px] text-amber-900 bg-amber-50 border border-amber-300 rounded-xl px-2.5 py-2">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
+                  <span>
+                    <strong>整期排班讀不到這項勤務</strong>（{unreachable(form.dutyItemId)}）。
+                    這條規則仍會算出分鐘數，但那些分鐘不會加到任何班次的人數上。
+                    要讓它生效，請到上面「勤務項目」把它設成「每日固定」並填上起訖時間。
+                  </span>
+                </span>
+              )}
             </label>
             <label className="block">
               <span className="text-[11px] font-bold text-slate-600">一隻要花幾分鐘 *</span>
@@ -497,6 +530,14 @@ export const AnimalStatusManager: React.FC<{ onToast: (m: string) => void }> = (
                 {m.status === 'disabled' && (
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 font-bold">已停用</span>
                 )}
+                {m.status === 'active' && unreachable(m.dutyItemId) && (
+                  <span
+                    title={unreachable(m.dutyItemId)}
+                    className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-bold flex items-center gap-1"
+                  >
+                    <AlertTriangle className="w-3 h-3" />排班讀不到
+                  </span>
+                )}
               </div>
               <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-3 flex-wrap">
                 <span><Clock className="w-3 h-3 inline" /> 一隻 {m.minutesPerAnimal} 分</span>
@@ -504,6 +545,11 @@ export const AnimalStatusManager: React.FC<{ onToast: (m: string) => void }> = (
                 <span className="text-slate-400">{m.categoryCode}/{m.optionCode}</span>
                 {m.note && <span className="text-slate-400">· {m.note}</span>}
               </div>
+              {m.status === 'active' && unreachable(m.dutyItemId) && (
+                <p className="text-[11px] text-amber-800 mt-1">
+                  {unreachable(m.dutyItemId)} —— 這條規則算得出分鐘，但進不了任何班次。
+                </p>
+              )}
             </div>
             <div className="flex items-center gap-1 shrink-0">
               <button onClick={() => startEdit(m)} title="修改"
