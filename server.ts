@@ -6,7 +6,7 @@ import { writeFileSync, mkdirSync, createWriteStream, statSync, readFileSync, un
 import { gzipSync } from 'zlib';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
-import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, cancelShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, isValidAssetSignature, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, setFeedbackReply, getVolunteerEmailByName, getRollCall, getAbsenceCounts, setVolunteerAccountStatus, sweepSuspensions, countSuspensions, recordAppeal, getStatusHistory, hasAppealedSinceSuspension, ABSENCE_SUSPENSION_THRESHOLD, SUSPENSION_DAYS, APPEAL_WINDOW_DAYS, createSubstitutionRequest, getSubstitutionRequest, getOpenSubstitutionForSignup, getOpenSubstitutions, takeSubstitutionRequest, withdrawSubstitutionRequest, expireStaleSubstitutions, hoursUntilShift, SUBSTITUTION_NOTICE_HOURS, getReminderCandidates, markReminderSent, normalizeReminderLead, planShiftsForRange, generateDraftShifts, publishDraftShifts, discardDraftShifts, SHIFT_MERGE_GAP_MINUTES, getAllStatusDutyMappings, getUnmappedStatuses, upsertStatusDutyMapping, setStatusDutyMappingStatus, getShiftCapacityMinutes, setShiftCapacityMinutes, getRecentStatusBatches, getImportedBatchSequences, getStatusRecordsForBatch, getStatusWorkload, getAnimalConcerns } from './db';
+import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, cancelShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, isValidAssetSignature, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, setFeedbackReply, getVolunteerEmailByName, getRollCall, getAbsenceCounts, setVolunteerAccountStatus, sweepSuspensions, countSuspensions, recordAppeal, getStatusHistory, hasAppealedSinceSuspension, ABSENCE_SUSPENSION_THRESHOLD, SUSPENSION_DAYS, APPEAL_WINDOW_DAYS, createSubstitutionRequest, getSubstitutionRequest, getOpenSubstitutionForSignup, getOpenSubstitutions, takeSubstitutionRequest, withdrawSubstitutionRequest, expireStaleSubstitutions, hoursUntilShift, SUBSTITUTION_NOTICE_HOURS, getReminderCandidates, markReminderSent, normalizeReminderLead, planShiftsForRange, generateDraftShifts, getStatusSupplementSummary, publishDraftShifts, discardDraftShifts, SHIFT_MERGE_GAP_MINUTES, getAllStatusDutyMappings, getUnmappedStatuses, upsertStatusDutyMapping, setStatusDutyMappingStatus, getShiftCapacityMinutes, setShiftCapacityMinutes, getRecentStatusBatches, getImportedBatchSequences, getStatusRecordsForBatch, getStatusWorkload, getAnimalConcerns } from './db';
 import { findMissingSequences } from './scripts/status-csv';
 import { isDutyOnTodaysList } from './src/utils/dutyVisibility';
  import { PDFParse } from 'pdf-parse';
@@ -2938,7 +2938,12 @@ ${contextText}
       const planned = planShiftsForRange(startDate, days);
       return res.json({
         success: true, startDate, days, endDate: rangeEnd(startDate, days),
-        planned, mergeGapMinutes: SHIFT_MERGE_GAP_MINUTES
+        planned, mergeGapMinutes: SHIFT_MERGE_GAP_MINUTES,
+        // Sent with every preview, not behind its own request. The coordinator
+        // has to be able to tell "the animals need nothing extra" from "this
+        // half of the system is not connected yet", and those look identical
+        // in `planned` alone.
+        statusSupplement: getStatusSupplementSummary()
       });
     } catch (error: any) {
       console.error('Schedule Preview Error:', error);
@@ -2951,12 +2956,21 @@ ${contextText}
     try {
       const startDate = requestedStart(req.body?.startDate);
       const days = requestedDays(req.body?.days);
-      const { created, skipped } = generateDraftShifts(startDate, days);
+      // Strict true, not truthy. This decides how many people a published
+      // shift will ask for, so a stray string from a future caller should mean
+      // "no" rather than "yes" -- the safe reading is the one that leaves the
+      // roster exactly as the duty list describes it.
+      const includeStatusSupplement = req.body?.includeStatusSupplement === true;
+      const { created, skipped, supplementedPeople } =
+        generateDraftShifts(startDate, days, { includeStatusSupplement });
       if (created.length > 0) broadcastChange('shifts');
-      console.log(`SQLite: 自動產生 ${created.length} 個班次草稿（略過已存在 ${skipped.length} 個）`);
+      console.log(
+        `SQLite: 自動產生 ${created.length} 個班次草稿（略過已存在 ${skipped.length} 個）`
+        + (includeStatusSupplement ? `，含依動物狀態加計的 ${supplementedPeople} 人次` : '')
+      );
       return res.json({
         success: true, startDate, days, endDate: rangeEnd(startDate, days),
-        created, skipped
+        created, skipped, includeStatusSupplement, supplementedPeople
       });
     } catch (error: any) {
       console.error('Schedule Generate Error:', error);
