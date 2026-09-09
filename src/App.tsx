@@ -587,17 +587,38 @@ export default function App() {
     }
   };
 
-  const handleCheckOutSubmit = (
+  /**
+   * Closes out a shift, and says whether it actually worked.
+   *
+   * This used to paint the record as completed, fire the request without
+   * waiting, and drop a failed response on the floor (`if (!data.success)
+   * return`). The caller had already shown 「✅ 簽退完成」 before the request
+   * was even sent. So a refused check-out looked exactly like a successful one:
+   * the feedback text sat on screen, the hours went up, and both quietly
+   * reverted on the next refresh -- with nothing to tell the volunteer their
+   * words were never saved.
+   *
+   * The same mistake is recorded in HANDOFF for shift signups: an HTTP error
+   * does not reach `.catch`, so a failed request that nobody inspects reads as
+   * success. It is written here as: await the answer, revert the optimistic
+   * paint when the answer is no, and hand the reason back to the caller.
+   */
+  const handleCheckOutSubmit = async (
     recordId: string,
     checkOutTime: string,
     hoursLogged: number,
     rating?: number,
     comment?: string,
     photo?: { base64: string; mimeType: string }
-  ) => {
+  ): Promise<{ ok: boolean; error?: string }> => {
     let checkedOutName = '';
+    // Kept so the optimistic paint below can be undone exactly, rather than
+    // approximately, if the server refuses.
+    let previousRecords: AttendanceRecord[] = [];
 
-    setAttendanceRecords(prev => prev.map(r => {
+    setAttendanceRecords(prev => {
+      previousRecords = prev;
+      return prev.map(r => {
       if (r.id === recordId) {
         checkedOutName = r.volunteerName;
         const nowStr = new Date().toLocaleString('zh-TW', { hour12: false });
@@ -612,51 +633,74 @@ export default function App() {
           lineReminderSent: true
         };
       }
-      return r;
-    }));
+        return r;
+      });
+    });
+
+    // The optimistic paint for the roster totals, applied before the request so
+    // the number moves with the row. Reverted below if the server says no.
+    if (checkedOutName) {
+      setVolunteers(prev => prev.map(v => (
+        v.name === checkedOutName
+          ? { ...v, totalHours: v.totalHours + hoursLogged, completedShiftsCount: v.completedShiftsCount + 1 }
+          : v
+      )));
+    }
+
+    /** Puts the screen back exactly as it was, and reports why. */
+    const revert = (error: string): { ok: false; error: string } => {
+      setAttendanceRecords(previousRecords);
+      if (checkedOutName) {
+        setVolunteers(prev => prev.map(v => (
+          v.name === checkedOutName
+            ? { ...v, totalHours: v.totalHours - hoursLogged, completedShiftsCount: v.completedShiftsCount - 1 }
+            : v
+        )));
+      }
+      return { ok: false, error };
+    };
 
     // The check-out time and the hours are no longer sent: the server reads its
     // own clock and takes the hours from the shift's schedule, because both are
     // facts it already holds and neither should be an assertion by the caller.
     // What comes back is authoritative, so reconcile against it rather than
     // leaving the optimistic guess above on screen.
-    authFetch(`/api/attendance/${recordId}/check-out`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        rating,
-        feedbackComment: comment,
-        photoBase64: photo?.base64,
-        mimeType: photo?.mimeType
-      })
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (!data.success || !data.record) return;
-        setAttendanceRecords(prev => prev.map(r => (r.id === recordId ? data.record : r)));
-        // Same for the roster total: if the server credited different hours
-        // from the ones guessed below, this is the number that is real.
-        if (checkedOutName && typeof data.record.hoursLogged === 'number' && data.record.hoursLogged !== hoursLogged) {
-          const correction = data.record.hoursLogged - hoursLogged;
-          setVolunteers(prev => prev.map(v =>
-            v.name === checkedOutName ? { ...v, totalHours: v.totalHours + correction } : v
-          ));
-        }
-      })
-      .catch(() => { /* best-effort backend sync -- local state already has the text feedback */ });
+    let data: any;
+    try {
+      const res = await authFetch(`/api/attendance/${recordId}/check-out`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rating,
+          feedbackComment: comment,
+          photoBase64: photo?.base64,
+          mimeType: photo?.mimeType
+        })
+      });
+      data = await res.json();
+    } catch {
+      // The network, not the server. Worth separating: one is worth retrying
+      // on the spot, the other is not.
+      return revert('連線中斷，這次簽退沒有送出。請確認訊號後再試一次。');
+    }
+
+    // A rejected check-out is not a missing field to skip over. `if
+    // (!data.success) return` here is what made a 403 look like a success.
+    if (!data?.success || !data.record) {
+      return revert(data?.error || '簽退沒有成功，您的回饋還沒有存下來。');
+    }
+
+    setAttendanceRecords(prev => prev.map(r => (r.id === recordId ? data.record : r)));
+    // Same for the roster total: if the server credited different hours from
+    // the ones guessed above, this is the number that is real.
+    if (checkedOutName && typeof data.record.hoursLogged === 'number' && data.record.hoursLogged !== hoursLogged) {
+      const correction = data.record.hoursLogged - hoursLogged;
+      setVolunteers(prev => prev.map(v =>
+        v.name === checkedOutName ? { ...v, totalHours: v.totalHours + correction } : v
+      ));
+    }
 
     if (checkedOutName) {
-      setVolunteers(prev => prev.map(v => {
-        if (v.name === checkedOutName) {
-          return {
-            ...v,
-            totalHours: v.totalHours + hoursLogged,
-            completedShiftsCount: v.completedShiftsCount + 1
-          };
-        }
-        return v;
-      }));
-
       // The hours themselves are credited by the check-out request above --
       // the server does it from the record it just closed, so there is nothing
       // to post here. This used to be a separate call that took a name and a
@@ -664,6 +708,8 @@ export default function App() {
       // reach the URL. The local update above is just the optimistic paint;
       // the next refresh reconciles it with what the server recorded.
     }
+
+    return { ok: true };
   };
 
   // Handlers for Shifts

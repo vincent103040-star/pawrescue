@@ -13,6 +13,7 @@ interface VolunteerSelfCheckInProps {
   onCheckedIn: () => void;
   /** Signed token from a scanned printed poster; replaces the on-screen code. */
   posterCode?: string;
+  /** Resolves to whether the server actually accepted it, and why not. */
   onCheckOutSubmit: (
     recordId: string,
     checkOutTime: string,
@@ -20,7 +21,7 @@ interface VolunteerSelfCheckInProps {
     rating?: number,
     comment?: string,
     photo?: { base64: string; mimeType: string }
-  ) => void;
+  ) => Promise<{ ok: boolean; error?: string }>;
   onSendLineToast: (msg: string) => void;
 }
 
@@ -165,6 +166,8 @@ export const VolunteerSelfCheckIn: React.FC<VolunteerSelfCheckInProps> = ({
   const [photo, setPhoto] = useState<{ previewUrl: string; base64: string; mimeType: string } | null>(null);
   const [isCaptioning, setIsCaptioning] = useState(false);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  /** Why the last attempt was refused. Empty until one is. */
+  const [checkOutError, setCheckOutError] = useState('');
 
   // Shrink before upload -- a raw phone photo is several MB and the caption
   // only needs enough detail to describe the scene.
@@ -208,12 +211,23 @@ export const VolunteerSelfCheckIn: React.FC<VolunteerSelfCheckInProps> = ({
     }
   };
 
-  const handleFinishCheckOut = () => {
+  /**
+   * Waits for the server before saying it worked.
+   *
+   * The success toast used to fire on the line after the request was started,
+   * and the modal closed with it -- so a refused check-out congratulated the
+   * volunteer and threw away what they had written. On failure the form now
+   * stays open with the text still in it, which is the only state from which
+   * retrying is possible.
+   */
+  const handleFinishCheckOut = async () => {
     if (!checkingOut || isCheckingOut) return;
     setIsCheckingOut(true);
+    setCheckOutError('');
     const shift = shifts.find(sh => sh.id === checkingOut.shiftId);
     const hours = (shift && scheduledHours(shift.timeRange)) || 3;
-    onCheckOutSubmit(
+
+    const result = await onCheckOutSubmit(
       checkingOut.id,
       new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Taipei' }),
       hours,
@@ -221,12 +235,18 @@ export const VolunteerSelfCheckIn: React.FC<VolunteerSelfCheckInProps> = ({
       comment.trim(),
       photo ? { base64: photo.base64, mimeType: photo.mimeType } : undefined
     );
+    setIsCheckingOut(false);
+
+    if (!result.ok) {
+      setCheckOutError(result.error || '簽退沒有成功，您寫的回饋還沒有存下來。');
+      return;
+    }
+
     onSendLineToast(`✅ 簽退完成！本次服務 ${hours} 小時，感謝您的回饋 🐾`);
     setCheckingOut(null);
     setPhoto(null);
     setComment('');
     setRating(5);
-    setIsCheckingOut(false);
     onClose();
   };
 
@@ -344,6 +364,24 @@ export const VolunteerSelfCheckIn: React.FC<VolunteerSelfCheckInProps> = ({
                 />
                 <p className="text-[10px] text-slate-400 mt-1">您的心得與照片會出現在督導後台的回饋牆上。</p>
               </div>
+
+              {/*
+                Said where the button is, not as a toast that scrolls away --
+                the volunteer needs it while deciding what to do next, and what
+                they wrote is still in the box above.
+              */}
+              {checkOutError && (
+                <div className="flex items-start gap-2 bg-rose-50 border border-rose-300 rounded-2xl px-3 py-2.5">
+                  <AlertCircle className="w-4 h-4 text-rose-700 shrink-0 mt-0.5" />
+                  <div className="text-[11px] text-rose-900 leading-relaxed">
+                    <p className="font-bold">簽退沒有成功，您寫的內容還在，沒有送出。</p>
+                    <p className="mt-0.5">{checkOutError}</p>
+                    <p className="mt-1 text-rose-800">
+                      再試一次還是不行的話，請直接告訴現場的社工督導，由他們幫您完成核銷 —— 您的服務時數不會因此少算。
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <div className="flex gap-2">
                 <button

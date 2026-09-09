@@ -171,7 +171,8 @@ VM **刻意沒有** `secretAccessor` 權限。還原是「機器沒了、建一�
 npm run lint                    # TypeScript 型別檢查
 npm run check:security          # 104 項授權檢查，需要伺服器在跑
 npm run check:ocr-chunking      # 13 項 OCR 頁碼對照檢查
-npm run check:status-supplement # 32 項「動物狀態 → 班表人力」檢查
+npm run check:status-supplement # 38 項「動物狀態 → 班表人力」檢查
+npm run check:attendance-ownership # 20 項「這筆出勤紀錄是不是我的」檢查
 ```
 
 `check:security` 只發出唯讀、或本來就該被拒絕的請求，所以通過時不會改變任何資料，失敗時揭露一個漏洞而不是製造一個。每次部署前跑。
