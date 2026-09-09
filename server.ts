@@ -9,6 +9,7 @@ import { GoogleGenAI } from '@google/genai';
 import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, cancelShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, isValidAssetSignature, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, setFeedbackReply, getVolunteerEmailByName, getRollCall, getAbsenceCounts, setVolunteerAccountStatus, sweepSuspensions, countSuspensions, recordAppeal, getStatusHistory, hasAppealedSinceSuspension, ABSENCE_SUSPENSION_THRESHOLD, SUSPENSION_DAYS, APPEAL_WINDOW_DAYS, createSubstitutionRequest, getSubstitutionRequest, getOpenSubstitutionForSignup, getOpenSubstitutions, takeSubstitutionRequest, withdrawSubstitutionRequest, expireStaleSubstitutions, hoursUntilShift, SUBSTITUTION_NOTICE_HOURS, getReminderCandidates, markReminderSent, normalizeReminderLead, planShiftsForRange, generateDraftShifts, getStatusSupplementSummary, describeRosterReach, getDutyRosterReach, publishDraftShifts, discardDraftShifts, SHIFT_MERGE_GAP_MINUTES, getAllStatusDutyMappings, getUnmappedStatuses, upsertStatusDutyMapping, setStatusDutyMappingStatus, getShiftCapacityMinutes, setShiftCapacityMinutes, getRecentStatusBatches, getImportedBatchSequences, getStatusRecordsForBatch, getStatusWorkload, getAnimalConcerns } from './db';
 import { findMissingSequences } from './scripts/status-csv';
 import { isDutyOnTodaysList } from './src/utils/dutyVisibility';
+import { attendanceBelongsTo } from './src/utils/attendanceOwnership';
  import { PDFParse } from 'pdf-parse';
 import type { SopContent, SopDocument, SopVideo } from './src/types';
 
@@ -143,6 +144,19 @@ async function startServer() {
     const norm = (v: unknown) => String(v || '').toLowerCase().trim();
     return !!norm(a) && norm(a) === norm(b);
   };
+
+  /**
+   * The signup ids belonging to one volunteer's email.
+   *
+   * This is the dependable half of "is this attendance row yours": a signup
+   * carries an email, and an email is not rewritten on sign-in the way
+   * volunteers.name is.
+   */
+  const signupIdsFor = (email: string): Set<string> => new Set(
+    getAllShiftSignups()
+      .filter(a => sameEmail(a.volunteerEmail, email))
+      .map(a => a.id)
+  );
 
   type PushCategory = 'shiftChanges' | 'urgentRecruitment' | 'checkInReminder' | 'feedbackReply';
 
@@ -3614,17 +3628,12 @@ ${contextText}
       if (!me) {
         return res.json({ success: true, records: [] });
       }
-      // Attendance rows identify the volunteer by name (that is what the
-      // check-in handler stamps), with the signupId as a second route in
-      // for rows created from an approved booking.
-      const mySignupIds = new Set(
-        getAllShiftSignups()
-          .filter(a => sameEmail(a.volunteerEmail, me.email))
-          .map(a => a.id)
-      );
-      const records = all.filter(
-        r => r.volunteerName === me.name || (r.signupId && mySignupIds.has(r.signupId))
-      );
+      // Which rows are mine is decided by attendanceBelongsTo, shared with the
+      // check-out handler below and with the volunteer's own screen. Reading
+      // and writing used to answer this differently, and a row could land in
+      // the gap: returned here, drawn on the phone, and refused on save.
+      const mySignupIds = signupIdsFor(me.email);
+      const records = all.filter(r => attendanceBelongsTo(r, me.name, mySignupIds));
       return res.json({ success: true, records });
     } catch (error: any) {
       console.error('Get Attendance Error:', error);
@@ -3959,13 +3968,21 @@ ${contextText}
       // You may only sign yourself out. This took nothing but a record id
       // before, so any caller could close out somebody else's shift, attach a
       // photo to it and file feedback in their name.
+      //
+      // The ownership test is attendanceBelongsTo, the same one GET
+      // /api/attendance filters with. It used to be `volunteerName !== me.name`
+      // here and something laxer there, so a row whose stored name differed by
+      // a trailing space was listed, drawn as a check-out form, and then
+      // refused on save -- while the coordinator's console, which skips this
+      // check entirely, saved the identical feedback. That reads from the
+      // outside as "volunteers can't write feedback, only admins can".
       const target = getAllAttendanceRecords().find(r => r.id === id);
       if (!target) {
         return res.status(404).json({ success: false, error: '找不到該筆出勤紀錄' });
       }
       if (!isAdmin(req)) {
         const me = getVolunteerByEmail(sessionEmail(req));
-        if (!me || target.volunteerName !== me.name) {
+        if (!me || !attendanceBelongsTo(target, me.name, signupIdsFor(me.email))) {
           return res.status(403).json({ success: false, error: '只能為自己簽退。' });
         }
       }

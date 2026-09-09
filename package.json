@@ -19,6 +19,7 @@
     "check:status-supplement": "node --import tsx scripts/status-supplement.test.ts",
     "status:ingest": "node --use-system-ca --import tsx scripts/status-ingest.ts",
     "check:duty-visibility": "node --import tsx scripts/duty-visibility.test.ts",
+    "check:attendance-ownership": "node --import tsx scripts/attendance-ownership.test.ts",
     "check:asset-urls": "node --import tsx scripts/asset-url.test.ts",
     "backup:offsite": "node --import tsx scripts/backup-offsite.ts",
     "check:backup": "node --import tsx scripts/backup-verify.ts"

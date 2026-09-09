@@ -13,7 +13,8 @@ interface VolunteerCheckInModalProps {
   attendanceRecords: AttendanceRecord[];
   onClose: () => void;
   onCheckInSubmit: (record: AttendanceRecord) => void;
-  onCheckOutSubmit: (recordId: string, checkOutTime: string, hoursLogged: number, rating?: number, comment?: string, photo?: { base64: string; mimeType: string }) => void;
+  /** Resolves to whether the server actually accepted it, and why not. */
+  onCheckOutSubmit: (recordId: string, checkOutTime: string, hoursLogged: number, rating?: number, comment?: string, photo?: { base64: string; mimeType: string }) => Promise<{ ok: boolean; error?: string }>;
   onSendLineToast: (msg: string) => void;
   /** Opens the printable poster, for sites with no screen at the gate. */
   onOpenPoster?: () => void;
@@ -75,6 +76,7 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
   const [feedbackRating, setFeedbackRating] = useState<number>(5);
   const [hoverRating, setHoverRating] = useState<number>(0);
   const [feedbackComment, setFeedbackComment] = useState<string>('');
+  const [isFinalizing, setIsFinalizing] = useState(false);
   const [isLineReminderNotificationShown, setIsLineReminderNotificationShown] = useState(false);
 
   // Check-out photo + AI caption state
@@ -224,8 +226,9 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
   };
 
   // Perform Final Check-Out Submission with Feedback (離場簽退與回饋)
-  const handleFinalizeCheckOut = (includeFeedback: boolean = true) => {
-    if (!pendingFeedbackRecord) return;
+  const handleFinalizeCheckOut = async (includeFeedback: boolean = true) => {
+    if (!pendingFeedbackRecord || isFinalizing) return;
+    setIsFinalizing(true);
 
     const checkOutTimeStr = getCurrentDateTimeStr();
 
@@ -256,7 +259,11 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
     const finalRating = includeFeedback ? feedbackRating : 5;
     const finalComment = includeFeedback ? (feedbackComment.trim() || '志工完成服務，流程順暢。') : '已透過 LINE 發送服務回饋提醒（等待志工回應）';
 
-    onCheckOutSubmit(
+    // Awaited, and the confirmation only follows a yes. It used to be
+    // announced on the next line, so a refused check-out told the coordinator
+    // the volunteer had been notified and the rating filed when neither had
+    // happened -- and the dialog closed, taking the typed feedback with it.
+    const result = await onCheckOutSubmit(
       pendingFeedbackRecord.id,
       checkOutTimeStr,
       hours,
@@ -264,6 +271,12 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
       finalComment,
       checkoutPhoto ? { base64: checkoutPhoto.base64, mimeType: checkoutPhoto.mimeType } : undefined
     );
+    setIsFinalizing(false);
+
+    if (!result.ok) {
+      onSendLineToast(`⚠️ 核銷未完成：${result.error || '伺服器沒有接受這次簽退'}。內容還在，可以再送一次。`);
+      return;
+    }
 
     onSendLineToast(
       `✅ 離場核銷成功！已透過 LINE 通知【${pendingFeedbackRecord.volunteerName}】並收集 ${finalRating} 星評分：「${finalComment}」，資料已彙整至管理員後台。`
@@ -824,16 +837,18 @@ export const VolunteerCheckInModal: React.FC<VolunteerCheckInModalProps> = ({
               <button
                 type="button"
                 onClick={() => handleFinalizeCheckOut(true)}
-                className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold py-2.5 px-4 rounded-xl text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer transform hover:scale-[1.02]"
+                disabled={isFinalizing}
+                className="flex-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 font-extrabold py-2.5 px-4 rounded-xl text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer transform hover:scale-[1.02]"
               >
                 <Send className="w-4 h-4 text-slate-950" />
-                <span>💬 模擬志工送出評分並完成簽退</span>
+                <span>{isFinalizing ? '送出中...' : '💬 模擬志工送出評分並完成簽退'}</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => handleFinalizeCheckOut(false)}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 px-4 rounded-xl text-xs transition flex items-center justify-center gap-1 cursor-pointer"
+                disabled={isFinalizing}
+                className="bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 font-bold py-2.5 px-4 rounded-xl text-xs transition flex items-center justify-center gap-1 cursor-pointer"
               >
                 <MessageSquare className="w-4 h-4 text-slate-500" />
                 <span>僅發送 LINE 提醒 (事後填寫)</span>
