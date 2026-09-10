@@ -1,0 +1,109 @@
+# 把「記得跑檢查」這件事從人手上拿走。
+#
+# 這個 repo 有 276 項自動檢查，但在這個檔案出現之前，它們只在有人主動打指令時
+# 才會跑。那等於整條防線的最後一步是「我記得」——而忘記不會有任何提示，你只會
+# 以為自己跑過了。這正是這個專案花最多力氣在防的那種沉默失敗，只是它發生在
+# 專案自己的流程裡。
+#
+# 現在每次 push 都會跑一遍。紅色的 ✗ 出現在 GitHub 上，不需要任何人記得。
+
+name: checks
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+# 同一個分支連推兩次時，取消還在跑的舊的那次——它驗的已經不是現在的程式碼了。
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # node:sqlite 是 Node 22 才有的內建模組，整個資料層都靠它。
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: 型別檢查
+        run: npm run lint
+
+      # ─── 不需要伺服器的檢查。各自一步，失敗時 GitHub 直接指名是哪一項。 ───
+
+      - name: 出勤紀錄的擁有者判斷（20 項）
+        run: npm run check:attendance-ownership
+
+      - name: 一次性勤務發給誰（11 項）
+        run: npm run check:duty-visibility
+
+      - name: 照片簽名網址（22 項）
+        run: npm run check:asset-urls
+
+      - name: 動物狀態換算人力（38 項）
+        run: npm run check:status-supplement
+
+      - name: 動物狀態 CSV 解析（28 項）
+        run: npm run check:status-csv
+
+      - name: 動物狀態收信解析（20 項）
+        run: npm run check:status-mail
+
+      - name: 動物狀態寫入與去重（20 項）
+        run: npm run check:status-db
+
+      - name: OCR 頁碼對照（13 項）
+        run: npm run check:ocr-chunking
+
+      # ─── 授權檢查要有一台真的伺服器，所以先建置再把它跑起來。 ───
+
+      - name: 建置
+        run: npm run build
+
+      - name: 啟動伺服器
+        env:
+          # 全新的暫存資料庫，不是任何人的資料。db.ts 的 DATA_DIR 就是為此存在。
+          DATA_DIR: ${{ runner.temp }}/pawrescue-ci
+          NODE_ENV: production
+          PORT: '3000'
+          # 設一個，否則伺服器會自己產生隨機密碼——CI 不需要那個驚喜。
+          ADMIN_PASSWORD: ci-only-not-a-real-password
+          # 這一項不是機密（.env.example 自己寫了：Channel ID 不是秘密，Channel
+          # secret 才是），但少了它，/api/auth/line-login-url 會在授權檢查之前
+          # 就先回 503「尚未設定」，於是那一項冒煙測試永遠是紅的。
+          #
+          # 一個永遠紅的 CI 比沒有 CI 更糟：大家會學會忽略它。所以這裡給 CI 一份
+          # 與正式機同形狀的設定，讓它驗得到那條路由真正的授權行為。
+          LINE_LOGIN_CHANNEL_ID: ci-placeholder-channel-id
+        run: |
+          mkdir -p "$DATA_DIR"
+          npm start > /tmp/server.log 2>&1 &
+          echo $! > /tmp/server.pid
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/api/health > /dev/null; then
+              echo "伺服器在第 ${i} 秒起來了"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::伺服器 30 秒內沒有起來"
+          cat /tmp/server.log
+          exit 1
+
+      - name: 授權檢查（104 項）
+        run: npm run check:security
+
+      # 伺服器沒起來、或冒煙測試失敗時，log 是唯一能說明原因的東西。
+      # if: failure() 讓它在前面任何一步掛掉時都還是會印出來。
+      - name: 失敗時印出伺服器 log
+        if: failure()
+        run: cat /tmp/server.log || true
