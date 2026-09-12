@@ -593,11 +593,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {/* 1. 關鍵指標與即時告警卡片 (Overview Stats) */}
       {visibleModules.overview_stats && (
         <DashboardModuleCard
-          moduleId="overview_stats"
+          id="overview_stats"
           title="1. 關鍵指標與即時告警卡片"
           subtitle="實時統計缺工總額、排班達成率、待審核報名及涵蓋園區"
           icon={<ShieldAlert className="w-5 h-5 text-amber-500" />}
-          badgeText="即時監控"
+          badge="即時監控"
           badgeColor="bg-amber-100 text-amber-900 border-amber-300"
           isCollapsed={collapsedModules.overview_stats}
           onToggleCollapse={() => handleToggleModuleCollapse('overview_stats')}
@@ -790,16 +790,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
         return (
           <DashboardModuleCard
-            moduleId="monthly_report"
+            id="monthly_report"
             title="5. 月度據點績效統計與總結報表匯出"
             subtitle="自動統計當月各據點總志工數、完成服務總時數與缺工率 (%)，可快速下載 CSV 試算表或 PDF 績效報告"
             icon={<FileSpreadsheet className="w-5 h-5 text-amber-400" />}
-            badgeText="各據點指標"
+            badge="各據點指標"
             badgeColor="bg-[#F5E6D0] text-[#716053]"
             isCollapsed={collapsedModules.monthly_report}
             onToggleCollapse={() => handleToggleModuleCollapse('monthly_report')}
             onHide={() => handleHideModule('monthly_report')}
-            headerRightExtras={
+            extraHeaderActions={
               <div className="flex flex-wrap items-center gap-2">
                 {/* Month Selector */}
                 <div className="flex items-center gap-1.5 bg-[#FAF6EE] px-3 py-1.5 rounded-2xl border border-[#716053] text-xs font-bold text-[#716053]">
@@ -918,16 +918,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
         return (
           <div id="feedback-hub-anchor" className="scroll-mt-4">
           <DashboardModuleCard
-            moduleId="feedback_hub"
+            id="feedback_hub"
             title="6. 志工服務回饋與滿意度彙整中心"
             subtitle="志工完成簽退離場時自動透過 LINE 發送提醒收集 1-5 星好評與改善建議，提供社工團隊即時數據以優化園區動線與衛教流程"
             icon={<Star className="w-5 h-5 text-amber-500 fill-amber-500" />}
-            badgeText="離場 LINE 即時提醒"
+            badge="離場 LINE 即時提醒"
             badgeColor="bg-amber-100 text-amber-900 border-amber-300"
             isCollapsed={collapsedModules.feedback_hub}
             onToggleCollapse={() => handleToggleModuleCollapse('feedback_hub')}
             onHide={() => handleHideModule('feedback_hub')}
-            headerRightExtras={
+            extraHeaderActions={
               <button
                 onClick={() => {
                   if (onOpenCheckInModal) onOpenCheckInModal();
@@ -1284,16 +1284,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
       // 7. 依「動物之家場域 (Zone)」分類之人力缺口與色彩管理 (Zone Shortage & Shifts)
       const mod7 = visibleModules.zone_shortage && (
         <DashboardModuleCard
-          moduleId="zone_shortage"
+          id="zone_shortage"
           title="7. 急缺志工班次與招募推播"
           subtitle="人力尚未補齊的班次，可直接發布 LINE 招募或代志工報名"
           icon={<Megaphone className="w-5 h-5 text-amber-300" />}
-          badgeText={`${understaffedShifts.length} 個缺額班次`}
+          badge={`${understaffedShifts.length} 個缺額班次`}
           badgeColor="bg-[#F5E6D0] text-[#716053]"
           isCollapsed={collapsedModules.zone_shortage}
           onToggleCollapse={() => handleToggleModuleCollapse('zone_shortage')}
           onHide={() => handleHideModule('zone_shortage')}
-          headerRightExtras={
+          extraHeaderActions={
             <div className="flex items-center space-x-1.5 text-xs font-sans">
               <Filter className="w-3.5 h-3.5 text-slate-400" />
               <button

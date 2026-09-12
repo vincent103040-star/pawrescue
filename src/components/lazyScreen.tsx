@@ -1,4 +1,4 @@
-import { lazy } from 'react';
+import { lazy, type ComponentType } from 'react';
 
 /**
  * 動態載入失敗時顯示的東西。
@@ -30,18 +30,19 @@ const ChunkLoadFailed = () => (
 /**
  * React.lazy，但載不到檔案時給出一則訊息，而不是讓整棵樹垮成一片空白。
  *
- * 為什麼不是 error boundary：那需要 class component，而這個專案沒有安裝
- * @types/react，class 的 this.props / this.state 一律解析不出型別。不過就算能寫，
- * 這個做法也比較準 —— error boundary 會連元件內部的執行期錯誤一起接走，把真正的
- * bug 偽裝成「載入失敗，請重新整理」；這裡的 catch 只包住 import 那一個 promise，
- * 接到的必定是取檔案失敗。
+ * 為什麼不是 error boundary：這個做法比較準 —— error boundary 會連元件內部的
+ * 執行期錯誤一起接走，把真正的 bug 偽裝成「載入失敗，請重新整理」；這裡的 catch
+ * 只包住 import 那一個 promise，接到的必定是取檔案失敗。
+ *
+ * 泛型 P 讓載入的元件保留自己的 props 型別；沒有它，tsc 會從 fallback 推成
+ * 「不接受任何 props」，每個呼叫處都會報錯。
  *
  * 失敗的模組會停在這個畫面直到重新整理：React.lazy 會記住第一次的結果，不會自己
  * 重試。這是刻意的 —— 自動重試在部署造成的失敗上永遠不會成功，只會讓使用者對著
  * 一個看似在動、其實不會好的畫面等下去。
  */
-export function lazyScreen(loader: () => Promise<{ default: any }>) {
-  return lazy(() =>
+export function lazyScreen<P extends object>(loader: () => Promise<{ default: ComponentType<P> }>) {
+  return lazy<ComponentType<P>>(() =>
     loader().catch((error: unknown) => {
       // 留在 console：這類失敗使用者只會回報「打不開」，有這行才分得出是取檔案
       // 失敗還是元件自己爆了。

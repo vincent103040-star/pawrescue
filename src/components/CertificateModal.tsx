@@ -113,7 +113,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({ volunteer, o
               ref={certificateRef}
               className="w-[842px] h-[595px] bg-[#FAF6EE] p-10 border-[12px] border-[#716053] rounded-xl shadow-xl relative flex flex-col justify-between text-[#716053] select-none"
               style={{
-                boxSizing: 'border-[#716053]'
+                boxSizing: 'border-box'
               }}
             >
               {/* Decorative Double Border */}
