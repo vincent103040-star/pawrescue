@@ -4358,13 +4358,20 @@ ${contextText}
    * here -- they used to fall through the event loop and vanish -- so pointing
    * them at Make adds a consumer without touching text (rulebook RAG) or audio.
    *
+   * The scenario's trigger is Make's own "LINE Watch Events" module, which is
+   * a webhook that expects the body LINE itself would send. Re-wrapping the
+   * single event in LINE's envelope means that module keeps parsing it exactly
+   * as before, and every downstream mapping in the scenario ({{1.message.id}}
+   * and friends) survives untouched. Make does not check x-line-signature on
+   * that hook, which is why this works without re-signing anything.
+   *
    * Deliberately fire-and-forget: LINE has already been answered 200 by the
    * time this runs, and the event loop below awaits each event in turn, so a
    * slow Make webhook must not hold up the text question behind it. A failed
    * forward is logged and dropped; Make owns the replyToken from here (it does
    * not reply today), so the volunteer gets no message either way.
    */
-  function forwardToMake(event: any): void {
+  function forwardToMake(event: any, destination: string | undefined): void {
     const url = process.env.MAKE_WEBHOOK_URL;
     if (!url) {
       console.warn('LINE Webhook: MAKE_WEBHOOK_URL not set, dropping', event.message?.type, 'message');
@@ -4373,7 +4380,7 @@ ${contextText}
     fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(event),
+      body: JSON.stringify({ destination, events: [event] }),
       signal: AbortSignal.timeout(5000)
     })
       .then((makeRes) => {
@@ -4421,7 +4428,7 @@ ${contextText}
           continue;
         }
         if (event.type === 'message' && (event.message?.type === 'image' || event.message?.type === 'file')) {
-          forwardToMake(event);
+          forwardToMake(event, req.body?.destination);
           continue;
         }
         if (event.type === 'message' && event.message?.type === 'text') {
