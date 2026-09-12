@@ -4352,6 +4352,38 @@ ${contextText}
     }
   });
 
+  /**
+   * Hands one LINE event to the Make.com scenario that classifies animal photos
+   * and matches them to a session. Photo and file messages never got a branch
+   * here -- they used to fall through the event loop and vanish -- so pointing
+   * them at Make adds a consumer without touching text (rulebook RAG) or audio.
+   *
+   * Deliberately fire-and-forget: LINE has already been answered 200 by the
+   * time this runs, and the event loop below awaits each event in turn, so a
+   * slow Make webhook must not hold up the text question behind it. A failed
+   * forward is logged and dropped; Make owns the replyToken from here (it does
+   * not reply today), so the volunteer gets no message either way.
+   */
+  function forwardToMake(event: any): void {
+    const url = process.env.MAKE_WEBHOOK_URL;
+    if (!url) {
+      console.warn('LINE Webhook: MAKE_WEBHOOK_URL not set, dropping', event.message?.type, 'message');
+      return;
+    }
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(event),
+      signal: AbortSignal.timeout(5000)
+    })
+      .then((makeRes) => {
+        if (!makeRes.ok) console.error('LINE Webhook: Make.com rejected forward, HTTP', makeRes.status);
+      })
+      .catch((error: any) => {
+        console.error('LINE Webhook: forward to Make.com failed:', error?.message || error);
+      });
+  }
+
   // API endpoint: LINE Messaging API webhook. Receives events (user messages, follows)
   // from the official account and auto-replies -- text questions are answered via the
   // same rulebook RAG logic as /api/ai/rag-ask, so "問手冊 AI 小幫手" also works as a
@@ -4386,6 +4418,10 @@ ${contextText}
       try {
         if (event.type === 'follow') {
           await replyToLine(event.replyToken, '嗨，我是浪浪家園的志工小幫手 🐾 直接傳訊息問我志工手冊 / SOP 相關問題，我會幫你從手冊裡找答案！');
+          continue;
+        }
+        if (event.type === 'message' && (event.message?.type === 'image' || event.message?.type === 'file')) {
+          forwardToMake(event);
           continue;
         }
         if (event.type === 'message' && event.message?.type === 'text') {
