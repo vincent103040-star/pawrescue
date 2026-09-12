@@ -291,6 +291,15 @@ export interface AttendanceRecord {
   feedbackReplyText?: string;
   feedbackRepliedAt?: string;
   feedbackRepliedBy?: string;
+  /**
+   * 這則回饋被讀成什麼（好評／建議／不滿／爭議事故）、一句話摘要，以及它是在
+   * 什麼時候被判定為「社工必須看」。讀法來自 Gemini（沒有金鑰時只看星數），
+   * 但「要不要拉社工進來」是 src/utils/feedbackTriage 裡的規則，不是模型說了算。
+   * feedbackAlertAt 有值但尚未參採、也尚未回覆，就是後台橫幅上還亮著的那一則。
+   */
+  feedbackAiCategory?: 'praise' | 'suggestion' | 'complaint' | 'dispute';
+  feedbackAiSummary?: string;
+  feedbackAlertAt?: string;
   lineReminderSent?: boolean; // whether a real LINE push confirming the feedback was sent
   photoUrl?: string; // relative URL to the AI-captioned check-out photo, if one was attached
 }

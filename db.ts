@@ -1070,6 +1070,31 @@ try {
   // column already exists
 }
 
+// Migration: what the feedback was read as, and whether it raised an alert.
+//
+// The category and the one-line summary are a model's reading of the text,
+// made once when the volunteer checks out and stored so the dashboard does not
+// re-read every note on every load. feedbackAlertAt is the moment the rule in
+// src/utils/feedbackTriage decided a coordinator had to see this one; it stays
+// set for the record, and "still open" is derived from it together with the
+// acknowledged/replied columns above rather than stored as a second flag that
+// could drift.
+try {
+  db.exec(`ALTER TABLE attendance_records ADD COLUMN feedbackAiCategory TEXT NOT NULL DEFAULT ''`);
+} catch {
+  // column already exists
+}
+try {
+  db.exec(`ALTER TABLE attendance_records ADD COLUMN feedbackAiSummary TEXT NOT NULL DEFAULT ''`);
+} catch {
+  // column already exists
+}
+try {
+  db.exec(`ALTER TABLE attendance_records ADD COLUMN feedbackAlertAt TEXT NOT NULL DEFAULT ''`);
+} catch {
+  // column already exists
+}
+
 /**
  * Marks a volunteer's service feedback as taken up by the social work team, or
  * clears that mark.
@@ -1128,6 +1153,33 @@ export function setFeedbackReply(
   return row ? rowToAttendanceRecord(row) : null;
 }
 
+/**
+ * Records how a piece of feedback was read, and whether that reading raised an
+ * alert for the social work team.
+ *
+ * Runs after check-out has already succeeded, from a task the volunteer is not
+ * waiting on, so it never throws for a missing row: returns null and the
+ * caller logs it. An alert is only ever set here, never cleared -- clearing
+ * is what acknowledging or replying does, and those already have columns.
+ */
+export function setFeedbackTriage(
+  id: string,
+  triage: { category: string; summary: string; needsAttention: boolean }
+): AttendanceRecord | null {
+  const existing = db.prepare('SELECT feedbackAlertAt FROM attendance_records WHERE id = ?').get(id) as { feedbackAlertAt: string } | undefined;
+  if (!existing) return null;
+
+  const alertAt = triage.needsAttention ? (existing.feedbackAlertAt || new Date().toISOString()) : existing.feedbackAlertAt;
+  db.prepare(`
+    UPDATE attendance_records
+    SET feedbackAiCategory = ?, feedbackAiSummary = ?, feedbackAlertAt = ?
+    WHERE id = ?
+  `).run(triage.category, triage.summary, alertAt, id);
+
+  const row = db.prepare('SELECT * FROM attendance_records WHERE id = ?').get(id);
+  return row ? rowToAttendanceRecord(row) : null;
+}
+
 // Seed with the original mock attendance history on first run only, same pattern as
 // the volunteers table above.
 const attendanceSeedCount = db.prepare('SELECT COUNT(*) AS c FROM attendance_records').get() as { c: number };
@@ -1157,6 +1209,9 @@ function rowToAttendanceRecord(row: any): AttendanceRecord {
     feedbackReplyText: row.feedbackReplyText || undefined,
     feedbackRepliedAt: row.feedbackRepliedAt || undefined,
     feedbackRepliedBy: row.feedbackRepliedBy || undefined,
+    feedbackAiCategory: row.feedbackAiCategory || undefined,
+    feedbackAiSummary: row.feedbackAiSummary || undefined,
+    feedbackAlertAt: row.feedbackAlertAt || undefined,
     checkInAt: row.checkInAt || undefined,
     checkOutAt: row.checkOutAt || undefined,
     volunteerName: row.volunteerName,

@@ -1,10 +1,11 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { PositionShift, ShiftSignup, ShelterLocation, AttendanceRecord } from '../types';
-import { AlertCircle, CheckCircle2, Users, Calendar, MapPin, ArrowRight, ShieldAlert, Sparkles, Filter, Eye, ChevronRight, QrCode, LogOut, Send, Zap, FileSpreadsheet, FileText, Download, Building2, Clock, BarChart3, Star, Smartphone, MessageSquare, ThumbsUp, Search, RefreshCw, SlidersHorizontal, LayoutGrid, EyeOff, Megaphone } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle2, Users, Calendar, MapPin, ArrowRight, ShieldAlert, Sparkles, Filter, Eye, ChevronRight, QrCode, LogOut, Send, Zap, FileSpreadsheet, FileText, Download, Building2, Clock, BarChart3, Star, Smartphone, MessageSquare, ThumbsUp, Search, RefreshCw, SlidersHorizontal, LayoutGrid, EyeOff, Megaphone } from 'lucide-react';
 import { DashboardModuleCard } from './DashboardModuleCard';
 import { lazyScreen } from './lazyScreen';
 import { calculateShiftDurationHours } from '../utils/shiftHours';
 import { authFetch } from '../utils/session';
+import { isOpenFeedbackAlert, FEEDBACK_CATEGORY_LABELS } from '../utils/feedbackTriage';
 import { resolveZone } from '../data/zones';
 import { 
   DashboardModuleCustomizer, 
@@ -219,7 +220,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
   };
 
   // Feedback Hub state
-  const [feedbackRatingFilter, setFeedbackRatingFilter] = useState<'all' | '5' | '4' | 'low'>('all');
+  const [feedbackRatingFilter, setFeedbackRatingFilter] = useState<'all' | '5' | '4' | 'low' | 'attention'>('all');
+
+  // 還亮著的回饋警報：規則判定社工必須看、而且還沒有人參採或回覆的那些。
+  // 算在這一層而不是回饋模組裡，因為橫幅掛在頁首 —— 社工一坐下打開看板就
+  // 該看到，不必先捲到第六個模組。這是唯一的提醒管道：沒有 LINE 推播，
+  // 下班的人不會被叫醒，上班的人不會漏掉。
+  const openFeedbackAlerts = attendanceRecords.filter(isOpenFeedbackAlert);
+  const jumpToFeedbackAlerts = () => {
+    setFeedbackRatingFilter('attention');
+    setVisibleModules(prev => ({ ...prev, feedback_hub: true }));
+    setCollapsedModules(prev => ({ ...prev, feedback_hub: false }));
+    // 模組可能這一刻才被顯示出來，等它畫好再捲。
+    window.setTimeout(() => {
+      document.getElementById('feedback-hub-anchor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  };
   const [feedbackSearchTerm, setFeedbackSearchTerm] = useState<string>('');
   // Which rows have a request in flight. Whether feedback *is* acknowledged is
   // not tracked here any more -- it comes from the record itself, so it
@@ -500,6 +516,39 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
       </div>
+
+      {/* 志工回饋警報：低星、或 AI 讀出不滿／爭議事故，且還沒有人處理。 */}
+      {openFeedbackAlerts.length > 0 && (
+        <div className="bg-rose-50 border-2 border-rose-300 p-4 rounded-[24px] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-2xl bg-rose-600 text-white flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <h4 className="font-bold text-rose-900 text-sm">{openFeedbackAlerts.length} 則志工回饋需要社工介入</h4>
+                <span className="text-[10px] bg-rose-200 text-rose-900 font-extrabold px-2 py-0.5 rounded-full">
+                  AI 分類
+                </span>
+              </div>
+              <p className="text-xs text-rose-800 mt-0.5">
+                {openFeedbackAlerts.slice(0, 3).map(r =>
+                  `${r.volunteerName}（${r.rating || 5} 星${r.feedbackAiCategory ? '・' + FEEDBACK_CATEGORY_LABELS[r.feedbackAiCategory] : ''}）`
+                ).join('、')}
+                {openFeedbackAlerts.length > 3 ? ` 等 ${openFeedbackAlerts.length} 則` : ''}
+                ，參採或回覆後即解除。
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={jumpToFeedbackAlerts}
+            className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-5 py-2.5 rounded-full shadow-xs transition flex items-center gap-1.5 shrink-0 self-start sm:self-auto cursor-pointer"
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span>前往處理</span>
+          </button>
+        </div>
+      )}
 
       {/* Quick Check-in Prompt Bar */}
       {onOpenCheckInModal && (
@@ -867,6 +916,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         const highRatingPct = totalCount > 0 ? Math.round((highRatingCount / totalCount) * 100) : 100;
 
         return (
+          <div id="feedback-hub-anchor" className="scroll-mt-4">
           <DashboardModuleCard
             moduleId="feedback_hub"
             title="6. 志工服務回饋與滿意度彙整中心"
@@ -1018,6 +1068,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   >
                     3星以下
                   </button>
+                  <button
+                    onClick={() => setFeedbackRatingFilter('attention')}
+                    className={`px-3 py-1 rounded-xl transition cursor-pointer border flex items-center gap-1 ${
+                      feedbackRatingFilter === 'attention'
+                        ? 'bg-rose-700 text-white border-rose-700'
+                        : openFeedbackAlerts.length > 0
+                          ? 'bg-rose-50 text-rose-800 hover:bg-rose-100 border-rose-300'
+                          : 'bg-white text-slate-700 hover:bg-slate-100 border-slate-200'
+                    }`}
+                  >
+                    <AlertTriangle className="w-3 h-3" />
+                    需社工介入 ({openFeedbackAlerts.length})
+                  </button>
                 </div>
               </div>
 
@@ -1029,6 +1092,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     if (feedbackRatingFilter === '5' && rating !== 5) return false;
                     if (feedbackRatingFilter === '4' && rating !== 4) return false;
                     if (feedbackRatingFilter === 'low' && rating > 3) return false;
+                    if (feedbackRatingFilter === 'attention' && !isOpenFeedbackAlert(r)) return false;
 
                     if (feedbackSearchTerm.trim()) {
                       const q = feedbackSearchTerm.toLowerCase();
@@ -1048,19 +1112,27 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     );
                   }
 
-                  return filtered.map(item => {
+                  // 還亮著警報的排最前面：橫幅把人帶到這裡，是為了讓他第一眼
+                  // 就看到那幾則，不是讓他在五星好評裡找。
+                  const ordered = [...filtered].sort((a, b) => Number(isOpenFeedbackAlert(b)) - Number(isOpenFeedbackAlert(a)));
+
+                  return ordered.map(item => {
                     const ratingVal = item.rating || 5;
                     const isAcknowledged = !!item.feedbackAcknowledgedAt;
                     const isSavingAck = savingFeedbackIds.includes(item.id);
                     const hasReplied = !!item.feedbackRepliedAt;
+                    const isOpenAlert = isOpenFeedbackAlert(item);
                     // 低星回饋才是真正需要有人親自回話的那些。五星好評不回也不會
                     // 少什麼，回了反而像罐頭 —— 所以只有這些會被標成待辦。
-                    const needsReply = !hasReplied && (item.rating || 5) <= 3;
+                    // 警報還亮著的當然也算，不管它幾星。
+                    const needsReply = !hasReplied && ((item.rating || 5) <= 3 || isOpenAlert);
 
                     return (
                       <div
                         key={item.id}
-                        className="bg-[#FFFDF7] p-5 rounded-2xl border border-[#716053] shadow-2xs hover:shadow-xs transition space-y-3 flex flex-col justify-between"
+                        className={`bg-[#FFFDF7] p-5 rounded-2xl border shadow-2xs hover:shadow-xs transition space-y-3 flex flex-col justify-between ${
+                          isOpenAlert ? 'border-2 border-rose-400' : 'border-[#716053]'
+                        }`}
                       >
                         <div className="space-y-2.5">
                           {/* Header Line */}
@@ -1111,6 +1183,28 @@ export const Dashboard: React.FC<DashboardProps> = ({
                               </p>
                             </div>
                           </div>
+
+                          {/* AI 的讀法：類別加一句摘要。警報亮著時整行改成紅的，
+                              解除（參採或回覆）之後退回一般的灰色標籤。 */}
+                          {item.feedbackAiCategory && (
+                            <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold border ${
+                                isOpenAlert
+                                  ? 'bg-rose-600 text-white border-rose-600'
+                                  : item.feedbackAiCategory === 'praise'
+                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                    : 'bg-slate-100 text-slate-700 border-slate-200'
+                              }`}>
+                                {isOpenAlert && <AlertTriangle className="w-3 h-3" />}
+                                {isOpenAlert ? '需社工介入・' : 'AI 分類・'}{FEEDBACK_CATEGORY_LABELS[item.feedbackAiCategory]}
+                              </span>
+                              {item.feedbackAiSummary && (
+                                <span className={isOpenAlert ? 'text-rose-800 font-semibold' : 'text-slate-500'}>
+                                  {item.feedbackAiSummary}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
 
                         {/* 回覆過的話，內容直接攤在卡片上。這是下一個打開同一則回饋
@@ -1183,6 +1277,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </div>
             </div>
           </DashboardModuleCard>
+          </div>
         );
       })();
 

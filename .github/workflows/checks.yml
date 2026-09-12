@@ -60,6 +60,9 @@ jobs:
       - name: 動物狀態換算人力（38 項）
         run: npm run check:status-supplement
 
+      - name: 志工回饋何時要拉社工進來（30 項）
+        run: npm run check:feedback-triage
+
       - name: 動物狀態 CSV 解析（28 項）
         run: npm run check:status-csv
 
