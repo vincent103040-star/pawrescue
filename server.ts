@@ -6,9 +6,10 @@ import { writeFileSync, mkdirSync, createWriteStream, statSync, readFileSync, un
 import { gzipSync } from 'zlib';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
-import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, cancelShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, isValidAssetSignature, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, setFeedbackReply, getVolunteerEmailByName, getRollCall, getAbsenceCounts, setVolunteerAccountStatus, sweepSuspensions, countSuspensions, recordAppeal, getStatusHistory, hasAppealedSinceSuspension, ABSENCE_SUSPENSION_THRESHOLD, SUSPENSION_DAYS, APPEAL_WINDOW_DAYS, createSubstitutionRequest, getSubstitutionRequest, getOpenSubstitutionForSignup, getOpenSubstitutions, takeSubstitutionRequest, withdrawSubstitutionRequest, expireStaleSubstitutions, hoursUntilShift, SUBSTITUTION_NOTICE_HOURS, getReminderCandidates, markReminderSent, normalizeReminderLead, planShiftsForRange, generateDraftShifts, getStatusSupplementSummary, describeRosterReach, getDutyRosterReach, publishDraftShifts, discardDraftShifts, SHIFT_MERGE_GAP_MINUTES, getAllStatusDutyMappings, getUnmappedStatuses, upsertStatusDutyMapping, setStatusDutyMappingStatus, getShiftCapacityMinutes, setShiftCapacityMinutes, getRecentStatusBatches, getImportedBatchSequences, getStatusRecordsForBatch, getStatusWorkload, getAnimalConcerns } from './db';
+import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, cancelShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, isValidAssetSignature, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, setFeedbackTriage, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, setFeedbackReply, getVolunteerEmailByName, getRollCall, getAbsenceCounts, setVolunteerAccountStatus, sweepSuspensions, countSuspensions, recordAppeal, getStatusHistory, hasAppealedSinceSuspension, ABSENCE_SUSPENSION_THRESHOLD, SUSPENSION_DAYS, APPEAL_WINDOW_DAYS, createSubstitutionRequest, getSubstitutionRequest, getOpenSubstitutionForSignup, getOpenSubstitutions, takeSubstitutionRequest, withdrawSubstitutionRequest, expireStaleSubstitutions, hoursUntilShift, SUBSTITUTION_NOTICE_HOURS, getReminderCandidates, markReminderSent, normalizeReminderLead, planShiftsForRange, generateDraftShifts, getStatusSupplementSummary, describeRosterReach, getDutyRosterReach, publishDraftShifts, discardDraftShifts, SHIFT_MERGE_GAP_MINUTES, getAllStatusDutyMappings, getUnmappedStatuses, upsertStatusDutyMapping, setStatusDutyMappingStatus, getShiftCapacityMinutes, setShiftCapacityMinutes, getRecentStatusBatches, getImportedBatchSequences, getStatusRecordsForBatch, getStatusWorkload, getAnimalConcerns } from './db';
 import { findMissingSequences } from './scripts/status-csv';
 import { isDutyOnTodaysList } from './src/utils/dutyVisibility';
+import { isFeedbackCategory, fallbackFeedbackCategory, needsCoordinatorAttention, clampRating, type FeedbackCategory } from './src/utils/feedbackTriage';
 import { attendanceBelongsTo } from './src/utils/attendanceOwnership';
  import { PDFParse } from 'pdf-parse';
 import type { SopContent, SopDocument, SopVideo } from './src/types';
@@ -642,6 +643,97 @@ async function startServer() {
       });
     }
   });
+
+  /**
+   * Reads a volunteer's feedback and files it as praise, a suggestion, a
+   * complaint or a dispute, with a one-line summary for the dashboard card.
+   *
+   * The reading is the model's; the decision that follows it is not. Whether
+   * a coordinator gets pulled in is needsCoordinatorAttention() in
+   * src/utils/feedbackTriage -- a two-clause rule the dashboard applies too --
+   * and the model can only widen it, never narrow it: a two-star note is an
+   * alert whatever the text says, and the model's job is to catch the
+   * five-star note whose text says 「被咬了」.
+   *
+   * Never throws. With no API key, or when Gemini fails or answers with
+   * something that is not one of the four categories, the stars are read
+   * literally (fallbackFeedbackCategory) and the summary is left empty rather
+   * than invented.
+   */
+  async function readFeedback(rating: unknown, comment: string): Promise<{ category: FeedbackCategory; summary: string; byModel: boolean }> {
+    const stars = clampRating(rating);
+    const fallback = { category: fallbackFeedbackCategory(stars), summary: '', byModel: false };
+    const text = String(comment || '').trim();
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey || !text) return fallback;
+
+    try {
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+      });
+      const prompt = `你是流浪動物之家的社工督導，正在分類一位志工在服務結束後留下的回饋。
+
+評分：${stars} 星（滿分 5）
+回饋原文：${text}
+
+請把這則回饋歸入以下四類之一：
+- praise：正面、感謝、開心，沒有提出問題
+- suggestion：語氣平和，提出可以改善的地方或建議
+- complaint：對流程、環境、人員或安排明確表達不滿
+- dispute：發生事故或爭議 —— 例如志工或動物受傷、被咬抓、與他人衝突、被不當對待、指控、安全疑慮、想退出或投訴
+
+判斷時以「文字內容」為準，不要只看星數：五星但提到受傷，仍然是 dispute。
+
+只回傳一行 JSON，不要任何其他文字：
+{"category":"praise|suggestion|complaint|dispute","summary":"用繁體中文 20 字內說明志工實際提到的事"}`;
+
+      const response = await ai.models.generateContent({ model: AI_TEXT_MODEL, contents: prompt });
+      const raw = String(response.text || '');
+      const match = raw.match(/\{[\s\S]*\}/);
+      if (!match) {
+        console.warn('Gemini Feedback Triage: no JSON in answer, reading stars only:', raw.slice(0, 200));
+        return fallback;
+      }
+      const parsed = JSON.parse(match[0]);
+      if (!isFeedbackCategory(parsed.category)) {
+        console.warn('Gemini Feedback Triage: unknown category, reading stars only:', parsed.category);
+        return fallback;
+      }
+      const summary = stripMarkdown(String(parsed.summary || '')).replace(/\s+/g, ' ').trim().slice(0, 60);
+      return { category: parsed.category, summary, byModel: true };
+    } catch (error: any) {
+      console.warn('Gemini Feedback Triage Error (fallback activated):', error?.message || error);
+      return fallback;
+    }
+  }
+
+  /**
+   * Runs after a check-out has been saved, off the volunteer's request.
+   *
+   * The volunteer has already been told their check-out worked; the reading
+   * is for the coordinator, and it must not make the phone wait on Gemini nor
+   * fail the check-out when Gemini is down. Whatever it decides is written to
+   * the record and pushed to every open dashboard over SSE, so a coordinator
+   * who happens to be looking sees the banner appear without reloading --
+   * and one who is not looking sees it when they next sit down. Nobody is
+   * messaged.
+   */
+  async function triageFeedbackForCoordinators(recordId: string, rating: unknown, comment: string): Promise<void> {
+    try {
+      const read = await readFeedback(rating, comment);
+      const needsAttention = needsCoordinatorAttention(rating, read.category);
+      const updated = setFeedbackTriage(recordId, { category: read.category, summary: read.summary, needsAttention });
+      if (!updated) {
+        console.warn('Feedback triage: record vanished before it could be filed:', recordId);
+        return;
+      }
+      console.log(`Feedback triage: ${recordId} → ${read.category}${read.byModel ? '' : ' (stars only)'}${needsAttention ? ' ⚠ needs coordinator' : ''}`);
+      broadcastChange('attendance');
+    } catch (error: any) {
+      console.error('Feedback triage failed:', error?.message || error);
+    }
+  }
 
   /**
    * Drafts a coordinator's reply to the feedback a volunteer left after a shift.
@@ -4029,6 +4121,13 @@ ${contextText}
       // check-out doesn't count the same shift twice.
       if (target.status !== 'completed') {
         addCompletedShiftHours(updated.volunteerName, hoursLogged);
+      }
+
+      // Read the feedback for the social work team. Off the request: the
+      // volunteer is not waiting on this, and a coordinator sees the result on
+      // their dashboard, not on their phone.
+      if (rating || (feedbackComment && String(feedbackComment).trim())) {
+        void triageFeedbackForCoordinators(updated.id, rating, String(feedbackComment || ''));
       }
 
       // Best-effort real LINE push thanking the volunteer and confirming their
