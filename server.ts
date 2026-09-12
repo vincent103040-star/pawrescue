@@ -4354,9 +4354,10 @@ ${contextText}
 
   /**
    * Hands one LINE event to the Make.com scenario that classifies animal photos
-   * and matches them to a session. Photo and file messages never got a branch
-   * here -- they used to fall through the event loop and vanish -- so pointing
-   * them at Make adds a consumer without touching text (rulebook RAG) or audio.
+   * and matches them to a session. Photo, file and postback events never got a
+   * branch here -- they used to fall through the event loop and vanish -- so
+   * pointing them at Make adds a consumer without touching text (rulebook RAG)
+   * or audio.
    *
    * The scenario's trigger is Make's own "LINE Watch Events" module, which is
    * a webhook that expects the body LINE itself would send. Re-wrapping the
@@ -4374,7 +4375,7 @@ ${contextText}
   function forwardToMake(event: any, destination: string | undefined): void {
     const url = process.env.MAKE_WEBHOOK_URL;
     if (!url) {
-      console.warn('LINE Webhook: MAKE_WEBHOOK_URL not set, dropping', event.message?.type, 'message');
+      console.warn('LINE Webhook: MAKE_WEBHOOK_URL not set, dropping', event.message?.type || event.type, 'event');
       return;
     }
     fetch(url, {
@@ -4428,6 +4429,15 @@ ${contextText}
           continue;
         }
         if (event.type === 'message' && (event.message?.type === 'image' || event.message?.type === 'file')) {
+          forwardToMake(event, req.body?.destination);
+          continue;
+        }
+        // A postback only ever comes from a button the bot itself sent -- in
+        // this flow, the Quick Reply that asks "which animal is this?" after a
+        // photo. Make owns that conversation, so the answer goes there too.
+        // (Had the buttons been message-type, the tap would have arrived as
+        // plain text and been answered from the rulebook instead.)
+        if (event.type === 'postback') {
           forwardToMake(event, req.body?.destination);
           continue;
         }
