@@ -64,8 +64,14 @@ export const ShiftCalendarView: React.FC<ShiftCalendarViewProps> = ({
   myAppliedShiftIds = [],
   viewModeSwitcher
 }) => {
-  // Calendar Navigation State (Default to August 2026 based on mock data date range)
-  const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 7, 1)); // Month index 7 = August
+  // The calendar opens on whatever month it is in Taipei right now. It used
+  // to be pinned to August 2026 to match the seed data, so every volunteer who
+  // tapped 班次報名 in September landed on a month that was already over and
+  // had to page forward before seeing a single shift they could take.
+  const [currentDate, setCurrentDate] = useState<Date>(() => {
+    const [y, m] = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' }).split('-').map(Number);
+    return new Date(y, m - 1, 1);
+  });
   const [selectedZoneFilter, setSelectedZoneFilter] = useState<string>('all');
   const [draggedShift, setDraggedShift] = useState<PositionShift | null>(null);
   const [dragOverDate, setDragOverDate] = useState<string | null>(null);

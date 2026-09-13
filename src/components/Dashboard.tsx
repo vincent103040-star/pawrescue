@@ -72,7 +72,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [selectedDateFilter, setSelectedDateFilter] = useState<'all' | 'today' | 'upcoming'>('all');
   const [showUrgentModal, setShowUrgentModal] = useState<boolean>(false);
   const [showReportModal, setShowReportModal] = useState<boolean>(false);
-  const [selectedExportMonth, setSelectedExportMonth] = useState<string>('2026-08');
+  // The month picker for the report offers this month and the two before it,
+  // worked out from today's date in Taipei. It was a fixed list ending in
+  // 2026-08 labelled 「當月」, which stayed "current" long after it was not.
+  const exportMonthOptions = (() => {
+    const [y, m] = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' }).split('-').map(Number);
+    return [0, 1, 2].map(back => {
+      const d = new Date(y, m - 1 - back, 1);
+      const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      return { value, label: `${d.getFullYear()} 年 ${d.getMonth() + 1} 月${back === 0 ? ' (當月)' : ''}` };
+    });
+  })();
+  const [selectedExportMonth, setSelectedExportMonth] = useState<string>(exportMonthOptions[0].value);
 
   // Modular Dashboard Controls State
   const [visibleModules, setVisibleModules] = useState<Record<DashboardModuleId, boolean>>(() => {
@@ -810,9 +821,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     onChange={e => setSelectedExportMonth(e.target.value)}
                     className="bg-white border border-[#716053] rounded-xl px-2 py-0.5 text-xs font-bold text-slate-900 focus:outline-none cursor-pointer"
                   >
-                    <option value="2026-08">2026 年 8 月 (當月)</option>
-                    <option value="2026-07">2026 年 7 月</option>
-                    <option value="2026-06">2026 年 6 月</option>
+                    {exportMonthOptions.map(o => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
                   </select>
                 </div>
 
