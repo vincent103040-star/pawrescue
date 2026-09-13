@@ -6,7 +6,7 @@ import { writeFileSync, mkdirSync, createWriteStream, statSync, readFileSync, un
 import { gzipSync } from 'zlib';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
-import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, cancelShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, isValidAssetSignature, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, setFeedbackTriage, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, setFeedbackReply, getVolunteerEmailByName, getRollCall, getAbsenceCounts, setVolunteerAccountStatus, sweepSuspensions, countSuspensions, recordAppeal, getStatusHistory, hasAppealedSinceSuspension, ABSENCE_SUSPENSION_THRESHOLD, SUSPENSION_DAYS, APPEAL_WINDOW_DAYS, createSubstitutionRequest, getSubstitutionRequest, getOpenSubstitutionForSignup, getOpenSubstitutions, takeSubstitutionRequest, withdrawSubstitutionRequest, expireStaleSubstitutions, hoursUntilShift, SUBSTITUTION_NOTICE_HOURS, getReminderCandidates, markReminderSent, normalizeReminderLead, planShiftsForRange, generateDraftShifts, getStatusSupplementSummary, describeRosterReach, getDutyRosterReach, publishDraftShifts, discardDraftShifts, SHIFT_MERGE_GAP_MINUTES, getAllStatusDutyMappings, getUnmappedStatuses, upsertStatusDutyMapping, setStatusDutyMappingStatus, getShiftCapacityMinutes, setShiftCapacityMinutes, getRecentStatusBatches, getImportedBatchSequences, getStatusRecordsForBatch, getStatusWorkload, getAnimalConcerns } from './db';
+import { getSession, createSession, destroySession, verifyAdminCredentials, changeAdminPassword, getAllShifts, insertShift, updateShift, deleteShift, getShift, getAllShiftSignups, insertShiftSignup, updateShiftSignupStatus, cancelShiftSignup, getAllVolunteers, getVolunteerByEmail, getVolunteerByLineUserId, updateVolunteerDetails, deleteVolunteer, upsertVolunteerFromLogin, updateVolunteerProfileExtras, addCompletedShiftHours, setLineUserId, getLineUserId, getLineUserIdByName, setLinePreferences, getLinePreferences, getAllAttendanceRecords, insertAttendanceRecord, updateAttendanceCheckout, getOpenAttendanceFor, getAppSecret, isValidAssetSignature, getSopContent, saveSopContent, getAllRagChunks, replaceRagChunks, deleteRagChunks, getAllSopDocuments, insertSopDocument, deleteSopDocument, backfillSopDocumentSizes, getSopDocumentText, getAllSopVideos, insertSopVideo, deleteSopVideo, getAllPromotionRequests, upsertPendingPromotionRequest, getLatestPromotionRequestForVolunteer, reviewPromotionRequest, setFeedbackTriage, updateVolunteerTier, getAllShiftTemplates, upsertShiftTemplate, deleteShiftTemplate, getShelterLocation, updateShelterLocation, getLineOfficialAccount, updateLineOfficialAccount, backupDatabase, getAllZones, getActiveZones, getZone, createZone, updateZone, setZoneStatus, countZoneUsage, getAllDutyItems, getActiveDutyItems, getDutyItem, createDutyItem, updateDutyItem, setDutyItemStatus, countDutyCompletions, getDutyCompletionsForDate, completeDuty, uncompleteDuty, getZoneWorkload, setFeedbackAcknowledged, setFeedbackReply, getVolunteerEmailByName, getRollCall, getAbsenceCounts, setVolunteerAccountStatus, sweepSuspensions, countSuspensions, recordAppeal, getStatusHistory, hasAppealedSinceSuspension, ABSENCE_SUSPENSION_THRESHOLD, SUSPENSION_DAYS, APPEAL_WINDOW_DAYS, createSubstitutionRequest, getSubstitutionRequest, getOpenSubstitutionForSignup, getOpenSubstitutions, takeSubstitutionRequest, withdrawSubstitutionRequest, expireStaleSubstitutions, hoursUntilShift, SUBSTITUTION_NOTICE_HOURS, getReminderCandidates, markReminderSent, normalizeReminderLead, planShiftsForRange, generateDraftShifts, getStatusSupplementSummary, describeRosterReach, getDutyRosterReach, publishDraftShifts, discardDraftShifts, SHIFT_MERGE_GAP_MINUTES, getAllStatusDutyMappings, getUnmappedStatuses, upsertStatusDutyMapping, setStatusDutyMappingStatus, getShiftCapacityMinutes, setShiftCapacityMinutes, getRecentStatusBatches, getImportedBatchSequences, recordIntegrationObservation, getStatusRecordsForBatch, getStatusWorkload, getAnimalConcerns } from './db';
 import { findMissingSequences } from './scripts/status-csv';
 import { isDutyOnTodaysList } from './src/utils/dutyVisibility';
 import { isFeedbackCategory, fallbackFeedbackCategory, needsCoordinatorAttention, clampRating, type FeedbackCategory } from './src/utils/feedbackTriage';
@@ -246,7 +246,10 @@ async function startServer() {
     ['POST', /^\/auth\/logout$/],
     // Called by LINE's servers, not by a browser. Authenticated by the
     // x-line-signature HMAC in the handler instead of by a session.
-    ['POST', /^\/line\/webhook$/]
+    ['POST', /^\/line\/webhook$/],
+    // Called by the Make.com photo flow. Authenticated by a shared token in
+    // the handler; there is no browser and no session on the other end.
+    ['POST', /^\/integrations\/animal-status$/]
   ];
 
   app.use('/api', (req, res, next) => {
@@ -2582,6 +2585,75 @@ ${contextText}
     } catch (error: any) {
       console.error('Set Shift Capacity Error:', error);
       return res.status(500).json({ success: false, error: error.message || '儲存失敗' });
+    }
+  });
+
+  /**
+   * One animal observation from the LINE photo flow.
+   *
+   * A volunteer sends a photo to the official account; the backend forwards
+   * it to Make, where a model decides whether it is a daily photo or a stool
+   * photo and, for the latter, what it sees. Make then calls this with the
+   * result in the same vocabulary as the main system's CSV (category code,
+   * option code, label), so the observation lands in the same table and
+   * flows into duty mapping and shift planning like any emailed row would.
+   *
+   * Nobody is notified. The volunteer holding the phone has already seen
+   * the animal; what they could not do by themselves is make tomorrow's
+   * roster know about it. This is the piece that does that.
+   *
+   * Authenticated by INTEGRATION_TOKEN rather than a session: the caller is
+   * a server, and the token compares in constant time like the LINE
+   * signature does. Unset means the door is closed, not open.
+   */
+  app.post('/api/integrations/animal-status', (req, res) => {
+    const expected = process.env.INTEGRATION_TOKEN;
+    if (!expected) {
+      return res.status(503).json({ success: false, error: 'INTEGRATION_TOKEN 尚未設定' });
+    }
+    const presented = String(req.get('authorization') || '').replace(/^Bearer\s+/i, '');
+    const a = Buffer.from(presented);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
+      return res.status(401).json({ success: false, error: '未授權' });
+    }
+
+    try {
+      const body = req.body || {};
+      const animalName = String(body.animalName || '').trim();
+      const optionCode = String(body.optionCode || '').trim();
+      const reference = String(body.reference || body.messageId || '').trim();
+      if (!animalName || !optionCode || !reference) {
+        return res.status(400).json({ success: false, error: '需要 animalName、optionCode 與 reference（LINE message id）' });
+      }
+      const observedAt = String(body.observedAt || '').trim()
+        || new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Taipei' }).replace(' ', 'T') + '+08:00';
+
+      const result = recordIntegrationObservation({
+        source: String(body.source || 'line-photo'),
+        reference,
+        sender: String(body.sender || 'make.com'),
+        notes: String(body.note || ''),
+        row: {
+          shelterCode: String(body.shelterCode || 'line'),
+          animalId: String(body.animalId || animalName),
+          shelterNumber: String(body.shelterNumber || ''),
+          animalName,
+          observedAt,
+          categoryCode: String(body.categoryCode || 'excretion'),
+          optionCode,
+          optionLabel: String(body.optionLabel || optionCode)
+        }
+      });
+      if ('error' in result) {
+        return res.status(409).json({ success: false, error: result.error });
+      }
+      console.log(`Integration: ${animalName} ${body.categoryCode || 'excretion'}/${optionCode} filed as ${result.batchId}`);
+      broadcastChange('attendance');
+      return res.json({ success: true, ...result });
+    } catch (error: any) {
+      console.error('Integration Animal Status Error:', error);
+      return res.status(500).json({ success: false, error: error.message || '寫入動物狀態失敗' });
     }
   });
 
