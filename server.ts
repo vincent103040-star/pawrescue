@@ -4563,6 +4563,48 @@ ${contextText}
       });
   }
 
+  /**
+   * Photos and files that arrived before the volunteer said which animal they
+   * belong to, kept for a few minutes so they can be sent again once they do.
+   *
+   * The Make flow asks "which animal is this?" only when a photo arrives with
+   * no open session, and the tap that answers is a postback. Without this,
+   * the photo that prompted the question was simply gone: it had been
+   * forwarded, found no session, and the volunteer had to send it a second
+   * time -- which is exactly the kind of thing that makes people stop using a
+   * bot. So the media events are remembered per sender, and when that sender's
+   * postback comes in they are forwarded once more, after a short pause to let
+   * Make write the session first. To Make they look like fresh uploads that
+   * happen to have a session, which is the case the flow already handles.
+   *
+   * In memory on purpose: minutes of lifetime, a restart losing them costs one
+   * re-send, and nothing else needs to know they exist.
+   */
+  const PENDING_MEDIA_TTL_MS = 10 * 60 * 1000;
+  const PENDING_MEDIA_REPLAY_DELAY_MS = 3000;
+  const pendingMedia = new Map<string, Array<{ event: any; destination: string | undefined; at: number }>>();
+
+  function rememberPendingMedia(event: any, destination: string | undefined) {
+    const userId = event?.source?.userId;
+    if (!userId) return;
+    const now = Date.now();
+    const kept = (pendingMedia.get(userId) || []).filter(m => now - m.at < PENDING_MEDIA_TTL_MS);
+    kept.push({ event, destination, at: now });
+    pendingMedia.set(userId, kept.slice(-10)); // a burst of photos is fine; a flood is not
+  }
+
+  function replayPendingMedia(userId: string | undefined) {
+    if (!userId) return;
+    const now = Date.now();
+    const items = (pendingMedia.get(userId) || []).filter(m => now - m.at < PENDING_MEDIA_TTL_MS);
+    pendingMedia.delete(userId);
+    if (items.length === 0) return;
+    console.log(`LINE Webhook: replaying ${items.length} pending upload(s) for ${userId} to Make after the animal was chosen`);
+    setTimeout(() => {
+      for (const m of items) forwardToMake(m.event, m.destination);
+    }, PENDING_MEDIA_REPLAY_DELAY_MS);
+  }
+
   // API endpoint: LINE Messaging API webhook. Receives events (user messages, follows)
   // from the official account and auto-replies -- text questions are answered via the
   // same rulebook RAG logic as /api/ai/rag-ask, so "問手冊 AI 小幫手" also works as a
@@ -4601,6 +4643,7 @@ ${contextText}
         }
         if (event.type === 'message' && (event.message?.type === 'image' || event.message?.type === 'file')) {
           forwardToMake(event, req.body?.destination);
+          rememberPendingMedia(event, req.body?.destination);
           continue;
         }
         // A postback only ever comes from a button the bot itself sent -- in
@@ -4610,6 +4653,7 @@ ${contextText}
         // plain text and been answered from the rulebook instead.)
         if (event.type === 'postback') {
           forwardToMake(event, req.body?.destination);
+          replayPendingMedia(event.source?.userId);
           continue;
         }
         if (event.type === 'message' && event.message?.type === 'text') {
