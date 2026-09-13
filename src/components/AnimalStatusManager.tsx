@@ -67,6 +67,7 @@ interface Workload {
 interface Batch {
   id: string;
   sequence: number;
+  source?: string;
   periodStart: string;
   periodEnd: string;
   subject: string;
@@ -603,7 +604,11 @@ export const AnimalStatusManager: React.FC<{ onToast: (m: string) => void }> = (
               <tbody>
                 {batches.map(b => (
                   <tr key={b.id} className="border-b border-slate-100 last:border-0">
-                    <td className="py-1.5 font-bold text-slate-900">#{b.sequence}</td>
+                    <td className="py-1.5 font-bold text-slate-900">
+                      {b.source === 'line-photo'
+                        ? <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-1.5 py-0.5 rounded-full">LINE 照片</span>
+                        : <>#{b.sequence}</>}
+                    </td>
                     <td className="py-1.5 text-slate-600">{b.periodStart} ~ {b.periodEnd}</td>
                     <td className="py-1.5 text-right font-bold text-slate-900">{b.recordCount}</td>
                     <td className={`py-1.5 text-right ${b.skippedCount > 0 ? 'text-rose-600 font-bold' : 'text-slate-400'}`}>

@@ -3993,6 +3993,21 @@ db.exec(`
   ON status_batches (organizationId, sequence)
 `);
 
+// Migration: where a batch came from.
+//
+// Batches used to come from exactly one place -- the main system's six-hourly
+// email -- and the sequence number is that sender's own count, which is what
+// the missing-batch check reasons about. Observations now also arrive one at a
+// time from the LINE photo flow (a volunteer's photo, read by a model). Those
+// carry no sequence, so they are filed under a negative one and marked with
+// their source, and the gap check only looks at the mail ones. Mixing them in
+// would report a "missing batch" for every photo ever taken.
+try {
+  db.exec(`ALTER TABLE status_batches ADD COLUMN source TEXT NOT NULL DEFAULT 'mail'`);
+} catch {
+  // column already exists
+}
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS animal_status_records (
     id TEXT PRIMARY KEY,
@@ -4062,6 +4077,8 @@ export interface StatusBatch {
   skippedCount: number;
   notes: string;
   importedAt: string;
+  /** 'mail' for the main system's CSV batches; 'line-photo' for observations a model read off a volunteer's photo. */
+  source?: string;
 }
 
 export interface AnimalStatusRecord {
@@ -4123,15 +4140,92 @@ function rowToStatusBatch(row: any): StatusBatch {
     recordCount: row.recordCount,
     skippedCount: row.skippedCount,
     notes: row.notes,
-    importedAt: row.importedAt
+    importedAt: row.importedAt,
+    source: row.source || 'mail'
   };
 }
 
 /** Which batch numbers are already in. Feeds the missing-batch check. */
 export function getImportedBatchSequences(): number[] {
   return (db.prepare(
-    'SELECT sequence FROM status_batches WHERE organizationId = ? ORDER BY sequence'
+    "SELECT sequence FROM status_batches WHERE organizationId = ? AND source = 'mail' ORDER BY sequence"
   ).all(currentOrganizationId()) as any[]).map(r => r.sequence as number);
+}
+
+/**
+ * Files one observation that did not come by email -- today, a photo a
+ * volunteer sent over LINE, read by a model into a status the same shape the
+ * main system's CSV uses. From here on it is indistinguishable from an emailed
+ * row: it shows up in the duty mapping, the workload arithmetic and the
+ * "animals needing attention" list without any of those knowing where it
+ * came from. That is the point -- the scheduling side has one vocabulary.
+ *
+ * One batch per observation, because a batch is the unit the screen lists
+ * and the unit a redelivery is caught at. `reference` is the sender's own id
+ * for the observation (the LINE message id); sending the same one twice --
+ * Make retries on a timeout -- is answered with the error, not a second row.
+ * The negative sequence keeps these out of the email numbering entirely.
+ */
+export function recordIntegrationObservation(input: {
+  source: string;
+  reference: string;
+  sender: string;
+  notes?: string;
+  row: {
+    shelterCode: string;
+    animalId: string;
+    shelterNumber: string;
+    animalName: string;
+    observedAt: string;
+    categoryCode: string;
+    optionCode: string;
+    optionLabel: string;
+  };
+}): { batchId: string; recordId: string } | { error: string } {
+  const organizationId = currentOrganizationId();
+  const subject = `${input.source}:${input.reference}`;
+
+  const existing = db.prepare(
+    'SELECT id, importedAt FROM status_batches WHERE organizationId = ? AND source = ? AND subject = ?'
+  ).get(organizationId, input.source, subject) as { id: string; importedAt: string } | undefined;
+  if (existing) {
+    return { error: `這筆觀察（${input.reference}）已經在 ${existing.importedAt} 收過了` };
+  }
+
+  const batchId = `batch-${randomUUID().slice(0, 8)}`;
+  const recordId = `status-${randomUUID().slice(0, 8)}`;
+  const now = new Date().toISOString();
+  const observedDay = String(input.row.observedAt).slice(0, 10);
+
+  db.exec('BEGIN');
+  try {
+    db.prepare(`
+      INSERT INTO status_batches
+        (id, sequence, periodStart, periodEnd, mailUid, subject, sender, sentAt,
+         recordCount, skippedCount, notes, organizationId, importedAt, source)
+      VALUES (?, ?, ?, ?, 0, ?, ?, ?, 1, 0, ?, ?, ?, ?)
+    `).run(
+      batchId, -Date.now(), observedDay, observedDay, subject, input.sender, input.row.observedAt,
+      input.notes || '', organizationId, now, input.source
+    );
+    db.prepare(`
+      INSERT INTO animal_status_records
+        (id, batchId, shelterCode, animalId, shelterNumber, animalName,
+         observedAt, observedAtUtc, categoryCode, optionCode, optionLabel, organizationId)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      recordId, batchId,
+      input.row.shelterCode, input.row.animalId, input.row.shelterNumber, input.row.animalName,
+      input.row.observedAt, toComparableInstant(input.row.observedAt),
+      input.row.categoryCode, input.row.optionCode, input.row.optionLabel, organizationId
+    );
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+
+  return { batchId, recordId };
 }
 
 export function getStatusBatchBySequence(sequence: number): StatusBatch | null {
